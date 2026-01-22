@@ -63,6 +63,8 @@ export default function AdminPage() {
         bannerUrl: '',
     });
     const [savingSettings, setSavingSettings] = useState(false);
+    const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+    const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
 
     useEffect(() => {
         fetch('/api/admin/me')
@@ -178,6 +180,39 @@ export default function AdminPage() {
             alert('Failed to save settings.');
         } finally {
             setSavingSettings(false);
+        }
+    };
+
+    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setBannerUploadError(null);
+        setIsUploadingBanner(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            setNodeSettings((prev) => ({
+                ...prev,
+                bannerUrl: data.media?.url || data.url,
+            }));
+        } catch (error) {
+            console.error('Banner upload failed', error);
+            setBannerUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingBanner(false);
         }
     };
 
@@ -471,6 +506,21 @@ export default function AdminPage() {
                                     onChange={e => setNodeSettings({ ...nodeSettings, bannerUrl: e.target.value })}
                                     placeholder="https://"
                                 />
+                                <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingBanner ? 'Uploading...' : 'Upload image'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleBannerUpload}
+                                            disabled={isUploadingBanner}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {bannerUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{bannerUploadError}</span>
+                                    )}
+                                </div>
                                 {nodeSettings.bannerUrl && (
                                     <div style={{ marginTop: '8px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
                                         <div style={{
