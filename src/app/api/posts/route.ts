@@ -20,6 +20,12 @@ const createPostSchema = z.object({
     content: z.string().min(1).max(POST_MAX_LENGTH),
     replyToId: z.string().uuid().optional(),
     mediaIds: z.array(z.string().uuid()).max(4).optional(),
+    linkPreview: z.object({
+        url: z.string().url(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        image: z.string().url().optional().nullable(),
+    }).optional(),
 });
 
 // Create a new post
@@ -41,6 +47,10 @@ export async function POST(request: Request) {
             replyToId: data.replyToId,
             apId: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
             apUrl: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
+            linkPreviewUrl: data.linkPreview?.url,
+            linkPreviewTitle: data.linkPreview?.title,
+            linkPreviewDescription: data.linkPreview?.description,
+            linkPreviewImage: data.linkPreview?.image,
         }).returning();
 
         let attachedMedia: typeof media.$inferSelect[] = [];
@@ -276,7 +286,7 @@ export async function GET(request: Request) {
 
                 // Get posts from people the user follows + their own posts
                 // For now, just return all posts (we'll add following filter later)
-            feedPosts = await db.query.posts.findMany({
+                feedPosts = await db.query.posts.findMany({
                     where: baseFilter,
                     with: {
                         author: true,

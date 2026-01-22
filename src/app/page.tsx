@@ -38,6 +38,10 @@ interface Post {
   author: User;
   media?: MediaItem[];
   feedMeta?: FeedMeta;
+  linkPreviewUrl?: string | null;
+  linkPreviewTitle?: string | null;
+  linkPreviewDescription?: string | null;
+  linkPreviewImage?: string | null;
 }
 
 // Icons as simple SVG components
@@ -166,6 +170,24 @@ function PostCard({ post, onLike, onRepost }: { post: Post; onLike: (id: string)
           ))}
         </div>
       )}
+      {post.linkPreviewUrl && (
+        <a href={post.linkPreviewUrl} target="_blank" rel="noopener noreferrer" className="link-preview-card">
+          {post.linkPreviewImage && (
+            <div className="link-preview-image">
+              <img src={post.linkPreviewImage} alt={post.linkPreviewTitle || ''} />
+            </div>
+          )}
+          <div className="link-preview-info">
+            <div className="link-preview-title">{post.linkPreviewTitle}</div>
+            {post.linkPreviewDescription && (
+              <div className="link-preview-description">{post.linkPreviewDescription}</div>
+            )}
+            <div className="link-preview-url">
+              {new URL(post.linkPreviewUrl.startsWith('http') ? post.linkPreviewUrl : `https://${post.linkPreviewUrl}`).hostname}
+            </div>
+          </div>
+        </a>
+      )}
       <div className="post-actions">
         <button className="post-action" onClick={() => { }}>
           <MessageIcon />
@@ -194,21 +216,58 @@ type Attachment = {
   altText?: string | null;
 };
 
-function Compose({ onPost }: { onPost: (content: string, mediaIds: string[]) => void }) {
+function Compose({ onPost }: { onPost: (content: string, mediaIds: string[], linkPreview?: any) => void }) {
   const [content, setContent] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [linkPreview, setLinkPreview] = useState<any>(null);
+  const [fetchingPreview, setFetchingPreview] = useState(false);
+  const [lastDetectedUrl, setLastDetectedUrl] = useState<string | null>(null);
   const maxLength = 400;
   const remaining = maxLength - content.length;
+
+  // Detect URLs in content
+  useEffect(() => {
+    const urlRegex = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.[a-z]{2,63})\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
+    const matches = content.match(urlRegex);
+
+    if (matches && matches[0]) {
+      const url = matches[0];
+      if (url !== lastDetectedUrl) {
+        setLastDetectedUrl(url);
+        fetchPreview(url);
+      }
+    } else if (!content.trim()) {
+      setLinkPreview(null);
+      setLastDetectedUrl(null);
+    }
+  }, [content]);
+
+  const fetchPreview = async (url: string) => {
+    setFetchingPreview(true);
+    try {
+      const res = await fetch(`/api/media/preview?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLinkPreview(data);
+      }
+    } catch (err) {
+      console.error('Preview error', err);
+    } finally {
+      setFetchingPreview(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!content.trim() || isPosting || isUploading) return;
     setIsPosting(true);
-    await onPost(content, attachments.map((item) => item.id).filter(Boolean));
+    await onPost(content, attachments.map((item) => item.id).filter(Boolean), linkPreview);
     setContent('');
     setAttachments([]);
+    setLinkPreview(null);
+    setLastDetectedUrl(null);
     setIsPosting(false);
   };
 
@@ -284,6 +343,30 @@ function Compose({ onPost }: { onPost: (content: string, mediaIds: string[]) => 
           ))}
         </div>
       )}
+
+      {linkPreview && (
+        <div className="compose-link-preview">
+          <button
+            type="button"
+            className="compose-link-preview-remove"
+            onClick={() => setLinkPreview(null)}
+          >
+            x
+          </button>
+          <div className="link-preview-card mini">
+            {linkPreview.image && (
+              <div className="link-preview-image">
+                <img src={linkPreview.image} alt="" />
+              </div>
+            )}
+            <div className="link-preview-info">
+              <div className="link-preview-title">{linkPreview.title}</div>
+              <div className="link-preview-url">{new URL(linkPreview.url.startsWith('http') ? linkPreview.url : `https://${linkPreview.url}`).hostname}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {uploadError && (
         <div className="compose-media-error">{uploadError}</div>
       )}
@@ -353,11 +436,11 @@ export default function Home() {
     loadFeed(feedType);
   }, [feedType]);
 
-  const handlePost = async (content: string, mediaIds: string[]) => {
+  const handlePost = async (content: string, mediaIds: string[], linkPreview?: any) => {
     const res = await fetch('/api/posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, mediaIds }),
+      body: JSON.stringify({ content, mediaIds, linkPreview }),
     });
 
     if (res.ok) {

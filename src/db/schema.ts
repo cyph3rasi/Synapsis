@@ -88,6 +88,11 @@ export const posts = pgTable('posts', {
   // ActivityPub
   apId: text('ap_id').unique(), // https://node.com/posts/uuid
   apUrl: text('ap_url'), // Public URL for the post
+  // Link Preview
+  linkPreviewUrl: text('link_preview_url'),
+  linkPreviewTitle: text('link_preview_title'),
+  linkPreviewDescription: text('link_preview_description'),
+  linkPreviewImage: text('link_preview_image'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
