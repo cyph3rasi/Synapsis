@@ -24,6 +24,10 @@ export const metadata: Metadata = {
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
+// Force all routes to be dynamic (no static generation at build time)
+// This is appropriate for a social network where all content is user-generated
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: {

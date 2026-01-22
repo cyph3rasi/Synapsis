@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 type EnvStatus = {
     required: Record<string, boolean>;
     optional: Record<string, boolean>;

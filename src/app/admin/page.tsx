@@ -255,9 +255,12 @@ export default function AdminPage() {
                                         {report.targetType === 'post' && report.target && 'content' in report.target && (
                                             <button
                                                 className="btn btn-ghost btn-sm"
-                                                onClick={() => handlePostAction(report.target.id, report.target.isRemoved ? 'restore' : 'remove')}
+                                                onClick={() => {
+                                                    const target = report.target as AdminPost;
+                                                    handlePostAction(target.id, target.isRemoved ? 'restore' : 'remove');
+                                                }}
                                             >
-                                                {report.target.isRemoved ? 'Restore post' : 'Remove post'}
+                                                {(report.target as AdminPost).isRemoved ? 'Restore post' : 'Remove post'}
                                             </button>
                                         )}
                                         {report.status === 'open' ? (
