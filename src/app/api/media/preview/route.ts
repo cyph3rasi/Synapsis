@@ -14,15 +14,21 @@ export async function GET(req: NextRequest) {
             url = 'https://' + url;
         }
 
-        const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'SynapsisBot/1.0',
-            },
-            signal: AbortSignal.timeout(5000), // 5s timeout
-        });
+        let response;
+        try {
+            response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'SynapsisBot/1.0',
+                },
+                signal: AbortSignal.timeout(5000), // 5s timeout
+            });
+        } catch (fetchError) {
+            console.warn(`Fetch failed for URL: ${url}`, fetchError);
+            return NextResponse.json({ error: 'Could not reach the URL' }, { status: 404 });
+        }
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch URL: ${response.status}`);
+            return NextResponse.json({ error: `URL returned status ${response.status}` }, { status: 404 });
         }
 
         const html = await response.text();

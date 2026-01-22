@@ -230,7 +230,7 @@ function Compose({ onPost }: { onPost: (content: string, mediaIds: string[], lin
 
   // Detect URLs in content
   useEffect(() => {
-    const urlRegex = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.[a-z]{2,63})\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
+    const urlRegex = /(?:https?:\/\/)?((?:[a-zA-Z0-9-]+\.)+[a-z]{2,63})\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
     const matches = content.match(urlRegex);
 
     if (matches && matches[0]) {
