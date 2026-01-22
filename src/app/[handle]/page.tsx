@@ -491,37 +491,40 @@ export default function ProfilePage() {
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Avatar</label>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-                                                setIsSaving(true);
-                                                try {
-                                                    const formData = new FormData();
-                                                    formData.append('file', file);
-                                                    const res = await fetch('/api/uploads', {
-                                                        method: 'POST',
-                                                        body: formData,
-                                                    });
-                                                    const data = await res.json();
-                                                    if (data.url) {
-                                                        setProfileForm(prev => ({ ...prev, avatarUrl: data.url }));
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                                            {isSaving ? 'Uploading...' : 'Choose File'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file) return;
+                                                    setIsSaving(true);
+                                                    try {
+                                                        const formData = new FormData();
+                                                        formData.append('file', file);
+                                                        const res = await fetch('/api/uploads', {
+                                                            method: 'POST',
+                                                            body: formData,
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.url) {
+                                                            setProfileForm(prev => ({ ...prev, avatarUrl: data.url }));
+                                                        }
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                        setSaveError('Upload failed');
+                                                    } finally {
+                                                        setIsSaving(false);
                                                     }
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    setSaveError('Upload failed');
-                                                } finally {
-                                                    setIsSaving(false);
-                                                }
-                                            }}
-                                            disabled={isSaving}
-                                            style={{ fontSize: '13px' }}
-                                        />
+                                                }}
+                                                disabled={isSaving}
+                                                style={{ display: 'none' }}
+                                            />
+                                        </label>
                                         {profileForm.avatarUrl && (
-                                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden' }}>
+                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                                 <img src={profileForm.avatarUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             </div>
                                         )}
@@ -529,37 +532,40 @@ export default function ProfilePage() {
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Header</label>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={async (e) => {
-                                                const file = e.target.files?.[0];
-                                                if (!file) return;
-                                                setIsSaving(true);
-                                                try {
-                                                    const formData = new FormData();
-                                                    formData.append('file', file);
-                                                    const res = await fetch('/api/uploads', {
-                                                        method: 'POST',
-                                                        body: formData,
-                                                    });
-                                                    const data = await res.json();
-                                                    if (data.url) {
-                                                        setProfileForm(prev => ({ ...prev, headerUrl: data.url }));
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                                            {isSaving ? 'Uploading...' : 'Choose File'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file) return;
+                                                    setIsSaving(true);
+                                                    try {
+                                                        const formData = new FormData();
+                                                        formData.append('file', file);
+                                                        const res = await fetch('/api/uploads', {
+                                                            method: 'POST',
+                                                            body: formData,
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.url) {
+                                                            setProfileForm(prev => ({ ...prev, headerUrl: data.url }));
+                                                        }
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                        setSaveError('Upload failed');
+                                                    } finally {
+                                                        setIsSaving(false);
                                                     }
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    setSaveError('Upload failed');
-                                                } finally {
-                                                    setIsSaving(false);
-                                                }
-                                            }}
-                                            disabled={isSaving}
-                                            style={{ fontSize: '13px' }}
-                                        />
+                                                }}
+                                                disabled={isSaving}
+                                                style={{ display: 'none' }}
+                                            />
+                                        </label>
                                         {profileForm.headerUrl && (
-                                            <div style={{ width: '48px', height: '32px', borderRadius: '4px', overflow: 'hidden' }}>
+                                            <div style={{ width: '80px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
                                                 <img src={profileForm.headerUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             </div>
                                         )}
@@ -568,7 +574,7 @@ export default function ProfilePage() {
                                 {saveError && (
                                     <div style={{ color: 'var(--error)', fontSize: '13px' }}>{saveError}</div>
                                 )}
-                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
                                     <button className="btn btn-ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
                                         Cancel
                                     </button>
