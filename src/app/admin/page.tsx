@@ -61,6 +61,7 @@ export default function AdminPage() {
         longDescription: '',
         rules: '',
         bannerUrl: '',
+        accentColor: '#00D4AA',
     });
     const [savingSettings, setSavingSettings] = useState(false);
     const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -123,6 +124,7 @@ export default function AdminPage() {
                 longDescription: data.longDescription || '',
                 rules: data.rules || '',
                 bannerUrl: data.bannerUrl || '',
+                accentColor: data.accentColor || '#00D4AA',
             });
         } catch {
             // error
@@ -499,6 +501,24 @@ export default function AdminPage() {
                                     placeholder="A brief tagline for your node."
                                     rows={2}
                                 />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Accent Color</label>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <input
+                                        type="color"
+                                        value={nodeSettings.accentColor}
+                                        onChange={(e) => setNodeSettings({ ...nodeSettings, accentColor: e.target.value })}
+                                        style={{ width: '44px', height: '36px', padding: 0, border: '1px solid var(--border)', background: 'transparent', borderRadius: '8px' }}
+                                    />
+                                    <input
+                                        className="input"
+                                        value={nodeSettings.accentColor}
+                                        onChange={(e) => setNodeSettings({ ...nodeSettings, accentColor: e.target.value })}
+                                        placeholder="#00D4AA"
+                                    />
+                                </div>
                             </div>
 
                             <div>

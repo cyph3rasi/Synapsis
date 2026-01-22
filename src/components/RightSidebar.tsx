@@ -31,22 +31,18 @@ export function RightSidebar() {
 
     return (
         <aside className="aside">
-            <div className="card" style={{ position: 'relative', overflow: 'hidden', padding: 0 }}>
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
                 {nodeInfo.bannerUrl && (
-                    <>
-                        <div style={{
-                            position: 'absolute', inset: 0,
+                    <div
+                        style={{
+                            height: '140px',
                             background: `url(${nodeInfo.bannerUrl}) center/cover no-repeat`,
-                            opacity: 0.6
-                        }} />
-                        <div style={{
-                            position: 'absolute', inset: 0,
-                            background: 'linear-gradient(to bottom, transparent 0%, var(--background-secondary) 90%)'
-                        }} />
-                    </>
+                            borderBottom: '1px solid var(--border)',
+                        }}
+                    />
                 )}
 
-                <div style={{ position: 'relative', zIndex: 1, padding: '16px' }}>
+                <div style={{ padding: '16px' }}>
                     <h3 style={{ fontWeight: 600, marginBottom: '12px' }}>Welcome to {nodeInfo.name}</h3>
                     <p style={{ color: 'var(--foreground-secondary)', fontSize: '14px', lineHeight: 1.6 }}>
                         {nodeInfo.description}

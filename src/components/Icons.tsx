@@ -79,10 +79,30 @@ export const UsersIcon = () => (
 );
 
 export const SynapsisLogo = () => (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="16" cy="16" r="16" fill="var(--foreground)" />
-        <path d="M16 6C10.477 6 6 10.477 6 16C6 21.523 10.477 26 16 26C21.523 26 26 21.523 26 16C26 10.477 21.523 6 16 6ZM16 24C11.5817 24 8 20.4183 8 16C8 11.5817 11.5817 8 16 8C20.4183 8 24 11.5817 24 16C24 20.4183 20.4183 24 16 24Z" fill="var(--background)" />
-        <path d="M16 12C13.7909 12 12 13.7909 12 16C12 18.2091 13.7909 20 16 20C18.2091 20 20 18.2091 20 16C20 13.7909 18.2091 12 16 12Z" fill="var(--background)" />
+    <svg
+        width="28"
+        height="28"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="0.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        xmlns="http://www.w3.org/2000/svg"
+    >
+        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+        <path d="M9 13a4.5 4.5 0 0 0 3-4" />
+        <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+        <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+        <path d="M6 18a4 4 0 0 1-1.967-.516" />
+        <path d="M12 13h4" />
+        <path d="M12 18h6a2 2 0 0 1 2 2v1" />
+        <path d="M12 8h8" />
+        <path d="M16 8V5a2 2 0 0 1 2-2" />
+        <circle cx="16" cy="13" r=".5" />
+        <circle cx="18" cy="3" r=".5" />
+        <circle cx="20" cy="21" r=".5" />
+        <circle cx="20" cy="8" r=".5" />
     </svg>
 );
 

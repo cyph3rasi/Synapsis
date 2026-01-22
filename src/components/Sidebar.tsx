@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon } from './Icons';
+import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo } from './Icons';
 
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
@@ -15,7 +15,7 @@ export function Sidebar() {
     return (
         <aside className="sidebar">
             <Link href="/" className="logo">
-                <img className="logo-icon" src="/logo.svg" alt="Synapsis" width={28} height={28} />
+                <SynapsisLogo />
                 <span>Synapsis</span>
             </Link>
             <nav>

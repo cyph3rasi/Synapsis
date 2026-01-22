@@ -33,6 +33,7 @@ export async function PATCH(req: NextRequest) {
                     longDescription: data.longDescription,
                     rules: data.rules,
                     bannerUrl: data.bannerUrl,
+                    accentColor: data.accentColor,
                     updatedAt: new Date(),
                 })
                 .where(eq(nodes.id, node.id))

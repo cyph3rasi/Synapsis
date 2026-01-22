@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { SynapsisLogo } from '@/components/Icons';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -58,7 +59,7 @@ export default function LoginPage() {
                 {/* Logo */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
                     <div className="logo" style={{ marginBottom: '8px', fontSize: '32px' }}>
-                        <img className="logo-icon" src="/logo.svg" alt="Synapsis" width={28} height={28} />
+                        <SynapsisLogo />
                         <span>Synapsis</span>
                     </div>
                     <p style={{ color: 'var(--foreground-secondary)', marginTop: '0' }}>
