@@ -87,6 +87,8 @@ Synapsis is an open-source, federated social network built to serve as global co
 
 This project is optimized for deployment on **Vercel**.
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
+
 1. Push your code to a Git repository.
 2. Import the project into Vercel.
 3. Add the required environment variables (`DATABASE_URL`, `AUTH_SECRET`, etc.) in the Vercel project settings.
