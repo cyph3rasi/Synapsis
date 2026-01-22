@@ -1,6 +1,57 @@
 import { NextResponse } from 'next/server';
 import { db, users, posts } from '@/db';
 import { ilike, or, desc, and, notInArray, eq } from 'drizzle-orm';
+import { resolveRemoteUser } from '@/lib/activitypub/fetch';
+
+type SearchUser = {
+    id: string;
+    handle: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    bio: string | null;
+    profileUrl?: string | null;
+    isRemote?: boolean;
+};
+
+const parseRemoteHandleQuery = (query: string): { handle: string; domain: string } | null => {
+    let trimmed = query.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('acct:')) {
+        trimmed = trimmed.slice(5);
+    }
+    const withoutPrefix = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+    if (withoutPrefix.includes(' ')) return null;
+    const parts = withoutPrefix.split('@').filter(Boolean);
+    if (parts.length !== 2) return null;
+    const [handle, domain] = parts;
+    if (!handle || !domain) return null;
+    if (!domain.includes('.') && !domain.includes(':')) return null;
+    return { handle: handle.toLowerCase(), domain: domain.toLowerCase() };
+};
+
+const buildRemoteUser = (
+    profile: Awaited<ReturnType<typeof resolveRemoteUser>>,
+    handle: string,
+    domain: string,
+): SearchUser | null => {
+    if (!profile) return null;
+    const displayName = profile.name || profile.preferredUsername || null;
+    const username = profile.preferredUsername || handle;
+    if (!username) return null;
+    const fullHandle = `${username}@${domain}`.replace(/^@/, '');
+    const iconUrl = typeof profile.icon === 'string' ? profile.icon : profile.icon?.url;
+    const profileUrl = typeof profile.url === 'string' ? profile.url : profile.id;
+
+    return {
+        id: profile.id || profileUrl || `remote:${fullHandle}`,
+        handle: fullHandle,
+        displayName,
+        avatarUrl: iconUrl ?? null,
+        bio: profile.summary ?? null,
+        profileUrl: profileUrl ?? null,
+        isRemote: true,
+    };
+};
 
 export async function GET(request: Request) {
     try {
@@ -23,7 +74,7 @@ export async function GET(request: Request) {
         }
 
         const searchPattern = `%${query}%`;
-        let searchUsers: { id: string; handle: string; displayName: string | null; avatarUrl: string | null; bio: string | null }[] = [];
+        let searchUsers: SearchUser[] = [];
         let searchPosts: typeof posts.$inferSelect[] = [];
 
         // Search users
@@ -47,6 +98,18 @@ export async function GET(request: Request) {
                 .from(users)
                 .where(userConditions)
                 .limit(limit);
+        }
+
+        // Federated user lookup (exact handle@domain queries)
+        if ((type === 'all' || type === 'users') && searchUsers.length < limit) {
+            const parsedRemote = parseRemoteHandleQuery(query);
+            if (parsedRemote) {
+                const remoteProfile = await resolveRemoteUser(parsedRemote.handle, parsedRemote.domain);
+                const remoteUser = buildRemoteUser(remoteProfile, parsedRemote.handle, parsedRemote.domain);
+                if (remoteUser && !searchUsers.some((user) => user.handle.toLowerCase() === remoteUser.handle.toLowerCase())) {
+                    searchUsers = [remoteUser, ...searchUsers].slice(0, limit);
+                }
+            }
         }
 
         const moderatedUsers = await db.select({ id: users.id })

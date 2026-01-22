@@ -136,13 +136,7 @@ export default function Home() {
         <div className="feed-meta card">
           <div className="feed-meta-title">Curated feed</div>
           <div className="feed-meta-body">
-            We rank posts using recency and engagement. Following gets a boost, and your own posts stay visible.
-          </div>
-          <div className="feed-meta-weights">
-            Weights: engagement {feedMeta.weights.engagement}, recency {feedMeta.weights.recency}, follow boost {feedMeta.weights.followBoost}.
-          </div>
-          <div className="feed-meta-foot">
-            Window: {feedMeta.windowHours} hours. Seed: {feedMeta.seedLimit} posts.
+            This feed highlights fresh posts and active discussions, with a boost for people you follow. It is designed to surface what matters without hiding your own activity.
           </div>
         </div>
       )}

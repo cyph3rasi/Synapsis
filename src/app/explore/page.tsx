@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ElementType } from 'react';
 import Link from 'next/link';
 import { SearchIcon, TrendingIcon, UsersIcon, HeartIcon, RepeatIcon, MessageIcon } from '@/components/Icons';
 
@@ -10,6 +10,8 @@ interface User {
     displayName: string;
     avatarUrl?: string;
     bio?: string;
+    profileUrl?: string | null;
+    isRemote?: boolean;
 }
 
 interface MediaItem {
@@ -106,8 +108,14 @@ function PostCard({ post }: { post: Post }) {
 }
 
 function UserCard({ user }: { user: User }) {
+    const isRemote = Boolean(user.isRemote && user.profileUrl);
+    const Wrapper: ElementType = isRemote ? 'a' : Link;
+    const wrapperProps = isRemote
+        ? { href: user.profileUrl || '#', target: '_blank', rel: 'noopener noreferrer' }
+        : { href: `/${user.handle}` };
+
     return (
-        <Link href={`/${user.handle}`} className="user-card">
+        <Wrapper {...wrapperProps} className="user-card">
             <div className="avatar">
                 {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.displayName} />
@@ -120,7 +128,7 @@ function UserCard({ user }: { user: User }) {
                 <div className="user-card-handle">@{user.handle}</div>
                 {user.bio && <div className="user-card-bio">{user.bio}</div>}
             </div>
-        </Link>
+        </Wrapper>
     );
 }
 

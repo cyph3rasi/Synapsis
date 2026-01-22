@@ -106,8 +106,11 @@ export async function fetchWebFinger(
  * Get the ActivityPub actor URL from a WebFinger response
  */
 export function getActorUrlFromWebFinger(webfinger: WebFingerResponse): string | null {
-    const selfLink = webfinger.links.find(
-        (link) => link.rel === 'self' && link.type === 'application/activity+json'
-    );
+    const selfLink = webfinger.links.find((link) => {
+        if (link.rel !== 'self' || !link.href) return false;
+        if (!link.type) return true;
+        const type = link.type.toLowerCase();
+        return type.includes('activity+json') || type.includes('activitystreams') || type.includes('application/ld+json');
+    });
     return selfLink?.href ?? null;
 }

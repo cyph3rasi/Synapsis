@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ElementType } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -10,6 +10,8 @@ interface User {
     displayName: string;
     avatarUrl?: string;
     bio?: string;
+    profileUrl?: string | null;
+    isRemote?: boolean;
 }
 
 interface MediaItem {
@@ -73,9 +75,15 @@ const FlagIcon = () => (
 );
 
 function UserCard({ user }: { user: User }) {
+    const isRemote = Boolean(user.isRemote && user.profileUrl);
+    const Wrapper: ElementType = isRemote ? 'a' : Link;
+    const wrapperProps = isRemote
+        ? { href: user.profileUrl || '#', target: '_blank', rel: 'noopener noreferrer' }
+        : { href: `/@${user.handle}` };
+
     return (
-        <Link
-            href={`/@${user.handle}`}
+        <Wrapper
+            {...wrapperProps}
             style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -109,7 +117,7 @@ function UserCard({ user }: { user: User }) {
                     </div>
                 )}
             </div>
-        </Link>
+        </Wrapper>
     );
 }
 
