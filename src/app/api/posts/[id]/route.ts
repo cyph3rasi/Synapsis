@@ -4,10 +4,10 @@ import { eq, desc, and } from 'drizzle-orm';
 
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params;
+        const { id } = await params;
 
         // Fetch the main post
         const post = await db.query.posts.findFirst({
