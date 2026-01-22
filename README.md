@@ -91,10 +91,20 @@ The easiest way to deploy your own instance is with **Vercel**. Click the button
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
 
-During the setup process on Vercel:
-1. **Repository Name**: Choose a name for your private copy (e.g., `my-node`).
-2. **Environment Variables**: Add your `DATABASE_URL` and `AUTH_SECRET`.
-   - *Note: If you skip this, the build will succeed with a placeholder DB, but you must add them later in Project Settings -> Environment Variables and redeploy.*
+### 1. Initial Deployment
+
+The easiest way to deploy your own instance is with **Vercel**. Click the button below to clone the repository and deploy:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
+
+1. **Create Repository**: Vercel will ask you to create a new Git repository.
+2. **Deploy**: Click "Deploy". The initial build will succeed using placeholder values.
+3. **Configure**: Once deployed, go to your project dashboard:
+   - **Settings** > **Environment Variables**
+   - Add `DATABASE_URL` (your Neon connection string)
+   - Add `AUTH_SECRET` (generate with `openssl rand -base64 33`)
+   - Add `ADMIN_EMAILS` (optional, for admin access)
+4. **Redeploy**: Go to **Deployments**, click the three dots on the latest deployment, and select **Redeploy** to apply the new variables.
 
 ### 2. Updating Your Instance
 
