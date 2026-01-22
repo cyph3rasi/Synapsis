@@ -42,36 +42,33 @@ const extractTextAndUrls = (value?: string | null) => {
 
 const normalizeUrl = (value: string) => value.replace(/[)\].,!?]+$/, '');
 
-const fetchLinkPreview = async (url: string) => {
+const fetchLinkPreview = async (url: string, origin: string) => {
     try {
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'SynapsisBot/1.0',
-            },
+        const previewUrl = new URL('/api/media/preview', origin);
+        previewUrl.searchParams.set('url', url);
+        const res = await fetch(previewUrl.toString(), {
+            headers: { 'Accept': 'application/json' },
             signal: AbortSignal.timeout(4000),
         });
         if (!res.ok) return null;
-        const html = await res.text();
-        const getMeta = (property: string) => {
-            const regex = new RegExp(`<meta[^>]+(?:property|name)=["'](?:og:)?${property}["'][^>]+content=["']([^"']+)["']`, 'i');
-            const match = html.match(regex);
-            if (match) return match[1];
-            const regexRev = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:)?${property}["']`, 'i');
-            const matchRev = html.match(regexRev);
-            return matchRev ? matchRev[1] : null;
-        };
-        const title = getMeta('title') || html.match(/<title>([^<]+)<\/title>/i)?.[1];
-        const description = getMeta('description');
-        const image = getMeta('image');
+        const data = await res.json();
         return {
-            url,
-            title: title?.trim() || url,
-            description: description?.trim() || null,
-            image: image?.trim() || null,
+            url: data?.url || url,
+            title: data?.title || null,
+            description: data?.description || null,
+            image: data?.image || null,
         };
     } catch {
         return null;
     }
+};
+
+const stripFirstUrl = (text: string, url: string) => {
+    const idx = text.indexOf(url);
+    if (idx === -1) return text;
+    const before = text.slice(0, idx).trimEnd();
+    const after = text.slice(idx + url.length).trimStart();
+    return `${before} ${after}`.trim();
 };
 
 const parseRemoteHandle = (handle: string) => {
@@ -136,6 +133,7 @@ export async function GET(request: Request, context: RouteContext) {
                 bio: sanitizeText(remoteProfile.summary),
             };
             const posts = [];
+            const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
                 const object = activity?.object;
@@ -145,10 +143,11 @@ export async function GET(request: Request, context: RouteContext) {
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
                 const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
-                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl) : null;
+                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl, origin) : null;
+                const contentText = linkPreview && normalizedUrl ? stripFirstUrl(text, normalizedUrl) : text;
                 posts.push({
                     id: object.id || activity.id,
-                    content: text || '',
+                    content: contentText || '',
                     createdAt: object.published || activity.published || new Date().toISOString(),
                     likesCount: 0,
                     repostsCount: 0,
@@ -162,7 +161,7 @@ export async function GET(request: Request, context: RouteContext) {
                             altText: sanitizeText(attachment.name) || null,
                         })),
                     linkPreviewUrl: linkPreview?.url || normalizedUrl,
-                    linkPreviewTitle: linkPreview?.title || (normalizedUrl ?? null),
+                    linkPreviewTitle: linkPreview?.title || null,
                     linkPreviewDescription: linkPreview?.description || null,
                     linkPreviewImage: linkPreview?.image || null,
                 });
@@ -194,6 +193,7 @@ export async function GET(request: Request, context: RouteContext) {
                 bio: sanitizeText(remoteProfile.summary),
             };
             const posts = [];
+            const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
                 const object = activity?.object;
@@ -203,10 +203,11 @@ export async function GET(request: Request, context: RouteContext) {
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
                 const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
-                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl) : null;
+                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl, origin) : null;
+                const contentText = linkPreview && normalizedUrl ? stripFirstUrl(text, normalizedUrl) : text;
                 posts.push({
                     id: object.id || activity.id,
-                    content: text || '',
+                    content: contentText || '',
                     createdAt: object.published || activity.published || new Date().toISOString(),
                     likesCount: 0,
                     repostsCount: 0,
@@ -220,7 +221,7 @@ export async function GET(request: Request, context: RouteContext) {
                             altText: sanitizeText(attachment.name) || null,
                         })),
                     linkPreviewUrl: linkPreview?.url || normalizedUrl,
-                    linkPreviewTitle: linkPreview?.title || (normalizedUrl ?? null),
+                    linkPreviewTitle: linkPreview?.title || null,
                     linkPreviewDescription: linkPreview?.description || null,
                     linkPreviewImage: linkPreview?.image || null,
                 });
