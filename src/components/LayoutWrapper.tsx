@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const { loading } = useAuth();
+    const pathname = usePathname();
 
     // Paths that should NOT have the app layout
     const isStandalone =
