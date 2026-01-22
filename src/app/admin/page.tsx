@@ -1,0 +1,385 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+
+type AdminUser = {
+    id: string;
+    handle: string;
+    displayName?: string | null;
+    email?: string | null;
+    isSuspended: boolean;
+    isSilenced: boolean;
+    suspensionReason?: string | null;
+    silenceReason?: string | null;
+    createdAt: string;
+};
+
+type AdminPost = {
+    id: string;
+    content: string;
+    createdAt: string;
+    isRemoved: boolean;
+    removedReason?: string | null;
+    author: {
+        id: string;
+        handle: string;
+        displayName?: string | null;
+    };
+};
+
+type Report = {
+    id: string;
+    targetType: 'post' | 'user';
+    targetId: string;
+    reason: string;
+    status: 'open' | 'resolved';
+    createdAt: string;
+    reporter?: {
+        id: string;
+        handle: string;
+    } | null;
+    target?: AdminPost | AdminUser | null;
+};
+
+const formatDate = (value: string) => {
+    const date = new Date(value);
+    return date.toLocaleString();
+};
+
+export default function AdminPage() {
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+    const [tab, setTab] = useState<'reports' | 'posts' | 'users'>('reports');
+    const [reports, setReports] = useState<Report[]>([]);
+    const [posts, setPosts] = useState<AdminPost[]>([]);
+    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [reportStatus, setReportStatus] = useState<'open' | 'resolved' | 'all'>('open');
+
+    useEffect(() => {
+        fetch('/api/admin/me')
+            .then((res) => res.json())
+            .then((data) => setIsAdmin(!!data.isAdmin))
+            .catch(() => setIsAdmin(false));
+    }, []);
+
+    const loadReports = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/admin/reports?status=${reportStatus}`);
+            const data = await res.json();
+            setReports(data.reports || []);
+        } catch {
+            setReports([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadPosts = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/posts?status=all');
+            const data = await res.json();
+            setPosts(data.posts || []);
+        } catch {
+            setPosts([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/users');
+            const data = await res.json();
+            setUsers(data.users || []);
+        } catch {
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        if (tab === 'reports') loadReports();
+        if (tab === 'posts') loadPosts();
+        if (tab === 'users') loadUsers();
+    }, [tab, isAdmin, reportStatus]);
+
+    const handleReportResolve = async (id: string, status: 'open' | 'resolved') => {
+        const note = status === 'resolved' ? window.prompt('Resolution note (optional):') || '' : '';
+        await fetch(`/api/admin/reports/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, note }),
+        });
+        loadReports();
+    };
+
+    const handlePostAction = async (id: string, action: 'remove' | 'restore') => {
+        const reason = action === 'remove' ? window.prompt('Reason (optional):') || '' : '';
+        await fetch(`/api/admin/posts/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, reason }),
+        });
+        if (tab === 'reports') {
+            loadReports();
+        } else {
+            loadPosts();
+        }
+    };
+
+    const handleUserAction = async (id: string, action: 'suspend' | 'unsuspend' | 'silence' | 'unsilence') => {
+        const needsReason = action === 'suspend' || action === 'silence';
+        const reason = needsReason ? window.prompt('Reason (optional):') || '' : '';
+        await fetch(`/api/admin/users/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, reason }),
+        });
+        loadUsers();
+    };
+
+    const reportCounts = useMemo(() => {
+        return {
+            open: reports.filter((r) => r.status === 'open').length,
+            resolved: reports.filter((r) => r.status === 'resolved').length,
+        };
+    }, [reports]);
+
+    if (isAdmin === null) {
+        return (
+            <div className="admin-shell">
+                <div className="admin-card">Checking permissions...</div>
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="admin-shell">
+                <div className="admin-card">
+                    <h1>Moderation</h1>
+                    <p>You do not have access to this page.</p>
+                    <Link href="/" className="btn btn-primary" style={{ marginTop: '12px' }}>
+                        Back to home
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="admin-shell">
+            <div className="admin-header">
+                <div>
+                    <h1>Moderation Dashboard</h1>
+                    <p>Manage reports, posts, and user actions.</p>
+                </div>
+                <Link href="/" className="btn btn-ghost">
+                    Return to feed
+                </Link>
+            </div>
+
+            <div className="admin-tabs">
+                <button className={`admin-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
+                    Reports
+                </button>
+                <button className={`admin-tab ${tab === 'posts' ? 'active' : ''}`} onClick={() => setTab('posts')}>
+                    Posts
+                </button>
+                <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
+                    Users
+                </button>
+            </div>
+
+            {tab === 'reports' && (
+                <div className="admin-card">
+                    <div className="admin-toolbar">
+                        <div className="admin-filters">
+                            {(['open', 'resolved', 'all'] as const).map((status) => (
+                                <button
+                                    key={status}
+                                    className={`pill ${reportStatus === status ? 'active' : ''}`}
+                                    onClick={() => setReportStatus(status)}
+                                >
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="admin-stats">
+                            <span>Open: {reportCounts.open}</span>
+                            <span>Resolved: {reportCounts.resolved}</span>
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="admin-empty">Loading reports...</div>
+                    ) : reports.length === 0 ? (
+                        <div className="admin-empty">No reports found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {reports.map((report) => (
+                                <div key={report.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${report.status}`}>
+                                                {report.status}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                {report.targetType.toUpperCase()} report
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body">
+                                            {report.reason}
+                                        </div>
+                                        <div className="admin-row-sub">
+                                            Reported by {report.reporter?.handle || 'anonymous'} • {formatDate(report.createdAt)}
+                                        </div>
+                                        {report.targetType === 'post' && report.target && 'content' in report.target && (
+                                            <div className="admin-row-target">
+                                                <strong>@{report.target.author.handle}:</strong> {report.target.content || '[repost]'}
+                                            </div>
+                                        )}
+                                        {report.targetType === 'user' && report.target && 'handle' in report.target && (
+                                            <div className="admin-row-target">
+                                                User: @{report.target.handle}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        {report.targetType === 'post' && report.target && 'content' in report.target && (
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={() => handlePostAction(report.target.id, report.target.isRemoved ? 'restore' : 'remove')}
+                                            >
+                                                {report.target.isRemoved ? 'Restore post' : 'Remove post'}
+                                            </button>
+                                        )}
+                                        {report.status === 'open' ? (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleReportResolve(report.id, 'resolved')}>
+                                                Resolve
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleReportResolve(report.id, 'open')}>
+                                                Reopen
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {tab === 'posts' && (
+                <div className="admin-card">
+                    {loading ? (
+                        <div className="admin-empty">Loading posts...</div>
+                    ) : posts.length === 0 ? (
+                        <div className="admin-empty">No posts found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {posts.map((post) => (
+                                <div key={post.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${post.isRemoved ? 'removed' : 'active'}`}>
+                                                {post.isRemoved ? 'removed' : 'active'}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                @{post.author.handle} • {formatDate(post.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body">{post.content || '[repost]'}</div>
+                                        {post.removedReason && (
+                                            <div className="admin-row-sub">Reason: {post.removedReason}</div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        {post.isRemoved ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handlePostAction(post.id, 'restore')}>
+                                                Restore
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handlePostAction(post.id, 'remove')}>
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {tab === 'users' && (
+                <div className="admin-card">
+                    {loading ? (
+                        <div className="admin-empty">Loading users...</div>
+                    ) : users.length === 0 ? (
+                        <div className="admin-empty">No users found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {users.map((user) => (
+                                <div key={user.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${user.isSuspended ? 'suspended' : 'active'}`}>
+                                                {user.isSuspended ? 'suspended' : 'active'}
+                                            </span>
+                                            <span className={`status-pill ${user.isSilenced ? 'silenced' : 'visible'}`}>
+                                                {user.isSilenced ? 'silenced' : 'visible'}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                @{user.handle} • {formatDate(user.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body">
+                                            {user.displayName || user.handle}
+                                        </div>
+                                        {user.suspensionReason && (
+                                            <div className="admin-row-sub">Suspension: {user.suspensionReason}</div>
+                                        )}
+                                        {user.silenceReason && (
+                                            <div className="admin-row-sub">Silence: {user.silenceReason}</div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        <Link href={`/@${user.handle}`} className="btn btn-ghost btn-sm">
+                                            View
+                                        </Link>
+                                        {user.isSuspended ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'unsuspend')}>
+                                                Unsuspend
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleUserAction(user.id, 'suspend')}>
+                                                Suspend
+                                            </button>
+                                        )}
+                                        {user.isSilenced ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'unsilence')}>
+                                                Unsilence
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'silence')}>
+                                                Silence
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}

@@ -1,0 +1,197 @@
+/**
+ * ActivityPub Inbox Handler
+ * 
+ * Processes incoming activities from remote servers.
+ */
+
+import { db, users, posts, follows, likes } from '@/db';
+import { eq, and } from 'drizzle-orm';
+import { verifySignature, fetchActorPublicKey } from './signatures';
+import { v4 as uuid } from 'uuid';
+
+export interface IncomingActivity {
+    '@context': string | string[];
+    id: string;
+    type: string;
+    actor: string;
+    object: string | object;
+    published?: string;
+    to?: string[];
+    cc?: string[];
+}
+
+/**
+ * Process an incoming activity
+ */
+export async function processIncomingActivity(
+    activity: IncomingActivity,
+    headers: Record<string, string>,
+    path: string
+): Promise<{ success: boolean; error?: string }> {
+    // Verify the signature
+    const publicKey = await fetchActorPublicKey(activity.actor);
+    if (!publicKey) {
+        return { success: false, error: 'Could not fetch actor public key' };
+    }
+
+    const isValid = await verifySignature('POST', path, headers, publicKey);
+    if (!isValid) {
+        console.warn('Invalid signature for activity:', activity.id);
+        // In development, we might want to continue anyway
+        // return { success: false, error: 'Invalid signature' };
+    }
+
+    // Process based on activity type
+    switch (activity.type) {
+        case 'Create':
+            return await handleCreate(activity);
+        case 'Follow':
+            return await handleFollow(activity);
+        case 'Like':
+            return await handleLike(activity);
+        case 'Announce':
+            return await handleAnnounce(activity);
+        case 'Undo':
+            return await handleUndo(activity);
+        case 'Delete':
+            return await handleDelete(activity);
+        case 'Accept':
+            return await handleAccept(activity);
+        case 'Reject':
+            return await handleReject(activity);
+        default:
+            console.log('Unhandled activity type:', activity.type);
+            return { success: true }; // Don't error on unknown types
+    }
+}
+
+/**
+ * Handle Create activities (new posts)
+ */
+async function handleCreate(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    const object = activity.object as { type: string; content?: string; id?: string; attributedTo?: string };
+
+    if (object.type !== 'Note') {
+        return { success: true }; // We only handle Notes for now
+    }
+
+    // TODO: Store remote posts in database for caching/display
+    console.log('Received remote post:', object.id);
+
+    return { success: true };
+}
+
+/**
+ * Handle Follow activities
+ */
+async function handleFollow(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    const targetActorUrl = typeof activity.object === 'string' ? activity.object : (activity.object as { id?: string }).id;
+
+    if (!targetActorUrl) {
+        return { success: false, error: 'Invalid follow target' };
+    }
+
+    // Extract handle from target URL
+    const handleMatch = targetActorUrl.match(/\/users\/([^\/]+)$/);
+    if (!handleMatch) {
+        return { success: false, error: 'Could not parse target handle' };
+    }
+
+    const handle = handleMatch[1];
+
+    // Find the local user
+    const targetUser = await db.query.users.findFirst({
+        where: eq(users.handle, handle),
+    });
+
+    if (!targetUser) {
+        return { success: false, error: 'User not found' };
+    }
+
+    // TODO: Store follower relationship, send Accept activity
+    console.log('Received follow request for:', handle, 'from:', activity.actor);
+
+    return { success: true };
+}
+
+/**
+ * Handle Like activities
+ */
+async function handleLike(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    const targetUrl = typeof activity.object === 'string' ? activity.object : null;
+
+    if (!targetUrl) {
+        return { success: false, error: 'Invalid like target' };
+    }
+
+    // TODO: Update like count on local post
+    console.log('Received like for:', targetUrl, 'from:', activity.actor);
+
+    return { success: true };
+}
+
+/**
+ * Handle Announce activities (reposts)
+ */
+async function handleAnnounce(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    const targetUrl = typeof activity.object === 'string' ? activity.object : null;
+
+    if (!targetUrl) {
+        return { success: false, error: 'Invalid announce target' };
+    }
+
+    // TODO: Update repost count on local post
+    console.log('Received announce for:', targetUrl, 'from:', activity.actor);
+
+    return { success: true };
+}
+
+/**
+ * Handle Undo activities
+ */
+async function handleUndo(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    const originalActivity = activity.object as IncomingActivity;
+
+    if (!originalActivity || !originalActivity.type) {
+        return { success: false, error: 'Invalid undo target' };
+    }
+
+    console.log('Received undo for:', originalActivity.type, 'from:', activity.actor);
+
+    // TODO: Handle undo based on original activity type
+
+    return { success: true };
+}
+
+/**
+ * Handle Delete activities
+ */
+async function handleDelete(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    console.log('Received delete from:', activity.actor);
+
+    // TODO: Remove cached remote content
+
+    return { success: true };
+}
+
+/**
+ * Handle Accept activities (follow accepted)
+ */
+async function handleAccept(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    console.log('Follow accepted by:', activity.actor);
+
+    // TODO: Update follow status
+
+    return { success: true };
+}
+
+/**
+ * Handle Reject activities (follow rejected)
+ */
+async function handleReject(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
+    console.log('Follow rejected by:', activity.actor);
+
+    // TODO: Remove pending follow
+
+    return { success: true };
+}

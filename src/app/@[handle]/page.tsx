@@ -1,0 +1,638 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+
+interface User {
+    id: string;
+    handle: string;
+    displayName: string;
+    bio?: string;
+    avatarUrl?: string;
+    headerUrl?: string;
+    followersCount: number;
+    followingCount: number;
+    postsCount: number;
+    createdAt: string;
+}
+
+interface UserSummary {
+    id: string;
+    handle: string;
+    displayName?: string | null;
+    bio?: string | null;
+    avatarUrl?: string | null;
+}
+
+interface MediaItem {
+    id: string;
+    url: string;
+    altText?: string | null;
+}
+
+interface Post {
+    id: string;
+    content: string;
+    createdAt: string;
+    likesCount: number;
+    repostsCount: number;
+    repliesCount: number;
+    author: User;
+    media?: MediaItem[];
+}
+
+// Icons
+const ArrowLeftIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="19" y1="12" x2="5" y2="12" />
+        <polyline points="12 19 5 12 12 5" />
+    </svg>
+);
+
+const CalendarIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+);
+
+const HeartIcon = ({ filled }: { filled?: boolean }) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+);
+
+const RepeatIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="17 1 21 5 17 9" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+);
+
+const MessageIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+);
+
+const FlagIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M5 5v16" />
+        <path d="M5 5h11l-1 4 1 4H5" />
+    </svg>
+);
+
+function UserRow({ user }: { user: UserSummary }) {
+    return (
+        <Link href={`/@${user.handle}`} className="user-row">
+            <div className="avatar">
+                {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.displayName || user.handle} />
+                ) : (
+                    (user.displayName || user.handle).charAt(0).toUpperCase()
+                )}
+            </div>
+            <div className="user-row-content">
+                <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
+                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>@{user.handle}</div>
+                {user.bio && (
+                    <div className="user-row-bio">{user.bio}</div>
+                )}
+            </div>
+        </Link>
+    );
+}
+
+function PostCard({ post }: { post: Post }) {
+    const [liked, setLiked] = useState(false);
+    const [reposted, setReposted] = useState(false);
+    const [reporting, setReporting] = useState(false);
+
+    const formatTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        if (minutes < 1) return 'now';
+        if (minutes < 60) return `${minutes}m`;
+        if (hours < 24) return `${hours}h`;
+        if (days < 7) return `${days}d`;
+        return date.toLocaleDateString();
+    };
+
+    return (
+        <article className="post">
+            <div className="post-header">
+                <div className="avatar">
+                    {post.author.avatarUrl ? (
+                        <img src={post.author.avatarUrl} alt={post.author.displayName} />
+                    ) : (
+                        post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
+                    )}
+                </div>
+                <div className="post-author">
+                    <Link href={`/@${post.author.handle}`} className="post-handle">
+                        {post.author.displayName || post.author.handle}
+                    </Link>
+                    <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
+                </div>
+            </div>
+            <div className="post-content">{post.content}</div>
+            {post.media && post.media.length > 0 && (
+                <div className="post-media-grid">
+                    {post.media.map((item) => (
+                        <div className="post-media-item" key={item.id}>
+                            <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="post-actions">
+                <button className="post-action">
+                    <MessageIcon />
+                    <span>{post.repliesCount || ''}</span>
+                </button>
+                <button className={`post-action ${reposted ? 'reposted' : ''}`} onClick={() => setReposted(!reposted)}>
+                    <RepeatIcon />
+                    <span>{post.repostsCount + (reposted ? 1 : 0) || ''}</span>
+                </button>
+                <button className={`post-action ${liked ? 'liked' : ''}`} onClick={() => setLiked(!liked)}>
+                    <HeartIcon filled={liked} />
+                    <span>{post.likesCount + (liked ? 1 : 0) || ''}</span>
+                </button>
+                <button
+                    className="post-action"
+                    onClick={async () => {
+                        if (reporting) return;
+                        const reason = window.prompt('Why are you reporting this post?');
+                        if (!reason) return;
+                        setReporting(true);
+                        try {
+                            const res = await fetch('/api/reports', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ targetType: 'post', targetId: post.id, reason }),
+                            });
+                            if (!res.ok) {
+                                if (res.status === 401) {
+                                    alert('Please log in to report.');
+                                } else {
+                                    alert('Report failed. Please try again.');
+                                }
+                            } else {
+                                alert('Report submitted. Thank you.');
+                            }
+                        } catch {
+                            alert('Report failed. Please try again.');
+                        } finally {
+                            setReporting(false);
+                        }
+                    }}
+                    disabled={reporting}
+                >
+                    <FlagIcon />
+                    <span>{reporting ? '...' : ''}</span>
+                </button>
+            </div>
+        </article>
+    );
+}
+
+export default function ProfilePage() {
+    const params = useParams();
+    const handle = (params.handle as string)?.replace(/^@/, '') || '';
+
+    const [user, setUser] = useState<User | null>(null);
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [currentUser, setCurrentUser] = useState<{ id: string; handle: string } | null>(null);
+    const [isFollowing, setIsFollowing] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
+    const [followers, setFollowers] = useState<UserSummary[]>([]);
+    const [following, setFollowing] = useState<UserSummary[]>([]);
+    const [followersLoading, setFollowersLoading] = useState(false);
+    const [followingLoading, setFollowingLoading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [profileForm, setProfileForm] = useState({
+        displayName: '',
+        bio: '',
+        avatarUrl: '',
+        headerUrl: '',
+    });
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        setIsEditing(false);
+        setSaveError(null);
+        setFollowers([]);
+        setFollowing([]);
+        // Get current user
+        fetch('/api/auth/me')
+            .then(res => res.json())
+            .then(data => setCurrentUser(data.user))
+            .catch(() => { });
+
+        // Get profile
+        fetch(`/api/users/${handle}`)
+            .then(res => res.json())
+            .then(data => {
+                setUser(data.user);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+
+        // Get posts
+        fetch(`/api/users/${handle}/posts`)
+            .then(res => res.json())
+            .then(data => setPosts(data.posts || []))
+            .catch(() => { });
+    }, [handle]);
+
+    useEffect(() => {
+        if (user && currentUser?.handle === user.handle) {
+            setProfileForm({
+                displayName: user.displayName || '',
+                bio: user.bio || '',
+                avatarUrl: user.avatarUrl || '',
+                headerUrl: user.headerUrl || '',
+            });
+        }
+    }, [user, currentUser]);
+
+    useEffect(() => {
+        if (!currentUser || !user || currentUser.handle === user.handle) {
+            setIsFollowing(false);
+            return;
+        }
+
+        fetch(`/api/users/${handle}/follow`)
+            .then(res => res.json())
+            .then(data => setIsFollowing(!!data.following))
+            .catch(() => setIsFollowing(false));
+    }, [currentUser, user, handle]);
+
+    useEffect(() => {
+        if (activeTab === 'followers') {
+            setFollowersLoading(true);
+            fetch(`/api/users/${handle}/followers`)
+                .then(res => res.json())
+                .then(data => setFollowers(data.followers || []))
+                .catch(() => setFollowers([]))
+                .finally(() => setFollowersLoading(false));
+        }
+
+        if (activeTab === 'following') {
+            setFollowingLoading(true);
+            fetch(`/api/users/${handle}/following`)
+                .then(res => res.json())
+                .then(data => setFollowing(data.following || []))
+                .catch(() => setFollowing([]))
+                .finally(() => setFollowingLoading(false));
+        }
+    }, [activeTab, handle]);
+
+    const handleFollow = async () => {
+        if (!currentUser) return;
+
+        const method = isFollowing ? 'DELETE' : 'POST';
+        const res = await fetch(`/api/users/${handle}/follow`, { method });
+
+        if (res.ok) {
+            setIsFollowing(!isFollowing);
+            if (user) {
+                setUser({
+                    ...user,
+                    followersCount: isFollowing ? user.followersCount - 1 : user.followersCount + 1,
+                });
+            }
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!isOwnProfile) return;
+        setIsSaving(true);
+        setSaveError(null);
+
+        try {
+            const res = await fetch('/api/auth/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profileForm),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to update profile');
+            }
+
+            setUser(data.user);
+            setIsEditing(false);
+        } catch (error) {
+            console.error('Profile update failed', error);
+            setSaveError('Unable to update profile. Please try again.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const formatDate = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+            month: 'long',
+            year: 'numeric',
+        });
+    };
+
+    if (loading) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--foreground-tertiary)',
+            }}>
+                Loading...
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '16px',
+            }}>
+                <h1 style={{ fontSize: '24px', fontWeight: 600 }}>User not found</h1>
+                <Link href="/" className="btn btn-primary">Go home</Link>
+            </div>
+        );
+    }
+
+    const isOwnProfile = currentUser?.handle === user.handle;
+
+    return (
+        <div style={{ maxWidth: '600px', margin: '0 auto', minHeight: '100vh' }}>
+            {/* Header */}
+            <header style={{
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '24px',
+                borderBottom: '1px solid var(--border)',
+                position: 'sticky',
+                top: 0,
+                background: 'var(--background)',
+                zIndex: 10,
+            }}>
+                <Link href="/" style={{ color: 'var(--foreground)' }}>
+                    <ArrowLeftIcon />
+                </Link>
+                <div>
+                    <h1 style={{ fontSize: '18px', fontWeight: 600 }}>{user.displayName || user.handle}</h1>
+                    <p style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}>{user.postsCount} posts</p>
+                </div>
+            </header>
+
+            {/* Profile Header */}
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+                {/* Banner */}
+                <div style={{
+                    height: '150px',
+                    background: user.headerUrl
+                        ? `url(${user.headerUrl}) center/cover`
+                        : 'linear-gradient(135deg, var(--accent-muted) 0%, var(--background-tertiary) 100%)',
+                }} />
+
+                {/* Avatar & Actions */}
+                <div style={{ padding: '0 16px' }}>
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-end',
+                        marginTop: '-48px',
+                    }}>
+                        <div className="avatar avatar-lg" style={{
+                            width: '96px',
+                            height: '96px',
+                            fontSize: '36px',
+                            border: '4px solid var(--background)',
+                        }}>
+                            {user.avatarUrl ? (
+                                <img src={user.avatarUrl} alt={user.displayName || user.handle} />
+                            ) : (
+                                (user.displayName || user.handle).charAt(0).toUpperCase()
+                            )}
+                        </div>
+
+                        {!isOwnProfile && currentUser && (
+                            <button
+                                className={`btn ${isFollowing ? '' : 'btn-primary'}`}
+                                onClick={handleFollow}
+                                style={{ marginBottom: '12px' }}
+                            >
+                                {isFollowing ? 'Following' : 'Follow'}
+                            </button>
+                        )}
+
+                        {isOwnProfile && (
+                            <button className="btn" style={{ marginBottom: '12px' }} onClick={() => setIsEditing(!isEditing)}>
+                                {isEditing ? 'Close' : 'Edit Profile'}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* User Info */}
+                    <div style={{ padding: '12px 0' }}>
+                        <h2 style={{ fontSize: '20px', fontWeight: 700 }}>{user.displayName || user.handle}</h2>
+                        <p style={{ color: 'var(--foreground-tertiary)' }}>@{user.handle}</p>
+
+                        {user.bio && (
+                            <p style={{ marginTop: '12px', lineHeight: 1.5 }}>{user.bio}</p>
+                        )}
+
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginTop: '12px',
+                            color: 'var(--foreground-tertiary)',
+                            fontSize: '14px',
+                        }}>
+                            <CalendarIcon />
+                            <span>Joined {formatDate(user.createdAt)}</span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                            <button
+                                onClick={() => setActiveTab('following')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--foreground)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <strong>{user.followingCount}</strong>{' '}
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Following</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('followers')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--foreground)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <strong>{user.followersCount}</strong>{' '}
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Followers</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {isOwnProfile && isEditing && (
+                    <div style={{ padding: '0 16px 16px' }}>
+                        <div className="card" style={{ padding: '16px' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '12px' }}>Edit profile</div>
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                <div>
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Display name</label>
+                                    <input
+                                        className="input"
+                                        value={profileForm.displayName}
+                                        onChange={(e) => setProfileForm({ ...profileForm, displayName: e.target.value })}
+                                        maxLength={50}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Bio</label>
+                                    <textarea
+                                        className="input"
+                                        value={profileForm.bio}
+                                        onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
+                                        maxLength={160}
+                                        style={{ minHeight: '80px', resize: 'vertical' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Avatar URL</label>
+                                    <input
+                                        className="input"
+                                        value={profileForm.avatarUrl}
+                                        onChange={(e) => setProfileForm({ ...profileForm, avatarUrl: e.target.value })}
+                                        placeholder="https://"
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Header URL</label>
+                                    <input
+                                        className="input"
+                                        value={profileForm.headerUrl}
+                                        onChange={(e) => setProfileForm({ ...profileForm, headerUrl: e.target.value })}
+                                        placeholder="https://"
+                                    />
+                                </div>
+                                {saveError && (
+                                    <div style={{ color: 'var(--error)', fontSize: '13px' }}>{saveError}</div>
+                                )}
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                    <button className="btn btn-ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                                        Cancel
+                                    </button>
+                                    <button className="btn btn-primary" onClick={handleSaveProfile} disabled={isSaving}>
+                                        {isSaving ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Tabs */}
+                <div style={{ display: 'flex', borderTop: '1px solid var(--border)' }}>
+                    {(['posts', 'followers', 'following'] as const).map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            style={{
+                                flex: 1,
+                                padding: '16px',
+                                background: 'none',
+                                border: 'none',
+                                borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                                color: activeTab === tab ? 'var(--foreground)' : 'var(--foreground-tertiary)',
+                                fontWeight: activeTab === tab ? 600 : 400,
+                                cursor: 'pointer',
+                                textTransform: 'capitalize',
+                            }}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Content */}
+            {activeTab === 'posts' && (
+                posts.length === 0 ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>No posts yet</p>
+                    </div>
+                ) : (
+                    posts.map(post => <PostCard key={post.id} post={post} />)
+                )
+            )}
+
+            {activeTab === 'followers' && (
+                followersLoading ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        Loading followers...
+                    </div>
+                ) : followers.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>No followers yet</p>
+                    </div>
+                ) : (
+                    <div>
+                        {followers.map(follower => (
+                            <UserRow key={follower.id} user={follower} />
+                        ))}
+                    </div>
+                )
+            )}
+
+            {activeTab === 'following' && (
+                followingLoading ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        Loading following...
+                    </div>
+                ) : following.length === 0 ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>Not following anyone yet</p>
+                    </div>
+                ) : (
+                    <div>
+                        {following.map(userItem => (
+                            <UserRow key={userItem.id} user={userItem} />
+                        ))}
+                    </div>
+                )
+            )}
+        </div>
+    );
+}
