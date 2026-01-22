@@ -120,7 +120,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
 
     return (
         <article className={`post ${isDetail ? 'detail' : ''}`}>
-            <Link href={postUrl} className="post-link-overlay" aria-label="View post" />
+            {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
             <div className="post-header">
                 <Link href={`/${post.author.handle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
