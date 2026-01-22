@@ -83,51 +83,93 @@ Synapsis is an open-source, federated social network built to serve as global co
 5. Add your email to `ADMIN_EMAILS` in your `.env` file to grant yourself admin privileges.
 6. Restart the server (if running locally) to apply the admin changes.
 
-## Deployment & Updates
+## Deployment (VPS)
 
-### 1. Initial Deployment
+Since Synapsis stores media files locally by default, it is best hosted on a VPS (Virtual Private Server) like DigitalOcean, Hetzner, or AWS EC2.
 
-The easiest way to deploy your own instance is with **Vercel**. Click the button below to clone the repository and deploy:
+### Prerequisites
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
+- A VPS running Ubuntu 20.04 or later.
+- A domain name pointing to your VPS IP address.
+- PostgreSQL database (managed or self-hosted).
 
-1. **Create Repository**: Vercel will ask you to create a new Git repository.
-2. **Deploy**: Click "Deploy". The initial build will succeed using placeholder values.
-3. **Configure**: Once deployed, go to your project dashboard:
-   - **Settings** > **Environment Variables**
-   - Add `DATABASE_URL` (your Neon connection string)
-   - Add `AUTH_SECRET` (generate with `openssl rand -base64 33`)
-   - Add `ADMIN_EMAILS` (optional, for admin access)
-4. **Redeploy**: Go to **Deployments**, click the three dots on the latest deployment, and select **Redeploy** to apply the new variables.
+### 1. Server Setup
 
-### 2. Updating Your Instance
-
-Since Vercel creates a **clone** (new copy) of the repository, you need to manually pull updates from the official source (`upstream`) to keep your node current.
-
-**Setup (One-time):**
-1. Clone your new repository to your local machine:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-   cd YOUR_REPO_NAME
-   ```
-2. Add the official repository as a remote source:
-   ```bash
-   git remote add upstream https://github.com/cyph3rasi/Synapsis.git
-   ```
-
-**To Update:**
-Whenever a new version of Synapsis is released, run these commands globally to pull changes and deploy them to your instance:
+Install Node.js 18+ and PM2 (process manager):
 
 ```bash
-# 1. Fetch latest changes from the official source
-git fetch upstream
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-# 2. Merge changes into your main branch
-git checkout main
-git merge upstream/main
+# Install PM2
+sudo npm install -g pm2
+```
 
-# 3. Push to your repository (Vercel will auto-deploy)
-git push origin main
+### 2. Installation
+
+Clone and configure the application:
+
+```bash
+# Clone repo
+git clone https://github.com/cyph3rasi/Synapsis.git
+cd Synapsis
+
+# Install dependencies
+npm install
+
+# Setup Env
+cp .env.example .env
+nano .env # (Edit with your DB credentials and domain)
+
+# Build the project
+npm run build
+
+# Push Database Schema
+npm run db:push
+```
+
+### 3. Start Application
+
+Use PM2 to run the app in the background:
+
+```bash
+pm2 start npm --name "synapsis" -- start
+pm2 save
+pm2 startup
+```
+
+Your node is now running on port 3000!
+
+### 4. Reverse Proxy (Nginx)
+
+It is highly recommended to use Nginx to handle SSL and forward traffic to port 3000.
+
+```nginx
+server {
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+## Updating Your Instance
+
+To update your node when a new version is released:
+
+```bash
+cd Synapsis
+git pull origin main
+npm install
+npm run build
+pm2 restart synapsis
 ```
 
 ## License
