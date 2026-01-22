@@ -189,6 +189,23 @@ export const followsRelations = relations(follows, ({ one }) => ({
 }));
 
 // ============================================
+// REMOTE FOLLOWS (for federated follows)
+// ============================================
+
+export const remoteFollows = pgTable('remote_follows', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  followerId: uuid('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetHandle: text('target_handle').notNull(), // username@domain
+  targetActorUrl: text('target_actor_url').notNull(),
+  inboxUrl: text('inbox_url').notNull(),
+  activityId: text('activity_id').notNull(), // UUID token for activity URL
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('remote_follows_follower_idx').on(table.followerId),
+  index('remote_follows_target_idx').on(table.targetHandle),
+]);
+
+// ============================================
 // LIKES
 // ============================================
 

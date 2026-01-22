@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { db, follows, users, notifications } from '@/db';
+import { db, follows, users, notifications, remoteFollows } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
 import { resolveRemoteUser } from '@/lib/activitypub/fetch';
-import { createFollowActivity } from '@/lib/activitypub/activities';
+import { createFollowActivity, createUndoActivity } from '@/lib/activitypub/activities';
 import { deliverActivity } from '@/lib/activitypub/outbox';
 
 type RouteContext = { params: Promise<{ handle: string }> };
@@ -31,7 +31,17 @@ export async function GET(request: Request, context: RouteContext) {
         }
 
         if (remote) {
-            return NextResponse.json({ following: false, remote: true });
+            if (!db) {
+                return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+            }
+            const targetHandle = `${remote.handle}@${remote.domain}`;
+            const existingRemoteFollow = await db.query.remoteFollows.findFirst({
+                where: and(
+                    eq(remoteFollows.followerId, currentUser.id),
+                    eq(remoteFollows.targetHandle, targetHandle)
+                ),
+            });
+            return NextResponse.json({ following: !!existingRemoteFollow, remote: true });
         }
 
         if (!db) {
@@ -92,6 +102,18 @@ export async function POST(request: Request, context: RouteContext) {
                 return NextResponse.json({ error: 'Remote inbox not available' }, { status: 400 });
             }
             const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+            const targetHandle = `${remote.handle}@${remote.domain}`;
+
+            const existingRemoteFollow = await db.query.remoteFollows.findFirst({
+                where: and(
+                    eq(remoteFollows.followerId, currentUser.id),
+                    eq(remoteFollows.targetHandle, targetHandle)
+                ),
+            });
+            if (existingRemoteFollow) {
+                return NextResponse.json({ error: 'Already following' }, { status: 400 });
+            }
+
             const activityId = crypto.randomUUID();
             const followActivity = createFollowActivity(currentUser, remoteProfile.id, nodeDomain, activityId);
             const keyId = `https://${nodeDomain}/users/${currentUser.handle}#main-key`;
@@ -103,6 +125,13 @@ export async function POST(request: Request, context: RouteContext) {
             if (!result.success) {
                 return NextResponse.json({ error: result.error || 'Failed to follow remote user' }, { status: 502 });
             }
+            await db.insert(remoteFollows).values({
+                followerId: currentUser.id,
+                targetHandle,
+                targetActorUrl: remoteProfile.id,
+                inboxUrl: targetInbox,
+                activityId,
+            });
             return NextResponse.json({ success: true, following: true, remote: true });
         }
 
@@ -183,7 +212,38 @@ export async function DELETE(request: Request, context: RouteContext) {
         const remote = parseRemoteHandle(handle);
 
         if (remote) {
-            return NextResponse.json({ error: 'Unfollow for remote users not supported yet' }, { status: 501 });
+            if (!db) {
+                return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+            }
+            const targetHandle = `${remote.handle}@${remote.domain}`;
+            const existingRemoteFollow = await db.query.remoteFollows.findFirst({
+                where: and(
+                    eq(remoteFollows.followerId, currentUser.id),
+                    eq(remoteFollows.targetHandle, targetHandle)
+                ),
+            });
+            if (!existingRemoteFollow) {
+                return NextResponse.json({ error: 'Not following' }, { status: 400 });
+            }
+            const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+            const originalFollow = createFollowActivity(
+                currentUser,
+                existingRemoteFollow.targetActorUrl,
+                nodeDomain,
+                existingRemoteFollow.activityId
+            );
+            const undoActivity = createUndoActivity(currentUser, originalFollow, nodeDomain, crypto.randomUUID());
+            const keyId = `https://${nodeDomain}/users/${currentUser.handle}#main-key`;
+            const privateKey = currentUser.privateKeyEncrypted;
+            if (!privateKey) {
+                return NextResponse.json({ error: 'Missing signing key' }, { status: 500 });
+            }
+            const result = await deliverActivity(undoActivity, existingRemoteFollow.inboxUrl, privateKey, keyId);
+            if (!result.success) {
+                return NextResponse.json({ error: result.error || 'Failed to unfollow remote user' }, { status: 502 });
+            }
+            await db.delete(remoteFollows).where(eq(remoteFollows.id, existingRemoteFollow.id));
+            return NextResponse.json({ success: true, following: false, remote: true });
         }
 
         if (!db) {

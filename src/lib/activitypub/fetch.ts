@@ -9,6 +9,9 @@ export interface ActivityPubProfile {
     summary?: string;
     url?: string;
     inbox?: string;
+    outbox?: string;
+    followers?: string;
+    following?: string;
     endpoints?: {
         sharedInbox?: string;
     };

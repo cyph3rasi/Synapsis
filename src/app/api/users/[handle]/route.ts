@@ -23,6 +23,23 @@ const sanitizeText = (value?: string | null) => {
     return decoded.replace(/\s+/g, ' ').trim() || null;
 };
 
+const fetchCollectionCount = async (url?: string | null) => {
+    if (!url) return 0;
+    try {
+        const res = await fetch(url, {
+            headers: {
+                'Accept': 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"',
+            },
+        });
+        if (!res.ok) return 0;
+        const data = await res.json();
+        if (typeof data?.totalItems === 'number') return data.totalItems;
+    } catch {
+        return 0;
+    }
+    return 0;
+};
+
 export async function GET(request: Request, context: RouteContext) {
     try {
         const { handle } = await context.params;
@@ -59,6 +76,11 @@ export async function GET(request: Request, context: RouteContext) {
                     const iconUrl = typeof remoteProfile.icon === 'string' ? remoteProfile.icon : remoteProfile.icon?.url;
                     const headerUrl = typeof remoteProfile.image === 'string' ? remoteProfile.image : remoteProfile.image?.url;
                     const profileUrl = typeof remoteProfile.url === 'string' ? remoteProfile.url : remoteProfile.id;
+                    const [followersCount, followingCount, postsCount] = await Promise.all([
+                        fetchCollectionCount(remoteProfile.followers),
+                        fetchCollectionCount(remoteProfile.following),
+                        fetchCollectionCount(remoteProfile.outbox),
+                    ]);
                     return NextResponse.json({
                         user: {
                             id: remoteProfile.id || profileUrl || `remote:${cleanHandle}`,
@@ -67,9 +89,9 @@ export async function GET(request: Request, context: RouteContext) {
                             bio: sanitizeText(remoteProfile.summary),
                             avatarUrl: iconUrl ?? null,
                             headerUrl: headerUrl ?? null,
-                            followersCount: 0,
-                            followingCount: 0,
-                            postsCount: 0,
+                            followersCount,
+                            followingCount,
+                            postsCount,
                             website: profileUrl ?? null,
                             createdAt: new Date().toISOString(),
                             isRemote: true,
