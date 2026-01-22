@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SynapsisLogo } from '@/components/Icons';
@@ -15,6 +15,46 @@ export default function LoginPage() {
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [nodeInfo, setNodeInfo] = useState({ name: '', description: '' });
+    const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+
+    // Fetch node info
+    useEffect(() => {
+        fetch('/api/node')
+            .then(res => res.json())
+            .then(data => {
+                setNodeInfo({
+                    name: data.name || '',
+                    description: data.description || 'Federated social network infrastructure'
+                });
+            })
+            .catch(() => { });
+    }, []);
+
+    // Handle availability check
+    useEffect(() => {
+        if (mode !== 'register' || !handle || handle.length < 3) {
+            setHandleStatus('idle');
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setHandleStatus('checking');
+            try {
+                const res = await fetch(`/api/auth/check-handle?handle=${handle}`);
+                const data = await res.json();
+                if (data.available) {
+                    setHandleStatus('available');
+                } else {
+                    setHandleStatus('taken');
+                }
+            } catch {
+                setHandleStatus('idle');
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [handle, mode]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,12 +105,17 @@ export default function LoginPage() {
             <div style={{ width: '100%', maxWidth: '400px' }}>
                 {/* Logo */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-                    <div className="logo" style={{ marginBottom: '8px', fontSize: '32px' }}>
+                    <div className="logo" style={{ marginBottom: '4px', fontSize: '32px' }}>
                         <SynapsisLogo />
                         <span>Synapsis</span>
                     </div>
-                    <p style={{ color: 'var(--foreground-secondary)', marginTop: '0' }}>
-                        Federated social network infrastructure
+                    {nodeInfo.name && nodeInfo.name !== 'Synapsis' && (
+                        <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--foreground)', marginBottom: '8px' }}>
+                            {nodeInfo.name}
+                        </div>
+                    )}
+                    <p style={{ color: 'var(--foreground-secondary)', marginTop: '0', textAlign: 'center' }}>
+                        {nodeInfo.description}
                     </p>
                 </div>
 
@@ -158,9 +203,26 @@ export default function LoginPage() {
                                         maxLength={20}
                                     />
                                 </div>
-                                <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                                    3-20 characters, letters, numbers, and underscores only
-                                </p>
+                                <div style={{
+                                    fontSize: '12px',
+                                    marginTop: '4px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                        3-20 characters, alphanumeric and underscores
+                                    </span>
+                                    {handleStatus === 'checking' && (
+                                        <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                    )}
+                                    {handleStatus === 'available' && (
+                                        <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                                    )}
+                                    {handleStatus === 'taken' && (
+                                        <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                    )}
+                                </div>
                             </div>
 
                             <div style={{ marginBottom: '16px' }}>

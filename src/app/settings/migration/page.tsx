@@ -31,6 +31,32 @@ export default function MigrationPage() {
     const [isImporting, setIsImporting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
     const [importSuccess, setImportSuccess] = useState<string | null>(null);
+    const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+
+    // Handle availability check
+    useEffect(() => {
+        if (activeTab !== 'import' || !importHandle || importHandle.length < 3) {
+            setHandleStatus('idle');
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setHandleStatus('checking');
+            try {
+                const res = await fetch(`/api/auth/check-handle?handle=${importHandle}`);
+                const data = await res.json();
+                if (data.available) {
+                    setHandleStatus('available');
+                } else {
+                    setHandleStatus('taken');
+                }
+            } catch {
+                setHandleStatus('idle');
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [importHandle, activeTab]);
 
     const handleExport = async () => {
         if (!exportPassword) {
@@ -359,15 +385,45 @@ export default function MigrationPage() {
                         <label style={{ fontSize: '13px', color: 'var(--foreground-tertiary)', display: 'block', marginBottom: '6px' }}>
                             Handle on this node
                         </label>
-                        <input
-                            type="text"
-                            className="input"
-                            value={importHandle}
-                            onChange={(e) => setImportHandle(e.target.value)}
-                            placeholder="e.g., alice"
-                        />
-                        <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                            This will be your @handle on this node. Your DID remains the same.
+                        <div style={{ position: 'relative' }}>
+                            <span style={{
+                                position: 'absolute',
+                                left: '12px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--foreground-tertiary)',
+                            }}>@</span>
+                            <input
+                                type="text"
+                                className="input"
+                                value={importHandle}
+                                onChange={(e) => setImportHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                style={{ paddingLeft: '28px' }}
+                                placeholder="yourhandle"
+                                required
+                                minLength={3}
+                                maxLength={20}
+                            />
+                        </div>
+                        <div style={{
+                            fontSize: '12px',
+                            marginTop: '4px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                3-20 characters, alphanumeric and underscores
+                            </span>
+                            {handleStatus === 'checking' && (
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                            )}
+                            {handleStatus === 'available' && (
+                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                            )}
+                            {handleStatus === 'taken' && (
+                                <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                            )}
                         </div>
                     </div>
 
