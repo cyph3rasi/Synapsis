@@ -83,16 +83,48 @@ Synapsis is an open-source, federated social network built to serve as global co
 5. Add your email to `ADMIN_EMAILS` in your `.env` file to grant yourself admin privileges.
 6. Restart the server (if running locally) to apply the admin changes.
 
-## Deployment
+## Deployment & Updates
 
-This project is optimized for deployment on **Vercel**.
+### 1. Initial Deployment
+
+The easiest way to deploy your own instance is with **Vercel**. Click the button below to clone the repository and deploy:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
 
-1. Push your code to a Git repository.
-2. Import the project into Vercel.
-3. Add the required environment variables (`DATABASE_URL`, `AUTH_SECRET`, etc.) in the Vercel project settings.
-4. Deploy.
+During the setup process on Vercel:
+1. **Repository Name**: Choose a name for your private copy (e.g., `my-node`).
+2. **Environment Variables**: Add your `DATABASE_URL` and `AUTH_SECRET`.
+   - *Note: If you skip this, the build will succeed with a placeholder DB, but you must add them later in Project Settings -> Environment Variables and redeploy.*
+
+### 2. Updating Your Instance
+
+Since Vercel creates a **clone** (new copy) of the repository, you need to manually pull updates from the official source (`upstream`) to keep your node current.
+
+**Setup (One-time):**
+1. Clone your new repository to your local machine:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+   cd YOUR_REPO_NAME
+   ```
+2. Add the official repository as a remote source:
+   ```bash
+   git remote add upstream https://github.com/cyph3rasi/Synapsis.git
+   ```
+
+**To Update:**
+Whenever a new version of Synapsis is released, run these commands globally to pull changes and deploy them to your instance:
+
+```bash
+# 1. Fetch latest changes from the official source
+git fetch upstream
+
+# 2. Merge changes into your main branch
+git checkout main
+git merge upstream/main
+
+# 3. Push to your repository (Vercel will auto-deploy)
+git push origin main
+```
 
 ## License
 
