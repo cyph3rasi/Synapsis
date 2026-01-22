@@ -12,6 +12,22 @@ Synapsis is an open-source, federated social network built to serve as global co
 - **Setup Wizard**: User-friendly `/install` flow to get your node running in minutes.
 - **Curated Feeds**: Smart feed algorithms to highlight engaging content.
 
+## Architecture & Concepts
+
+Synapsis differs from traditional social networks by prioritizing **sovereign identity** and **federated interoperability**.
+
+### 🔐 The ID System
+Unlike centralized platforms where your identity is a row in a database owned by a corporation, Synapsis uses a cryptographic identity system:
+- **DIDs (Decentralized Identifiers)**: Every user is assigned a unique DID (`did:key:...`) upon registration. This is your true, portable identity that exists independently of any specific server.
+- **Handles**: Human-readable names (e.g., `@alice`) are mapped to DIDs. This allows you to potentially move your account to a different node while keeping your connections, as the underlying DID remains the same.
+- **Cryptographic Signing**: Every post and action is cryptographically signed using your private key, ensuring authenticity and preventing tampering.
+
+### 🌐 Federation
+Synapsis is designed as a network of independent **Nodes**.
+- **Sovereign Data**: Communities can run their own Synapsis node, setting their own moderation rules and data policies.
+- **Interconnectivity**: Nodes can talk to each other (via ActivityPub), allowing a user on *Node A* to follow and interact with a user on *Node B*.
+- **Shared Protocol**: By adhering to open standards (WebFinger, NodeInfo), Synapsis plays nicely with the broader Fediverse.
+
 ## Tech Stack
 
 - **Framework**: [Next.js 15+](https://nextjs.org/) (App Router)
