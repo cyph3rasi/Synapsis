@@ -53,7 +53,7 @@ export default function SettingsPage() {
                         Security
                     </div>
                     <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
-                        Change password, manage sessions
+                        Change password
                     </div>
                 </Link>
 

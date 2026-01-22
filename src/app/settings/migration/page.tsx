@@ -315,13 +315,31 @@ export default function MigrationPage() {
                         <label style={{ fontSize: '13px', color: 'var(--foreground-tertiary)', display: 'block', marginBottom: '6px' }}>
                             Export file
                         </label>
-                        <input
-                            type="file"
-                            accept=".json"
-                            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                            className="input"
-                            style={{ padding: '8px' }}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type="file"
+                                id="import-file-input"
+                                accept=".json"
+                                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                                style={{ display: 'none' }}
+                            />
+                            <label
+                                htmlFor="import-file-input"
+                                className="input"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    cursor: 'pointer',
+                                    color: importFile ? 'var(--foreground)' : 'var(--foreground-tertiary)'
+                                }}
+                            >
+                                <span>{importFile ? importFile.name : 'Select export file...'}</span>
+                                <span className="btn btn-ghost btn-sm" style={{ pointerEvents: 'none' }}>
+                                    Browse
+                                </span>
+                            </label>
+                        </div>
                     </div>
 
                     <div style={{ marginBottom: '20px' }}>

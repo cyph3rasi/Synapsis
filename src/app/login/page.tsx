@@ -10,6 +10,7 @@ export default function LoginPage() {
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [handle, setHandle] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
@@ -18,6 +19,12 @@ export default function LoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (mode === 'register' && password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -198,12 +205,24 @@ export default function LoginPage() {
                             required
                             minLength={8}
                         />
-                        {mode === 'register' && (
-                            <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                                Minimum 8 characters
-                            </p>
-                        )}
                     </div>
+
+                    {mode === 'register' && (
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Confirm Password
+                            </label>
+                            <input
+                                type="password"
+                                className="input"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                minLength={8}
+                            />
+                        </div>
+                    )}
 
                     <button
                         type="submit"
