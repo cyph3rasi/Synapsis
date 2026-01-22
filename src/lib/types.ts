@@ -3,6 +3,13 @@ export interface User {
     handle: string;
     displayName: string;
     avatarUrl?: string | null;
+    bio?: string | null;
+    headerUrl?: string | null;
+    followersCount?: number;
+    followingCount?: number;
+    postsCount?: number;
+    createdAt?: string;
+    movedTo?: string | null;
 }
 
 export interface MediaItem {
