@@ -3,21 +3,28 @@
 import { useState, useEffect } from 'react';
 
 export function RightSidebar() {
+    const fallbackDescription = process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.';
     const [nodeInfo, setNodeInfo] = useState({
         name: process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node',
-        description: 'A federated social network designed as global communication infrastructure. Signal over noise. Identity that is truly yours.',
+        description: fallbackDescription,
         longDescription: '',
         rules: '',
         bannerUrl: '',
     });
 
     useEffect(() => {
-        fetch('/api/node')
+        fetch('/api/node', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
-                if (data.name) {
-                    setNodeInfo(prev => ({ ...prev, ...data }));
-                }
+                setNodeInfo(prev => ({
+                    ...prev,
+                    ...data,
+                    name: data?.name ?? prev.name,
+                    description: data?.description ?? prev.description,
+                    longDescription: data?.longDescription ?? prev.longDescription,
+                    rules: data?.rules ?? prev.rules,
+                    bannerUrl: data?.bannerUrl ?? prev.bannerUrl,
+                }));
             })
             .catch(() => { });
     }, []);

@@ -163,13 +163,14 @@ export default function AdminPage() {
         }
     };
 
-    const handleSaveSettings = async () => {
+    const handleSaveSettings = async (override?: typeof nodeSettings) => {
+        const payload = override ?? nodeSettings;
         setSavingSettings(true);
         try {
             const res = await fetch('/api/admin/node', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(nodeSettings),
+                body: JSON.stringify(payload),
             });
             if (res.ok) {
                 alert('Settings saved!');
@@ -204,10 +205,12 @@ export default function AdminPage() {
                 throw new Error(data.error || 'Upload failed');
             }
 
-            setNodeSettings((prev) => ({
-                ...prev,
+            const nextSettings = {
+                ...nodeSettings,
                 bannerUrl: data.media?.url || data.url,
-            }));
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
         } catch (error) {
             console.error('Banner upload failed', error);
             setBannerUploadError('Upload failed. Please try again.');
