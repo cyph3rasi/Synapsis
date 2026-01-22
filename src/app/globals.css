@@ -118,8 +118,8 @@ a.btn-primary:visited {
 }
 
 .btn-ghost {
-  background: transparent;
-  border-color: transparent;
+  background: var(--background-tertiary);
+  border-color: var(--border);
 }
 
 .btn-ghost:hover {
@@ -1308,4 +1308,3 @@ a.btn-primary:visited {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-

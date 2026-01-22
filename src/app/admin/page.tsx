@@ -499,16 +499,10 @@ export default function AdminPage() {
                             </div>
 
                             <div>
-                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Banner / Logo URL</label>
-                                <input
-                                    className="input"
-                                    value={nodeSettings.bannerUrl}
-                                    onChange={e => setNodeSettings({ ...nodeSettings, bannerUrl: e.target.value })}
-                                    placeholder="https://"
-                                />
-                                <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Banner image</label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <label className="btn btn-ghost btn-sm">
-                                        {isUploadingBanner ? 'Uploading...' : 'Upload image'}
+                                        {isUploadingBanner ? 'Uploading...' : 'Upload banner'}
                                         <input
                                             type="file"
                                             accept="image/*"
