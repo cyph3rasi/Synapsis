@@ -30,6 +30,9 @@ export const dynamic = 'force-dynamic';
 
 // This is appropriate for a social network where all content is user-generated
 
+import { AuthProvider } from '@/lib/contexts/AuthContext';
+import { LayoutWrapper } from '@/components/LayoutWrapper';
+
 export default function RootLayout({
   children,
 }: {
@@ -37,7 +40,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${sairaCondensed.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

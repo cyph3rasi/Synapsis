@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-const ShieldIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface User {
   id: string;
@@ -45,33 +40,7 @@ interface Post {
 }
 
 // Icons as simple SVG components
-const HomeIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-);
 
-const SearchIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const BellIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
-const UserIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
 
 const HeartIcon = ({ filled }: { filled?: boolean }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
@@ -101,32 +70,7 @@ const FlagIcon = () => (
   </svg>
 );
 
-const SynapsisLogo = () => (
-  <svg
-    width="28"
-    height="28"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
-    <path d="M9 13a4.5 4.5 0 0 0 3-4" />
-    <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
-    <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
-    <path d="M6 18a4 4 0 0 1-1.967-.516" />
-    <path d="M12 13h4" />
-    <path d="M12 18h6a2 2 0 0 1 2 2v1" />
-    <path d="M12 8h8" />
-    <path d="M16 8V5a2 2 0 0 1 2-2" />
-    <circle cx="16" cy="13" r=".5" fill="currentColor" />
-    <circle cx="18" cy="3" r=".5" fill="currentColor" />
-    <circle cx="20" cy="21" r=".5" fill="currentColor" />
-    <circle cx="20" cy="8" r=".5" fill="currentColor" />
-  </svg>
-);
+
 
 function PostCard({ post, onLike, onRepost }: { post: Post; onLike: (id: string) => void; onRepost: (id: string) => void }) {
   const [liked, setLiked] = useState(false);
@@ -372,8 +316,7 @@ function Compose({ onPost }: { onPost: (content: string, mediaIds: string[]) => 
 }
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
@@ -406,20 +349,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Check auth status
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => setUser(data.user))
-      .catch(() => { });
-
-    // Check admin status
-    fetch('/api/admin/me')
-      .then(res => res.json())
-      .then(data => setIsAdmin(!!data.isAdmin))
-      .catch(() => { });
-  }, []);
-
-  useEffect(() => {
     loadFeed(feedType);
   }, [feedType]);
 
@@ -449,158 +378,82 @@ export default function Home() {
   };
 
   return (
-    <div className="layout">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="logo">
-          <SynapsisLogo />
-          <span>Synapsis</span>
+    <>
+      <header style={{
+        padding: '16px',
+        borderBottom: '1px solid var(--border)',
+        position: 'sticky',
+        top: 0,
+        background: 'var(--background)',
+        zIndex: 10,
+        backdropFilter: 'blur(12px)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Home</h1>
+          <div className="feed-toggle">
+            <button
+              className={`feed-toggle-btn ${feedType === 'latest' ? 'active' : ''}`}
+              onClick={() => setFeedType('latest')}
+            >
+              Latest
+            </button>
+            <button
+              className={`feed-toggle-btn ${feedType === 'curated' ? 'active' : ''}`}
+              onClick={() => setFeedType('curated')}
+            >
+              Curated
+            </button>
+          </div>
         </div>
-        <nav>
-          <Link href="/" className="nav-item active">
-            <HomeIcon />
-            <span>Home</span>
-          </Link>
-          <Link href="/explore" className="nav-item">
-            <SearchIcon />
-            <span>Explore</span>
-          </Link>
-          <Link href="/notifications" className="nav-item">
-            <BellIcon />
-            <span>Notifications</span>
-          </Link>
-          {user ? (
-            <Link href={`/${user.handle}`} className="nav-item">
-              <UserIcon />
-              <span>Profile</span>
-            </Link>
-          ) : (
-            <Link href="/login" className="nav-item">
-              <UserIcon />
-              <span>Login</span>
-            </Link>
-          )}
-          {isAdmin && (
-            <Link href="/admin" className="nav-item">
-              <ShieldIcon />
-              <span>Admin</span>
-            </Link>
-          )}
-        </nav>
-        {user && (
-          <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="avatar avatar-sm">
-                {user.displayName?.charAt(0) || user.handle.charAt(0)}
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px' }}>{user.displayName}</div>
-                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>@{user.handle}</div>
-              </div>
-            </div>
-          </div>
-        )}
-      </aside>
+      </header>
 
-      {/* Main Feed */}
-      <main className="main">
-        <header style={{
-          padding: '16px',
-          borderBottom: '1px solid var(--border)',
-          position: 'sticky',
-          top: 0,
-          background: 'var(--background)',
-          zIndex: 10,
-          backdropFilter: 'blur(12px)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Home</h1>
-            <div className="feed-toggle">
-              <button
-                className={`feed-toggle-btn ${feedType === 'latest' ? 'active' : ''}`}
-                onClick={() => setFeedType('latest')}
-              >
-                Latest
-              </button>
-              <button
-                className={`feed-toggle-btn ${feedType === 'curated' ? 'active' : ''}`}
-                onClick={() => setFeedType('curated')}
-              >
-                Curated
-              </button>
-            </div>
-          </div>
-        </header>
+      {user && <Compose onPost={handlePost} />}
 
-        {user && <Compose onPost={handlePost} />}
-
-        {!user && (
-          <div style={{ padding: '24px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
-            <p style={{ color: 'var(--foreground-secondary)', marginBottom: '16px' }}>
-              Join Synapsis to post and interact
-            </p>
-            <Link href="/login" className="btn btn-primary">
-              Login or Register
-            </Link>
-          </div>
-        )}
-
-        {feedType === 'curated' && feedMeta && (
-          <div className="feed-meta card">
-            <div className="feed-meta-title">Curated feed</div>
-            <div className="feed-meta-body">
-              We rank posts using recency and engagement. Following gets a boost, and your own posts stay visible.
-            </div>
-            <div className="feed-meta-weights">
-              Weights: engagement {feedMeta.weights.engagement}, recency {feedMeta.weights.recency}, follow boost {feedMeta.weights.followBoost}.
-            </div>
-            <div className="feed-meta-foot">
-              Window: {feedMeta.windowHours} hours. Seed: {feedMeta.seedLimit} posts.
-            </div>
-          </div>
-        )}
-
-        {loading ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
-            Loading...
-          </div>
-        ) : posts.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
-            <p>No posts yet</p>
-            <p style={{ fontSize: '13px', marginTop: '8px' }}>Be the first to post something!</p>
-          </div>
-        ) : (
-          posts.map(post => (
-            <PostCard
-              key={post.id}
-              post={post}
-              onLike={handleLike}
-              onRepost={handleRepost}
-            />
-          ))
-        )}
-      </main>
-
-      {/* Right Sidebar */}
-      <aside className="aside">
-        <div className="card">
-          <h3 style={{ fontWeight: 600, marginBottom: '12px' }}>Welcome to Synapsis</h3>
-          <p style={{ color: 'var(--foreground-secondary)', fontSize: '14px', lineHeight: 1.6 }}>
-            A federated social network designed as global communication infrastructure.
-            Signal over noise. Identity that&apos;s truly yours.
+      {!user && (
+        <div style={{ padding: '24px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
+          <p style={{ color: 'var(--foreground-secondary)', marginBottom: '16px' }}>
+            Join Synapsis to post and interact
           </p>
+          <Link href="/login" className="btn btn-primary">
+            Login or Register
+          </Link>
         </div>
+      )}
 
-        <div className="card" style={{ marginTop: '16px' }}>
-          <h3 style={{ fontWeight: 600, marginBottom: '12px' }}>Node Info</h3>
-          <p style={{ color: 'var(--foreground-secondary)', fontSize: '13px' }}>
-            {process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node'}
-          </p>
-          <p style={{ color: 'var(--foreground-tertiary)', fontSize: '12px', marginTop: '4px' }}>
-            Running Synapsis v0.1.0
-          </p>
+      {feedType === 'curated' && feedMeta && (
+        <div className="feed-meta card">
+          <div className="feed-meta-title">Curated feed</div>
+          <div className="feed-meta-body">
+            We rank posts using recency and engagement. Following gets a boost, and your own posts stay visible.
+          </div>
+          <div className="feed-meta-weights">
+            Weights: engagement {feedMeta.weights.engagement}, recency {feedMeta.weights.recency}, follow boost {feedMeta.weights.followBoost}.
+          </div>
+          <div className="feed-meta-foot">
+            Window: {feedMeta.windowHours} hours. Seed: {feedMeta.seedLimit} posts.
+          </div>
         </div>
-      </aside>
-    </div>
+      )}
+
+      {loading ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+          Loading...
+        </div>
+      ) : posts.length === 0 ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+          <p>No posts yet</p>
+          <p style={{ fontSize: '13px', marginTop: '8px' }}>Be the first to post something!</p>
+        </div>
+      ) : (
+        posts.map(post => (
+          <PostCard
+            key={post.id}
+            post={post}
+            onLike={handleLike}
+            onRepost={handleRepost}
+          />
+        ))
+      )}
+    </>
   );
 }

@@ -49,12 +49,20 @@ const formatDate = (value: string) => {
 
 export default function AdminPage() {
     const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-    const [tab, setTab] = useState<'reports' | 'posts' | 'users'>('reports');
+    const [tab, setTab] = useState<'reports' | 'posts' | 'users' | 'settings'>('reports');
     const [reports, setReports] = useState<Report[]>([]);
     const [posts, setPosts] = useState<AdminPost[]>([]);
     const [users, setUsers] = useState<AdminUser[]>([]);
     const [loading, setLoading] = useState(false);
     const [reportStatus, setReportStatus] = useState<'open' | 'resolved' | 'all'>('open');
+    const [nodeSettings, setNodeSettings] = useState({
+        name: '',
+        description: '',
+        longDescription: '',
+        rules: '',
+        bannerUrl: '',
+    });
+    const [savingSettings, setSavingSettings] = useState(false);
 
     useEffect(() => {
         fetch('/api/admin/me')
@@ -102,11 +110,31 @@ export default function AdminPage() {
         }
     };
 
+    const loadNodeSettings = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/node');
+            const data = await res.json();
+            setNodeSettings({
+                name: data.name || '',
+                description: data.description || '',
+                longDescription: data.longDescription || '',
+                rules: data.rules || '',
+                bannerUrl: data.bannerUrl || '',
+            });
+        } catch {
+            // error
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!isAdmin) return;
         if (tab === 'reports') loadReports();
         if (tab === 'posts') loadPosts();
         if (tab === 'users') loadUsers();
+        if (tab === 'settings') loadNodeSettings();
     }, [tab, isAdmin, reportStatus]);
 
     const handleReportResolve = async (id: string, status: 'open' | 'resolved') => {
@@ -130,6 +158,26 @@ export default function AdminPage() {
             loadReports();
         } else {
             loadPosts();
+        }
+    };
+
+    const handleSaveSettings = async () => {
+        setSavingSettings(true);
+        try {
+            const res = await fetch('/api/admin/node', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nodeSettings),
+            });
+            if (res.ok) {
+                alert('Settings saved!');
+            } else {
+                alert('Failed to save settings.');
+            }
+        } catch {
+            alert('Failed to save settings.');
+        } finally {
+            setSavingSettings(false);
         }
     };
 
@@ -194,6 +242,9 @@ export default function AdminPage() {
                 </button>
                 <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
                     Users
+                </button>
+                <button className={`admin-tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
+                    Settings
                 </button>
             </div>
 
@@ -379,6 +430,88 @@ export default function AdminPage() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </div>
+            )}
+            {tab === 'settings' && (
+                <div className="admin-card">
+                    <div style={{ fontWeight: 600, marginBottom: '16px', fontSize: '16px' }}>Node Settings</div>
+
+                    {loading ? (
+                        <div className="admin-empty">Loading settings...</div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Node Name</label>
+                                <input
+                                    className="input"
+                                    value={nodeSettings.name}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, name: e.target.value })}
+                                    placeholder="My Synapsis Node"
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Short Description</label>
+                                <textarea
+                                    className="input"
+                                    value={nodeSettings.description}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, description: e.target.value })}
+                                    placeholder="A brief tagline for your node."
+                                    rows={2}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Banner / Logo URL</label>
+                                <input
+                                    className="input"
+                                    value={nodeSettings.bannerUrl}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, bannerUrl: e.target.value })}
+                                    placeholder="https://"
+                                />
+                                {nodeSettings.bannerUrl && (
+                                    <div style={{ marginTop: '8px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
+                                        <div style={{
+                                            position: 'absolute', inset: 0,
+                                            background: `url(${nodeSettings.bannerUrl}) center/cover no-repeat`
+                                        }} />
+                                        <div style={{
+                                            position: 'absolute', inset: 0,
+                                            background: 'linear-gradient(to bottom, transparent, var(--background-secondary))'
+                                        }} />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Long Description (About)</label>
+                                <textarea
+                                    className="input"
+                                    value={nodeSettings.longDescription}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, longDescription: e.target.value })}
+                                    placeholder="Detailed information about your node/community."
+                                    rows={5}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Rules</label>
+                                <textarea
+                                    className="input"
+                                    value={nodeSettings.rules}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, rules: e.target.value })}
+                                    placeholder="Community rules and guidelines."
+                                    rows={5}
+                                />
+                            </div>
+
+                            <div style={{ paddingTop: '8px' }}>
+                                <button className="btn btn-primary" onClick={handleSaveSettings} disabled={savingSettings}>
+                                    {savingSettings ? 'Saving...' : 'Save Settings'}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
