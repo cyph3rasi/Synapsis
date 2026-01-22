@@ -91,12 +91,6 @@ The easiest way to deploy your own instance is with **Vercel**. Click the button
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
 
-### 1. Initial Deployment
-
-The easiest way to deploy your own instance is with **Vercel**. Click the button below to clone the repository and deploy:
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/cyph3rasi/Synapsis)
-
 1. **Create Repository**: Vercel will ask you to create a new Git repository.
 2. **Deploy**: Click "Deploy". The initial build will succeed using placeholder values.
 3. **Configure**: Once deployed, go to your project dashboard:
