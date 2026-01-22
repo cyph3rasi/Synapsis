@@ -42,6 +42,7 @@ export interface ActivityPubActor {
     endpoints: {
         sharedInbox: string;
     };
+    movedTo?: string; // If account has migrated to a new location
 }
 
 /**
@@ -99,6 +100,11 @@ export function userToActor(user: User, nodeDomain: string): ActivityPubActor {
             mediaType: 'image/png',
             url: user.headerUrl,
         };
+    }
+
+    // Add movedTo if account has migrated
+    if (user.movedTo) {
+        actor.movedTo = user.movedTo;
     }
 
     return actor;

@@ -17,6 +17,7 @@ interface User {
     followingCount: number;
     postsCount: number;
     createdAt: string;
+    movedTo?: string; // New actor URL if account has migrated
 }
 
 interface UserSummary {
@@ -366,6 +367,36 @@ export default function ProfilePage() {
                     <p style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}>{user.postsCount} posts</p>
                 </div>
             </header>
+
+            {/* Account Moved Banner */}
+            {user.movedTo && (
+                <div style={{
+                    padding: '16px',
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    borderBottom: '1px solid rgba(245, 158, 11, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                }}>
+                    <span style={{ fontSize: '20px' }}>🚀</span>
+                    <div>
+                        <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>
+                            This account has moved
+                        </div>
+                        <div style={{ fontSize: '14px', color: 'var(--foreground-secondary)' }}>
+                            This user has migrated to a new node:{' '}
+                            <a
+                                href={user.movedTo}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: 'var(--accent)' }}
+                            >
+                                {user.movedTo.replace('https://', '').replace('/users/', '/@')}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Profile Header */}
             <div style={{ borderBottom: '1px solid var(--border)' }}>

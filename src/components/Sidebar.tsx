@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo } from './Icons';
+import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo, BookOpenIcon, SettingsIcon } from './Icons';
 
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
@@ -31,6 +31,10 @@ export function Sidebar() {
                     <BellIcon />
                     <span>Notifications</span>
                 </Link>
+                <Link href="/guide" className={`nav-item ${pathname?.startsWith('/guide') ? 'active' : ''}`}>
+                    <BookOpenIcon />
+                    <span>Guide</span>
+                </Link>
                 {user ? (
                     <Link href={`/${user.handle}`} className={`nav-item ${pathname === '/' + user.handle ? 'active' : ''}`}>
                         <UserIcon />
@@ -46,6 +50,12 @@ export function Sidebar() {
                     <Link href="/admin" className={`nav-item ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
                         <ShieldIcon />
                         <span>Admin</span>
+                    </Link>
+                )}
+                {user && (
+                    <Link href="/settings" className={`nav-item ${pathname?.startsWith('/settings') ? 'active' : ''}`}>
+                        <SettingsIcon />
+                        <span>Settings</span>
                     </Link>
                 )}
             </nav>

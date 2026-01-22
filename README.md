@@ -1,32 +1,73 @@
 # Synapsis
 
-Synapsis is an open-source, federated social network built to serve as global communication infrastructure. It is designed to be lightweight, easy to deploy, and interoperable with the broader fediverse.
+Synapsis is an open-source, federated social network built to serve as global communication infrastructure. It is designed to be lightweight, easy to deploy, and interoperable with the broader Fediverse.
 
 ## Features
 
-- **Federation Ready**: Built with ActivityPub compatibility in mind (WebFinger, NodeInfo).
-- **Identity**: Portable identity system backed by user handles.
+- **Federation Ready**: Built with ActivityPub compatibility for cross-platform communication.
+- **Decentralized Identity (DIDs)**: Portable identity system that you truly own.
 - **Modern UI**: Clean, responsive interface inspired by Vercel's design system.
 - **Rich Media**: Support for image uploads and media galleries.
 - **Moderation**: Built-in admin dashboard for user management and content moderation.
 - **Setup Wizard**: User-friendly `/install` flow to get your node running in minutes.
 - **Curated Feeds**: Smart feed algorithms to highlight engaging content.
 
+---
+
+## 📖 User Guide
+
+New to Synapsis or the Fediverse? Visit the **[/guide](/guide)** page in the app for a comprehensive walkthrough on:
+
+- What the Fediverse is and how it works
+- How Synapsis differs from platforms like Mastodon
+- How to follow users on other servers
+- How others can follow you
+- Understanding Decentralized Identifiers (DIDs) and portable identity
+
+---
+
 ## Architecture & Concepts
 
 Synapsis differs from traditional social networks by prioritizing **sovereign identity** and **federated interoperability**.
 
-### 🔐 The ID System
-Unlike centralized platforms where your identity is a row in a database owned by a corporation, Synapsis uses a cryptographic identity system:
-- **DIDs (Decentralized Identifiers)**: Every user is assigned a unique DID (`did:key:...`) upon registration. This is your true, portable identity that exists independently of any specific server.
-- **Handles**: Human-readable names (e.g., `@alice`) are mapped to DIDs. This allows you to potentially move your account to a different node while keeping your connections, as the underlying DID remains the same.
-- **Cryptographic Signing**: Every post and action is cryptographically signed using your private key, ensuring authenticity and preventing tampering.
+### 🔐 Decentralized Identity (DIDs)
 
-### 🌐 Federation
-Synapsis is designed as a network of independent **Nodes**.
-- **Sovereign Data**: Communities can run their own Synapsis node, setting their own moderation rules and data policies.
-- **Interconnectivity**: Nodes can talk to each other (via ActivityPub), allowing a user on *Node A* to follow and interact with a user on *Node B*.
-- **Shared Protocol**: By adhering to open standards (WebFinger, NodeInfo), Synapsis plays nicely with the broader Fediverse.
+Unlike centralized platforms where your identity is a row in a database owned by a corporation, Synapsis uses a cryptographic identity system:
+
+| Concept | Description |
+|---------|-------------|
+| **DID** | A unique, cryptographically-generated identifier (`did:key:...`) assigned to every user. This is your true identity that exists independently of any server. |
+| **Handle** | A human-readable username (`@alice`) that points to your DID. Think of it like a domain name pointing to an IP address. |
+| **Key Pair** | Every account has a public/private key pair. Your private key proves you are you; your public key lets others verify your identity. |
+
+**Why this matters:**
+- **Ownership**: Your identity is cryptographically yours, not controlled by a company.
+- **Authenticity**: Every post is signed with your private key, proving it came from you.
+- **Future Portability**: The foundation for moving your account between nodes without losing followers.
+
+### 🌐 Federation via ActivityPub
+
+Synapsis is designed as a network of independent **Nodes** that communicate using the ActivityPub protocol.
+
+- **Sovereign Data**: Communities run their own Synapsis nodes with their own rules.
+- **Interconnectivity**: A user on *Node A* can follow and interact with a user on *Node B*.
+- **Fediverse Compatibility**: Synapsis can communicate with Mastodon, Pleroma, Misskey, and other ActivityPub platforms.
+
+**How it works:**
+1. **WebFinger**: When you search for `@user@other-server.com`, WebFinger discovers their profile.
+2. **Follow Request**: Synapsis sends an ActivityPub `Follow` activity to the remote server.
+3. **Content Delivery**: When they post, it's delivered to your inbox via ActivityPub.
+
+### 🆚 Synapsis vs. Mastodon
+
+| Feature | Mastodon | Synapsis |
+|---------|----------|----------|
+| **Identity** | Server-bound (`@user@server`) | DID-based (cryptographic, portable) |
+| **Account Migration** | Limited (followers don't auto-migrate) | **Supported**: Full DID-based migration with auto-follow |
+| **Cryptographic Signing** | HTTP Signatures only | Full post signing with user keys |
+| **Protocol** | ActivityPub | ActivityPub + DID layer |
+
+---
 
 ## Tech Stack
 
@@ -35,6 +76,8 @@ Synapsis is designed as a network of independent **Nodes**.
 - **Styling**: Tailwind CSS v4 & custom Vercel-like design system
 - **Authentication**: Auth.js (NextAuth)
 - **Type Safety**: TypeScript
+
+---
 
 ## Installation & Setup
 
@@ -75,6 +118,14 @@ NEXT_PUBLIC_NODE_NAME="My Synapsis Node"
 
 # Admin Access
 ADMIN_EMAILS="admin@example.com"
+
+# Object Storage (Optional - for media uploads)
+STORAGE_ENDPOINT=https://your-s3-endpoint.com
+STORAGE_REGION=us-east-1
+STORAGE_BUCKET=your-bucket-name
+STORAGE_ACCESS_KEY=your-access-key
+STORAGE_SECRET_KEY=your-secret-key
+STORAGE_PUBLIC_BASE_URL=https://your-public-bucket-url.com
 ```
 
 ### 3. Initialize Database
@@ -122,6 +173,8 @@ server {
 }
 ```
 
+---
+
 ## Updates
 
 To update your node:
@@ -132,6 +185,8 @@ npm install
 npm run build
 pm2 restart synapsis
 ```
+
+---
 
 ## License
 

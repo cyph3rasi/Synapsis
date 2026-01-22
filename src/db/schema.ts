@@ -42,6 +42,10 @@ export const users = pgTable('users', {
   isSilenced: boolean('is_silenced').default(false).notNull(),
   silenceReason: text('silence_reason'),
   silencedAt: timestamp('silenced_at'),
+  // Account migration fields
+  movedTo: text('moved_to'), // New actor URL if this account migrated away
+  movedFrom: text('moved_from'), // Old actor URL if this account migrated here
+  migratedAt: timestamp('migrated_at'), // When the migration occurred
   followersCount: integer('followers_count').default(0).notNull(),
   followingCount: integer('following_count').default(0).notNull(),
   postsCount: integer('posts_count').default(0).notNull(),

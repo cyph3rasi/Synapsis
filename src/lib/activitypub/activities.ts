@@ -32,14 +32,16 @@ export interface ActivityPubNote {
 }
 
 export interface ActivityPubActivity {
-    '@context': string;
+    '@context': string | (string | object)[];
     id: string;
-    type: 'Create' | 'Follow' | 'Like' | 'Announce' | 'Undo' | 'Accept' | 'Reject' | 'Delete';
+    type: 'Create' | 'Follow' | 'Like' | 'Announce' | 'Undo' | 'Accept' | 'Reject' | 'Delete' | 'Move';
     actor: string;
     object: string | ActivityPubNote | object;
+    target?: string;
     published?: string;
     to?: string[];
     cc?: string[];
+    'synapsis:did'?: string; // Synapsis extension for DID-based migration
 }
 
 /**
@@ -185,6 +187,42 @@ export function createAcceptActivity(
         type: 'Accept',
         actor: actorUrl,
         object: followActivity,
+    };
+}
+
+/**
+ * Synapsis namespace for DID extension
+ */
+const SYNAPSIS_CONTEXT = 'https://synapsis.social/ns';
+
+/**
+ * Create a Move activity for account migration
+ * Includes the Synapsis DID extension for automatic follower migration
+ */
+export function createMoveActivity(
+    user: User,
+    oldActorUrl: string,
+    newActorUrl: string,
+    nodeDomain: string
+): ActivityPubActivity {
+    return {
+        '@context': [
+            ACTIVITY_STREAMS_CONTEXT,
+            SYNAPSIS_CONTEXT,
+            {
+                'synapsis': 'https://synapsis.social/ns#',
+                'synapsis:did': {
+                    '@id': 'synapsis:did',
+                    '@type': '@id',
+                },
+            },
+        ],
+        id: `https://${nodeDomain}/activities/move-${user.id}-${Date.now()}`,
+        type: 'Move',
+        actor: oldActorUrl,
+        object: oldActorUrl,
+        target: newActorUrl,
+        'synapsis:did': user.did, // This enables automatic migration for Synapsis nodes
     };
 }
 
