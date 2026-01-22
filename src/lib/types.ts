@@ -11,6 +11,8 @@ export interface User {
     website?: string | null;
     createdAt?: string;
     movedTo?: string | null;
+    isRemote?: boolean;
+    profileUrl?: string | null;
 }
 
 export interface MediaItem {

@@ -8,6 +8,10 @@ export interface ActivityPubProfile {
     name?: string;
     summary?: string;
     url?: string;
+    inbox?: string;
+    endpoints?: {
+        sharedInbox?: string;
+    };
     icon?: {
         url: string;
     } | string;

@@ -13,6 +13,23 @@ type SearchUser = {
     isRemote?: boolean;
 };
 
+const decodeEntities = (value: string) =>
+    value
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&#(\\d+);/g, (_, num) => String.fromCharCode(Number(num)))
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+
+const sanitizeText = (value?: string | null) => {
+    if (!value) return null;
+    const withoutTags = value.replace(/<[^>]*>/g, ' ');
+    const decoded = decodeEntities(withoutTags);
+    return decoded.replace(/\\s+/g, ' ').trim() || null;
+};
+
 const parseRemoteHandleQuery = (query: string): { handle: string; domain: string } | null => {
     let trimmed = query.trim();
     if (!trimmed) return null;
@@ -35,7 +52,7 @@ const buildRemoteUser = (
     domain: string,
 ): SearchUser | null => {
     if (!profile) return null;
-    const displayName = profile.name || profile.preferredUsername || null;
+    const displayName = sanitizeText(profile.name) || sanitizeText(profile.preferredUsername) || null;
     const username = profile.preferredUsername || handle;
     if (!username) return null;
     const fullHandle = `${username}@${domain}`.replace(/^@/, '');
@@ -47,7 +64,7 @@ const buildRemoteUser = (
         handle: fullHandle,
         displayName,
         avatarUrl: iconUrl ?? null,
-        bio: profile.summary ?? null,
+        bio: sanitizeText(profile.summary),
         profileUrl: profileUrl ?? null,
         isRemote: true,
     };

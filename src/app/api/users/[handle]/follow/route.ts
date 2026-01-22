@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { db, follows, users, notifications } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
+import { resolveRemoteUser } from '@/lib/activitypub/fetch';
+import { createFollowActivity } from '@/lib/activitypub/activities';
+import { deliverActivity } from '@/lib/activitypub/outbox';
 
 type RouteContext = { params: Promise<{ handle: string }> };
+
+const parseRemoteHandle = (handle: string) => {
+    const clean = handle.toLowerCase().replace(/^@/, '');
+    const parts = clean.split('@').filter(Boolean);
+    if (parts.length === 2) {
+        return { handle: parts[0], domain: parts[1] };
+    }
+    return null;
+};
 
 // Check follow status
 export async function GET(request: Request, context: RouteContext) {
@@ -11,9 +24,14 @@ export async function GET(request: Request, context: RouteContext) {
         const currentUser = await requireAuth();
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
+        const remote = parseRemoteHandle(handle);
 
         if (currentUser.isSuspended || currentUser.isSilenced) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
+        }
+
+        if (remote) {
+            return NextResponse.json({ following: false, remote: true });
         }
 
         if (!db) {
@@ -58,9 +76,34 @@ export async function POST(request: Request, context: RouteContext) {
         const currentUser = await requireAuth();
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
+        const remote = parseRemoteHandle(handle);
 
         if (currentUser.isSuspended || currentUser.isSilenced) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
+        }
+
+        if (remote) {
+            const remoteProfile = await resolveRemoteUser(remote.handle, remote.domain);
+            if (!remoteProfile) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
+            const targetInbox = remoteProfile.endpoints?.sharedInbox || remoteProfile.inbox;
+            if (!targetInbox) {
+                return NextResponse.json({ error: 'Remote inbox not available' }, { status: 400 });
+            }
+            const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+            const activityId = crypto.randomUUID();
+            const followActivity = createFollowActivity(currentUser, remoteProfile.id, nodeDomain, activityId);
+            const keyId = `https://${nodeDomain}/users/${currentUser.handle}#main-key`;
+            const privateKey = currentUser.privateKeyEncrypted;
+            if (!privateKey) {
+                return NextResponse.json({ error: 'Missing signing key' }, { status: 500 });
+            }
+            const result = await deliverActivity(followActivity, targetInbox, privateKey, keyId);
+            if (!result.success) {
+                return NextResponse.json({ error: result.error || 'Failed to follow remote user' }, { status: 502 });
+            }
+            return NextResponse.json({ success: true, following: true, remote: true });
         }
 
         if (!db) {
@@ -137,6 +180,11 @@ export async function DELETE(request: Request, context: RouteContext) {
         const currentUser = await requireAuth();
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
+        const remote = parseRemoteHandle(handle);
+
+        if (remote) {
+            return NextResponse.json({ error: 'Unfollow for remote users not supported yet' }, { status: 501 });
+        }
 
         if (!db) {
             return NextResponse.json({ error: 'Database not available' }, { status: 503 });
