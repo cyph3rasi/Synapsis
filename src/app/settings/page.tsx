@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
+import { Rocket, Shield, Bell } from 'lucide-react';
 
 export default function SettingsPage() {
     return (
@@ -31,11 +32,28 @@ export default function SettingsPage() {
                     color: 'var(--foreground)',
                     transition: 'border-color 0.15s ease',
                 }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                        🚀 Account Migration
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Rocket size={18} />
+                        Account Migration
                     </div>
                     <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
                         Export your account or import from another Synapsis node
+                    </div>
+                </Link>
+
+                <Link href="/settings/security" className="card" style={{
+                    display: 'block',
+                    padding: '20px',
+                    textDecoration: 'none',
+                    color: 'var(--foreground)',
+                    transition: 'border-color 0.15s ease',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Shield size={18} />
+                        Security
+                    </div>
+                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
+                        Change password, manage sessions
                     </div>
                 </Link>
 
@@ -44,21 +62,9 @@ export default function SettingsPage() {
                     padding: '20px',
                     opacity: 0.5,
                 }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                        🔐 Security
-                    </div>
-                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
-                        Change password, manage sessions (coming soon)
-                    </div>
-                </div>
-
-                <div className="card" style={{
-                    display: 'block',
-                    padding: '20px',
-                    opacity: 0.5,
-                }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                        🔔 Notifications
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Bell size={18} />
+                        Notifications
                     </div>
                     <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
                         Notification preferences (coming soon)

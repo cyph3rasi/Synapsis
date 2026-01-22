@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
+import { Rocket } from 'lucide-react';
 
 export default function GuidePage() {
     return (
@@ -175,7 +176,9 @@ export default function GuidePage() {
                 </ol>
 
                 <div className="card" style={{ background: 'var(--accent-muted)', padding: '16px', borderLeft: '3px solid var(--accent)' }}>
-                    <div style={{ fontWeight: 600, marginBottom: '8px' }}>🚀 The Synapsis Advantage</div>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Rocket size={18} /> The Synapsis Advantage
+                    </div>
                     <p style={{ color: 'var(--foreground-secondary)', lineHeight: 1.7, margin: 0 }}>
                         Unlike Mastodon where followers must manually re-follow you, <strong>Synapsis followers are automatically migrated</strong> because they follow your DID, not just a server-specific account. This is true account portability.
                     </p>

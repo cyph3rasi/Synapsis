@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { TriangleAlert, ShieldAlert } from 'lucide-react';
 
 interface ExportStats {
     posts: number;
@@ -286,8 +287,8 @@ export default function MigrationPage() {
                         border: '1px solid rgba(239, 68, 68, 0.3)',
                         borderRadius: '8px',
                     }}>
-                        <div style={{ fontWeight: 600, color: 'var(--error)', marginBottom: '8px' }}>
-                            ⚠️ Security Warning
+                        <div style={{ fontWeight: 600, color: 'var(--error)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <ShieldAlert size={18} /> Security Warning
                         </div>
                         <p style={{ fontSize: '13px', color: 'var(--foreground-secondary)', margin: 0 }}>
                             The export file contains your encrypted private key. Keep this file secure
@@ -368,7 +369,9 @@ export default function MigrationPage() {
                                 style={{ marginTop: '4px' }}
                             />
                             <span style={{ fontSize: '14px', color: 'var(--foreground-secondary)', lineHeight: 1.6 }}>
-                                <strong style={{ color: 'var(--warning)' }}>⚠️ Content Compliance:</strong> All of your post history
+                                <strong style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <TriangleAlert size={14} /> Content Compliance:
+                                </strong> All of your post history
                                 and content will be migrated to this node. It is your responsibility to ensure your content
                                 complies with this node's rules. If you migrate content that violates this node's rules,
                                 you may be subject to any moderation action the node operator sees fit.

@@ -1,19 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db, media } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { randomUUID } from 'crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { v4 as uuidv4 } from 'uuid';
 
-const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads');
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
     try {
         const user = await requireAuth();
 
-        const formData = await request.formData();
+        const formData = await req.formData();
         const file = formData.get('file') as File | null;
         const altText = (formData.get('alt') as string | null) || null;
 
@@ -35,21 +33,40 @@ export async function POST(request: Request) {
             }, { status: 400 });
         }
 
-        // Generate unique filename
-        const ext = file.name.split('.').pop() || 'jpg';
-        const filename = `${randomUUID()}.${ext}`;
-        const filepath = join(UPLOAD_DIR, filename);
+        const buffer = Buffer.from(await file.arrayBuffer());
+        // Sanitize filename to be safe for S3 keys
+        const filename = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
 
-        // Ensure upload directory exists
-        await mkdir(UPLOAD_DIR, { recursive: true });
+        // S3 Configuration
+        const s3 = new S3Client({
+            region: process.env.STORAGE_REGION || 'us-east-1',
+            endpoint: process.env.STORAGE_ENDPOINT,
+            credentials: {
+                accessKeyId: process.env.STORAGE_ACCESS_KEY || '',
+                secretAccessKey: process.env.STORAGE_SECRET_KEY || '',
+            },
+            forcePathStyle: true, // Needed for many S3-compatible providers
+        });
 
-        // Write file
-        const bytes = await file.arrayBuffer();
-        await writeFile(filepath, Buffer.from(bytes));
+        const bucket = process.env.STORAGE_BUCKET || 'synapsis';
 
-        const url = `/uploads/${filename}`;
+        await s3.send(new PutObjectCommand({
+            Bucket: bucket,
+            Key: filename,
+            Body: buffer,
+            ContentType: file.type,
+            ACL: 'public-read',
+        }));
 
-        // If database is available, store media record
+        // Construct Public URL
+        let url = '';
+        if (process.env.STORAGE_PUBLIC_BASE_URL) {
+            url = `${process.env.STORAGE_PUBLIC_BASE_URL}/${filename}`;
+        } else {
+            url = `${process.env.STORAGE_ENDPOINT}/${bucket}/${filename}`;
+        }
+
+        // Store media record
         if (db) {
             const [mediaRecord] = await db.insert(media).values({
                 userId: user.id,
@@ -72,6 +89,7 @@ export async function POST(request: Request) {
             success: true,
             url,
         });
+
     } catch (error) {
         if (error instanceof Error && error.message === 'Authentication required') {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

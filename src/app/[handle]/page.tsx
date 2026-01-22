@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeftIcon, CalendarIcon, HeartIcon, RepeatIcon, MessageIcon, FlagIcon } from '@/components/Icons';
 import AutoTextarea from '@/components/AutoTextarea';
+import { Rocket } from 'lucide-react';
 
 interface User {
     id: string;
@@ -378,7 +379,7 @@ export default function ProfilePage() {
                     alignItems: 'center',
                     gap: '12px',
                 }}>
-                    <span style={{ fontSize: '20px' }}>🚀</span>
+                    <Rocket size={24} style={{ color: 'var(--warning)' }} />
                     <div>
                         <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>
                             This account has moved
