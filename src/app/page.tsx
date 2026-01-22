@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import AutoTextarea from '@/components/AutoTextarea';
 
 interface User {
   id: string;
@@ -260,7 +261,7 @@ function Compose({ onPost }: { onPost: (content: string, mediaIds: string[]) => 
 
   return (
     <div className="compose">
-      <textarea
+      <AutoTextarea
         className="compose-input"
         placeholder="What's happening?"
         value={content}

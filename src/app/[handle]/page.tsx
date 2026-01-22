@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeftIcon, CalendarIcon, HeartIcon, RepeatIcon, MessageIcon, FlagIcon } from '@/components/Icons';
+import AutoTextarea from '@/components/AutoTextarea';
 
 interface User {
     id: string;
@@ -481,7 +482,7 @@ export default function ProfilePage() {
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Bio</label>
-                                    <textarea
+                                    <AutoTextarea
                                         className="input"
                                         value={profileForm.bio}
                                         onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}

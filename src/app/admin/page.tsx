@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import AutoTextarea from '@/components/AutoTextarea';
 
 type AdminUser = {
     id: string;
@@ -494,7 +495,7 @@ export default function AdminPage() {
 
                             <div>
                                 <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Short Description</label>
-                                <textarea
+                                <AutoTextarea
                                     className="input"
                                     value={nodeSettings.description}
                                     onChange={e => setNodeSettings({ ...nodeSettings, description: e.target.value })}
@@ -554,7 +555,7 @@ export default function AdminPage() {
 
                             <div>
                                 <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Long Description (About)</label>
-                                <textarea
+                                <AutoTextarea
                                     className="input"
                                     value={nodeSettings.longDescription}
                                     onChange={e => setNodeSettings({ ...nodeSettings, longDescription: e.target.value })}
@@ -565,7 +566,7 @@ export default function AdminPage() {
 
                             <div>
                                 <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Rules</label>
-                                <textarea
+                                <AutoTextarea
                                     className="input"
                                     value={nodeSettings.rules}
                                     onChange={e => setNodeSettings({ ...nodeSettings, rules: e.target.value })}
