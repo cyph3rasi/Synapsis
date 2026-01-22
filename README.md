@@ -20,152 +20,97 @@ Synapsis is an open-source, federated social network built to serve as global co
 - **Authentication**: Auth.js (NextAuth)
 - **Type Safety**: TypeScript
 
-## Getting Started
+## Installation & Setup
+
+You can run Synapsis locally for development or deploy it to a VPS for production.
 
 ### Prerequisites
 
 - Node.js 18+
-- A PostgreSQL database (e.g., [Neon](https://neon.tech))
+- PostgreSQL database (e.g., [Neon](https://neon.tech) or self-hosted)
+- Domain name (for production)
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/cyph3rasi/Synapsis.git
-   cd Synapsis
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Environment**
-   Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-   Update `.env` with your credentials:
-   ```env
-   # Database (PostgreSQL connection string)
-   DATABASE_URL="postgresql://user:password@host/dbname..."
-
-   # Auth (Generate with: openssl rand -base64 33)
-   AUTH_SECRET="your-secret-key"
-
-   # Node Configuration
-   NEXT_PUBLIC_NODE_DOMAIN="your-domain.com"
-   NEXT_PUBLIC_NODE_NAME="My Synapsis Node"
-
-   # Admin Access (Comma-separated emails)
-   ADMIN_EMAILS="admin@example.com,moderator@example.com"
-   ```
-
-4. **Initialize Database**
-   Push the schema to your database:
-   ```bash
-   npm run db:push
-   ```
-
-5. **Start Development Server**
-   ```bash
-   npm run dev
-   ```
-   Visit `http://localhost:3000` to see your node.
-
-### Initial Setup
-
-1. Go to `http://localhost:3000` (or your deployed URL).
-2. You will be redirected to the **Setup Wizard** (`/install`) if the node is not configured.
-3. Follow the wizard to verify your environment and database connection.
-4. **Register your first account**.
-5. Add your email to `ADMIN_EMAILS` in your `.env` file to grant yourself admin privileges.
-6. Restart the server (if running locally) to apply the admin changes.
-
-## Deployment (VPS)
-
-Since Synapsis stores media files locally by default, it is best hosted on a VPS (Virtual Private Server) like DigitalOcean, Hetzner, or AWS EC2.
-
-### Prerequisites
-
-- A VPS running Ubuntu 20.04 or later.
-- A domain name pointing to your VPS IP address.
-- PostgreSQL database (managed or self-hosted).
-
-### 1. Server Setup
-
-Install Node.js 18+ and PM2 (process manager):
+### 1. Clone & Install
 
 ```bash
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Install PM2
-sudo npm install -g pm2
-```
-
-### 2. Installation
-
-Clone and configure the application:
-
-```bash
-# Clone repo
 git clone https://github.com/cyph3rasi/Synapsis.git
 cd Synapsis
-
-# Install dependencies
 npm install
+```
 
-# Setup Env
+### 2. Configure Environment
+
+Copy the example configuration:
+```bash
 cp .env.example .env
-nano .env # (Edit with your DB credentials and domain)
+```
 
-# Build the project
-npm run build
+Edit `.env` with your credentials:
+```env
+# Database
+DATABASE_URL="postgresql://user:password@host/dbname..."
 
-# Push Database Schema
+# Auth (Generate with: openssl rand -base64 33)
+AUTH_SECRET="your-secret-key"
+
+# Node Info
+NEXT_PUBLIC_NODE_DOMAIN="localhost:3000" # Use your domain for production
+NEXT_PUBLIC_NODE_NAME="My Synapsis Node"
+
+# Admin Access
+ADMIN_EMAILS="admin@example.com"
+```
+
+### 3. Initialize Database
+```bash
 npm run db:push
 ```
 
-### 3. Start Application
+### 4. Run the Application
 
-Use PM2 to run the app in the background:
+**For Local Development:**
+```bash
+npm run dev
+# Visit http://localhost:3000
+```
+
+**For Production (VPS):**
+We recommend using **PM2** to run the app in the background.
 
 ```bash
+# Build the project
+npm run build
+
+# Install PM2
+sudo npm install -g pm2
+
+# Start the app
 pm2 start npm --name "synapsis" -- start
 pm2 save
 pm2 startup
 ```
 
-Your node is now running on port 3000!
-
-### 4. Reverse Proxy (Nginx)
-
-It is highly recommended to use Nginx to handle SSL and forward traffic to port 3000.
+### 5. Production Reverse Proxy (Optional)
+For production, use Nginx to handle SSL and forward traffic to port 3000.
 
 ```nginx
 server {
     server_name your-domain.com;
-
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
 
-## Updating Your Instance
+## Updates
 
-To update your node when a new version is released:
+To update your node:
 
 ```bash
-cd Synapsis
 git pull origin main
 npm install
 npm run build
