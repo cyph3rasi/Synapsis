@@ -70,13 +70,13 @@ export async function GET(
                     ...post,
                     isLiked: likedPostIds.has(post.id),
                     isReposted: repostedPostIds.has(post.id),
-                };
+                } as any;
 
                 replyPosts = replies.map(r => ({
                     ...r,
                     isLiked: likedPostIds.has(r.id),
                     isReposted: repostedPostIds.has(r.id),
-                }));
+                })) as any;
             }
         } catch {
             // Not authenticated or other error, skip flags

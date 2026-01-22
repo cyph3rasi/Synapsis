@@ -328,7 +328,7 @@ export async function GET(request: Request) {
                         ...p,
                         isLiked: likedPostIds.has(p.id),
                         isReposted: repostedPostIds.has(p.id),
-                    }));
+                    })) as any;
                 }
             }
         } catch (error) {

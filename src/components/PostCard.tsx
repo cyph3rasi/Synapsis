@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon } from '@/components/Icons';
 import { Post } from '@/lib/types';
 
 interface PostCardProps {
     post: Post;
-    onLike?: (id: string) => void;
-    onRepost?: (id: string) => void;
+    onLike?: (id: string, currentLiked: boolean) => void;
+    onRepost?: (id: string, currentReposted: boolean) => void;
     onComment?: (post: Post) => void;
     isDetail?: boolean;
 }

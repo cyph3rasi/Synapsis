@@ -154,14 +154,12 @@ export default function ProfilePage() {
         const method = isFollowing ? 'DELETE' : 'POST';
         const res = await fetch(`/api/users/${handle}/follow`, { method });
 
-        if (res.ok) {
+        if (res.ok && user) {
             setIsFollowing(!isFollowing);
-            if (user) {
-                setUser({
-                    ...user,
-                    followersCount: isFollowing ? user.followersCount - 1 : user.followersCount + 1,
-                });
-            }
+            setUser({
+                ...user,
+                followersCount: isFollowing ? (user.followersCount || 0) - 1 : (user.followersCount || 0) + 1,
+            });
         }
     };
 
@@ -352,7 +350,7 @@ export default function ProfilePage() {
                             fontSize: '14px',
                         }}>
                             <CalendarIcon />
-                            <span>Joined {formatDate(user.createdAt)}</span>
+                            <span>Joined {formatDate(user.createdAt || new Date().toISOString())}</span>
                         </div>
 
                         <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>

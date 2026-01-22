@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
