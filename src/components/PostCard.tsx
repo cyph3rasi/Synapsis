@@ -118,6 +118,28 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
 
     const postUrl = `/${post.author.handle}/posts/${post.id}`;
 
+    const renderContent = (content: string) => {
+        const parts = content.split(/(https?:\/\/[^\s]+)/g);
+        return parts.map((part, index) => {
+            if (part.match(/^https?:\/\/[^\s]+$/)) {
+                const display = part.replace(/^https?:\/\//, '');
+                const truncated = display.length > 48 ? `${display.slice(0, 32)}…${display.slice(-8)}` : display;
+                return (
+                    <a
+                        key={`url-${index}`}
+                        href={part}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {truncated}
+                    </a>
+                );
+            }
+            return <span key={`text-${index}`}>{part}</span>;
+        });
+    };
+
     return (
         <article className={`post ${isDetail ? 'detail' : ''}`}>
             {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
@@ -146,7 +168,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                 </div>
             )}
 
-            <div className="post-content">{post.content}</div>
+            <div className="post-content">{renderContent(post.content)}</div>
 
             {post.media && post.media.length > 0 && (
                 <div className="post-media-grid">

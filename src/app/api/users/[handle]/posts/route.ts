@@ -22,6 +22,58 @@ const sanitizeText = (value?: string | null) => {
     return decoded.replace(/\s+/g, ' ').trim() || null;
 };
 
+const extractTextAndUrls = (value?: string | null) => {
+    if (!value) return { text: '', urls: [] as string[] };
+    let html = value;
+    // Replace <br> with spaces to avoid words running together.
+    html = html.replace(/<br\s*\/?>/gi, ' ');
+    // Replace anchor tags with their hrefs (preferred) or inner text.
+    html = html.replace(/<a[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, href, text) => {
+        const cleanedHref = decodeEntities(String(href));
+        const cleanedText = decodeEntities(String(text)).replace(/<[^>]*>/g, ' ').trim();
+        return cleanedHref || cleanedText;
+    });
+    const withoutTags = html.replace(/<[^>]*>/g, ' ');
+    const decoded = decodeEntities(withoutTags);
+    const text = decoded.replace(/\s+/g, ' ').trim();
+    const urls = Array.from(text.matchAll(/https?:\/\/[^\s]+/gi)).map((match) => match[0]);
+    return { text, urls };
+};
+
+const normalizeUrl = (value: string) => value.replace(/[)\].,!?]+$/, '');
+
+const fetchLinkPreview = async (url: string) => {
+    try {
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'SynapsisBot/1.0',
+            },
+            signal: AbortSignal.timeout(4000),
+        });
+        if (!res.ok) return null;
+        const html = await res.text();
+        const getMeta = (property: string) => {
+            const regex = new RegExp(`<meta[^>]+(?:property|name)=["'](?:og:)?${property}["'][^>]+content=["']([^"']+)["']`, 'i');
+            const match = html.match(regex);
+            if (match) return match[1];
+            const regexRev = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:)?${property}["']`, 'i');
+            const matchRev = html.match(regexRev);
+            return matchRev ? matchRev[1] : null;
+        };
+        const title = getMeta('title') || html.match(/<title>([^<]+)<\/title>/i)?.[1];
+        const description = getMeta('description');
+        const image = getMeta('image');
+        return {
+            url,
+            title: title?.trim() || url,
+            description: description?.trim() || null,
+            image: image?.trim() || null,
+        };
+    } catch {
+        return null;
+    }
+};
+
 const parseRemoteHandle = (handle: string) => {
     const clean = handle.toLowerCase().replace(/^@/, '');
     const parts = clean.split('@').filter(Boolean);
@@ -83,32 +135,38 @@ export async function GET(request: Request, context: RouteContext) {
                 avatarUrl: typeof remoteProfile.icon === 'string' ? remoteProfile.icon : remoteProfile.icon?.url,
                 bio: sanitizeText(remoteProfile.summary),
             };
-            const posts = outboxItems
-                .map((item: any) => {
-                    const activity = item?.type === 'Create' ? item : null;
-                    const object = activity?.object;
-                    if (!object || typeof object === 'string' || object.type !== 'Note') {
-                        return null;
-                    }
-                    const attachments = Array.isArray(object.attachment) ? object.attachment : [];
-                    return {
-                        id: object.id || activity.id,
-                        content: sanitizeText(object.content) || '',
-                        createdAt: object.published || activity.published || new Date().toISOString(),
-                        likesCount: 0,
-                        repostsCount: 0,
-                        repliesCount: 0,
-                        author,
-                        media: attachments
-                            .filter((attachment: any) => attachment?.url)
-                            .map((attachment: any, index: number) => ({
-                                id: `${object.id || activity.id || 'media'}-${index}`,
-                                url: attachment.url,
-                                altText: sanitizeText(attachment.name) || null,
-                            })),
-                    };
-                })
-                .filter(Boolean);
+            const posts = [];
+            for (const item of outboxItems) {
+                const activity = item?.type === 'Create' ? item : null;
+                const object = activity?.object;
+                if (!object || typeof object === 'string' || object.type !== 'Note') {
+                    continue;
+                }
+                const attachments = Array.isArray(object.attachment) ? object.attachment : [];
+                const { text, urls } = extractTextAndUrls(object.content);
+                const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
+                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl) : null;
+                posts.push({
+                    id: object.id || activity.id,
+                    content: text || '',
+                    createdAt: object.published || activity.published || new Date().toISOString(),
+                    likesCount: 0,
+                    repostsCount: 0,
+                    repliesCount: 0,
+                    author,
+                    media: attachments
+                        .filter((attachment: any) => attachment?.url)
+                        .map((attachment: any, index: number) => ({
+                            id: `${object.id || activity.id || 'media'}-${index}`,
+                            url: attachment.url,
+                            altText: sanitizeText(attachment.name) || null,
+                        })),
+                    linkPreviewUrl: linkPreview?.url || normalizedUrl,
+                    linkPreviewTitle: linkPreview?.title || (normalizedUrl ?? null),
+                    linkPreviewDescription: linkPreview?.description || null,
+                    linkPreviewImage: linkPreview?.image || null,
+                });
+            }
             return NextResponse.json({ posts, nextCursor: null });
         }
 
@@ -135,33 +193,38 @@ export async function GET(request: Request, context: RouteContext) {
                 avatarUrl: typeof remoteProfile.icon === 'string' ? remoteProfile.icon : remoteProfile.icon?.url,
                 bio: sanitizeText(remoteProfile.summary),
             };
-
-            const posts = outboxItems
-                .map((item: any) => {
-                    const activity = item?.type === 'Create' ? item : null;
-                    const object = activity?.object;
-                    if (!object || typeof object === 'string' || object.type !== 'Note') {
-                        return null;
-                    }
-                    const attachments = Array.isArray(object.attachment) ? object.attachment : [];
-                    return {
-                        id: object.id || activity.id,
-                        content: sanitizeText(object.content) || '',
-                        createdAt: object.published || activity.published || new Date().toISOString(),
-                        likesCount: 0,
-                        repostsCount: 0,
-                        repliesCount: 0,
-                        author,
-                        media: attachments
-                            .filter((attachment: any) => attachment?.url)
-                            .map((attachment: any, index: number) => ({
-                                id: `${object.id || activity.id || 'media'}-${index}`,
-                                url: attachment.url,
-                                altText: sanitizeText(attachment.name) || null,
-                            })),
-                    };
-                })
-                .filter(Boolean);
+            const posts = [];
+            for (const item of outboxItems) {
+                const activity = item?.type === 'Create' ? item : null;
+                const object = activity?.object;
+                if (!object || typeof object === 'string' || object.type !== 'Note') {
+                    continue;
+                }
+                const attachments = Array.isArray(object.attachment) ? object.attachment : [];
+                const { text, urls } = extractTextAndUrls(object.content);
+                const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
+                const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl) : null;
+                posts.push({
+                    id: object.id || activity.id,
+                    content: text || '',
+                    createdAt: object.published || activity.published || new Date().toISOString(),
+                    likesCount: 0,
+                    repostsCount: 0,
+                    repliesCount: 0,
+                    author,
+                    media: attachments
+                        .filter((attachment: any) => attachment?.url)
+                        .map((attachment: any, index: number) => ({
+                            id: `${object.id || activity.id || 'media'}-${index}`,
+                            url: attachment.url,
+                            altText: sanitizeText(attachment.name) || null,
+                        })),
+                    linkPreviewUrl: linkPreview?.url || normalizedUrl,
+                    linkPreviewTitle: linkPreview?.title || (normalizedUrl ?? null),
+                    linkPreviewDescription: linkPreview?.description || null,
+                    linkPreviewImage: linkPreview?.image || null,
+                });
+            }
 
             return NextResponse.json({
                 posts,
