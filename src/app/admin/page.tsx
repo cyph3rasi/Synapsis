@@ -555,7 +555,7 @@ export default function AdminPage() {
                             </div>
 
                             <div style={{ paddingTop: '8px' }}>
-                                <button className="btn btn-primary" onClick={handleSaveSettings} disabled={savingSettings}>
+                                <button className="btn btn-primary" onClick={() => handleSaveSettings()} disabled={savingSettings}>
                                     {savingSettings ? 'Saving...' : 'Save Settings'}
                                 </button>
                             </div>
