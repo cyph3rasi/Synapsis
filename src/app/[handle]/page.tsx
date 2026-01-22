@@ -490,22 +490,80 @@ export default function ProfilePage() {
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Avatar URL</label>
-                                    <input
-                                        className="input"
-                                        value={profileForm.avatarUrl}
-                                        onChange={(e) => setProfileForm({ ...profileForm, avatarUrl: e.target.value })}
-                                        placeholder="https://"
-                                    />
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Avatar</label>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                setIsSaving(true);
+                                                try {
+                                                    const formData = new FormData();
+                                                    formData.append('file', file);
+                                                    const res = await fetch('/api/uploads', {
+                                                        method: 'POST',
+                                                        body: formData,
+                                                    });
+                                                    const data = await res.json();
+                                                    if (data.url) {
+                                                        setProfileForm(prev => ({ ...prev, avatarUrl: data.url }));
+                                                    }
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    setSaveError('Upload failed');
+                                                } finally {
+                                                    setIsSaving(false);
+                                                }
+                                            }}
+                                            disabled={isSaving}
+                                            style={{ fontSize: '13px' }}
+                                        />
+                                        {profileForm.avatarUrl && (
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden' }}>
+                                                <img src={profileForm.avatarUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Header URL</label>
-                                    <input
-                                        className="input"
-                                        value={profileForm.headerUrl}
-                                        onChange={(e) => setProfileForm({ ...profileForm, headerUrl: e.target.value })}
-                                        placeholder="https://"
-                                    />
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Header</label>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                setIsSaving(true);
+                                                try {
+                                                    const formData = new FormData();
+                                                    formData.append('file', file);
+                                                    const res = await fetch('/api/uploads', {
+                                                        method: 'POST',
+                                                        body: formData,
+                                                    });
+                                                    const data = await res.json();
+                                                    if (data.url) {
+                                                        setProfileForm(prev => ({ ...prev, headerUrl: data.url }));
+                                                    }
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    setSaveError('Upload failed');
+                                                } finally {
+                                                    setIsSaving(false);
+                                                }
+                                            }}
+                                            disabled={isSaving}
+                                            style={{ fontSize: '13px' }}
+                                        />
+                                        {profileForm.headerUrl && (
+                                            <div style={{ width: '48px', height: '32px', borderRadius: '4px', overflow: 'hidden' }}>
+                                                <img src={profileForm.headerUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 {saveError && (
                                     <div style={{ color: 'var(--error)', fontSize: '13px' }}>{saveError}</div>

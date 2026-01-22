@@ -12,6 +12,8 @@ export function RightSidebar() {
         bannerUrl: '',
     });
 
+    const [loading, setLoading] = useState(true);
+
     useEffect(() => {
         fetch('/api/node', { cache: 'no-store' })
             .then(res => res.json())
@@ -26,8 +28,28 @@ export function RightSidebar() {
                     bannerUrl: data?.bannerUrl ?? prev.bannerUrl,
                 }));
             })
-            .catch(() => { });
+            .catch(() => { })
+            .finally(() => setLoading(false));
     }, []);
+
+    if (loading) {
+        return (
+            <aside className="aside">
+                <div className="card" style={{ overflow: 'hidden', padding: 0, height: '300px' }}>
+                    <div style={{
+                        height: '140px',
+                        background: 'var(--background-tertiary)',
+                        borderBottom: '1px solid var(--border)',
+                    }} />
+                    <div style={{ padding: '16px' }}>
+                        <div style={{ height: '24px', width: '60%', background: 'var(--background-tertiary)', borderRadius: '4px', marginBottom: '12px' }} />
+                        <div style={{ height: '16px', width: '90%', background: 'var(--background-tertiary)', borderRadius: '4px', marginBottom: '8px' }} />
+                        <div style={{ height: '16px', width: '75%', background: 'var(--background-tertiary)', borderRadius: '4px' }} />
+                    </div>
+                </div>
+            </aside>
+        );
+    }
 
     return (
         <aside className="aside">
