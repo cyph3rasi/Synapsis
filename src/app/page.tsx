@@ -3,6 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+const ShieldIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
 interface User {
   id: string;
   handle: string;
@@ -190,7 +196,7 @@ function PostCard({ post, onLike, onRepost }: { post: Post; onLike: (id: string)
           )}
         </div>
         <div className="post-author">
-          <Link href={`/@${post.author.handle}`} className="post-handle">
+          <Link href={`/${post.author.handle}`} className="post-handle">
             {post.author.displayName || post.author.handle}
           </Link>
           <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
@@ -367,6 +373,7 @@ function Compose({ onPost }: { onPost: (content: string, mediaIds: string[]) => 
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
@@ -403,6 +410,12 @@ export default function Home() {
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => setUser(data.user))
+      .catch(() => { });
+
+    // Check admin status
+    fetch('/api/admin/me')
+      .then(res => res.json())
+      .then(data => setIsAdmin(!!data.isAdmin))
       .catch(() => { });
   }, []);
 
@@ -457,7 +470,7 @@ export default function Home() {
             <span>Notifications</span>
           </Link>
           {user ? (
-            <Link href={`/@${user.handle}`} className="nav-item">
+            <Link href={`/${user.handle}`} className="nav-item">
               <UserIcon />
               <span>Profile</span>
             </Link>
@@ -465,6 +478,12 @@ export default function Home() {
             <Link href="/login" className="nav-item">
               <UserIcon />
               <span>Login</span>
+            </Link>
+          )}
+          {isAdmin && (
+            <Link href="/admin" className="nav-item">
+              <ShieldIcon />
+              <span>Admin</span>
             </Link>
           )}
         </nav>

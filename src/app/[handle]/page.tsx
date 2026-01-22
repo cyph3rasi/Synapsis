@@ -89,7 +89,7 @@ const FlagIcon = () => (
 
 function UserRow({ user }: { user: UserSummary }) {
     return (
-        <Link href={`/@${user.handle}`} className="user-row">
+        <Link href={`/${user.handle}`} className="user-row">
             <div className="avatar">
                 {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.displayName || user.handle} />
@@ -139,7 +139,7 @@ function PostCard({ post }: { post: Post }) {
                     )}
                 </div>
                 <div className="post-author">
-                    <Link href={`/@${post.author.handle}`} className="post-handle">
+                    <Link href={`/${post.author.handle}`} className="post-handle">
                         {post.author.displayName || post.author.handle}
                     </Link>
                     <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
