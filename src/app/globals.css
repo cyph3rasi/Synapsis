@@ -1315,20 +1315,24 @@ a.btn-primary:visited {
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background-color: transparent;
   border-radius: var(--radius-full);
-  border: 2px solid var(--background); /* Creates a padding effect */
+}
+
+/* Show scrollbar thumb when hovering over the scrollable element */
+*:hover::-webkit-scrollbar-thumb {
+  background-color: var(--foreground-tertiary);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-hover);
+  background-color: var(--foreground-secondary);
 }
