@@ -2,24 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeftIcon, CalendarIcon, HeartIcon, RepeatIcon, MessageIcon, FlagIcon } from '@/components/Icons';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeftIcon, CalendarIcon } from '@/components/Icons';
+import { PostCard } from '@/components/PostCard';
+import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Rocket } from 'lucide-react';
-
-interface User {
-    id: string;
-    handle: string;
-    displayName: string;
-    bio?: string;
-    avatarUrl?: string;
-    headerUrl?: string;
-    followersCount: number;
-    followingCount: number;
-    postsCount: number;
-    createdAt: string;
-    movedTo?: string; // New actor URL if account has migrated
-}
 
 interface UserSummary {
     id: string;
@@ -28,26 +16,6 @@ interface UserSummary {
     bio?: string | null;
     avatarUrl?: string | null;
 }
-
-interface MediaItem {
-    id: string;
-    url: string;
-    altText?: string | null;
-}
-
-interface Post {
-    id: string;
-    content: string;
-    createdAt: string;
-    likesCount: number;
-    repostsCount: number;
-    repliesCount: number;
-    author: User;
-    media?: MediaItem[];
-}
-
-// Icons
-
 
 function UserRow({ user }: { user: UserSummary }) {
     return (
@@ -70,106 +38,9 @@ function UserRow({ user }: { user: UserSummary }) {
     );
 }
 
-function PostCard({ post }: { post: Post }) {
-    const [liked, setLiked] = useState(false);
-    const [reposted, setReposted] = useState(false);
-    const [reporting, setReporting] = useState(false);
-
-    const formatTime = (dateStr: string) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        if (minutes < 1) return 'now';
-        if (minutes < 60) return `${minutes}m`;
-        if (hours < 24) return `${hours}h`;
-        if (days < 7) return `${days}d`;
-        return date.toLocaleDateString();
-    };
-
-    return (
-        <article className="post">
-            <div className="post-header">
-                <div className="avatar">
-                    {post.author.avatarUrl ? (
-                        <img src={post.author.avatarUrl} alt={post.author.displayName} />
-                    ) : (
-                        post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
-                    )}
-                </div>
-                <div className="post-author">
-                    <Link href={`/${post.author.handle}`} className="post-handle">
-                        {post.author.displayName || post.author.handle}
-                    </Link>
-                    <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
-                </div>
-            </div>
-            <div className="post-content">{post.content}</div>
-            {post.media && post.media.length > 0 && (
-                <div className="post-media-grid">
-                    {post.media.map((item) => (
-                        <div className="post-media-item" key={item.id}>
-                            <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
-                        </div>
-                    ))}
-                </div>
-            )}
-            <div className="post-actions">
-                <button className="post-action">
-                    <MessageIcon />
-                    <span>{post.repliesCount || ''}</span>
-                </button>
-                <button className={`post-action ${reposted ? 'reposted' : ''}`} onClick={() => setReposted(!reposted)}>
-                    <RepeatIcon />
-                    <span>{post.repostsCount + (reposted ? 1 : 0) || ''}</span>
-                </button>
-                <button className={`post-action ${liked ? 'liked' : ''}`} onClick={() => setLiked(!liked)}>
-                    <HeartIcon filled={liked} />
-                    <span>{post.likesCount + (liked ? 1 : 0) || ''}</span>
-                </button>
-                <button
-                    className="post-action"
-                    onClick={async () => {
-                        if (reporting) return;
-                        const reason = window.prompt('Why are you reporting this post?');
-                        if (!reason) return;
-                        setReporting(true);
-                        try {
-                            const res = await fetch('/api/reports', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ targetType: 'post', targetId: post.id, reason }),
-                            });
-                            if (!res.ok) {
-                                if (res.status === 401) {
-                                    alert('Please log in to report.');
-                                } else {
-                                    alert('Report failed. Please try again.');
-                                }
-                            } else {
-                                alert('Report submitted. Thank you.');
-                            }
-                        } catch {
-                            alert('Report failed. Please try again.');
-                        } finally {
-                            setReporting(false);
-                        }
-                    }}
-                    disabled={reporting}
-                >
-                    <FlagIcon />
-                    <span>{reporting ? '...' : ''}</span>
-                </button>
-            </div>
-        </article>
-    );
-}
-
 export default function ProfilePage() {
     const params = useParams();
+    const router = useRouter();
     const handle = (params.handle as string)?.replace(/^@/, '') || '';
 
     const [user, setUser] = useState<User | null>(null);
@@ -212,12 +83,27 @@ export default function ProfilePage() {
             })
             .catch(() => setLoading(false));
 
-        // Get posts
         fetch(`/api/users/${handle}/posts`)
             .then(res => res.json())
             .then(data => setPosts(data.posts || []))
             .catch(() => { });
     }, [handle]);
+
+    const handleLike = async (postId: string, currentLiked: boolean) => {
+        const method = currentLiked ? 'DELETE' : 'POST';
+        await fetch(`/api/posts/${postId}/like`, { method });
+    };
+
+    const handleRepost = async (postId: string, currentReposted: boolean) => {
+        const method = currentReposted ? 'DELETE' : 'POST';
+        await fetch(`/api/posts/${postId}/repost`, { method });
+    };
+
+    const handleComment = (post: Post) => {
+        // Navigation is handled by the PostCard overlay, 
+        // but we can also use router.push if they explicitly click the comment button.
+        router.push(`/${post.author.handle}/posts/${post.id}`);
+    };
 
     useEffect(() => {
         if (user && currentUser?.handle === user.handle) {
@@ -651,7 +537,15 @@ export default function ProfilePage() {
                         <p>No posts yet</p>
                     </div>
                 ) : (
-                    posts.map(post => <PostCard key={post.id} post={post} />)
+                    posts.map(post => (
+                        <PostCard
+                            key={post.id}
+                            post={post}
+                            onLike={handleLike}
+                            onRepost={handleRepost}
+                            onComment={handleComment}
+                        />
+                    ))
                 )
             )}
 

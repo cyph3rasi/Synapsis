@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, posts, users, media, follows, mutes, blocks } from '@/db';
+import { db, posts, users, media, follows, mutes, blocks, likes } from '@/db';
 import { requireAuth } from '@/lib/auth';
 import { eq, desc, and, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -128,13 +128,8 @@ export async function GET(request: Request) {
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
         let feedPosts;
-        const moderatedUsers = await db.select({ id: users.id })
-            .from(users)
-            .where(or(eq(users.isSuspended, true), eq(users.isSilenced, true)));
-        const moderatedIds = moderatedUsers.map((item) => item.id);
         const baseFilter = buildWhere(
-            eq(posts.isRemoved, false),
-            moderatedIds.length ? notInArray(posts.userId, moderatedIds) : undefined
+            eq(posts.isRemoved, false)
         );
 
         if (type === 'public') {
@@ -168,7 +163,9 @@ export async function GET(request: Request) {
         } else if (type === 'curated') {
             let viewer = null;
             try {
-                viewer = await requireAuth();
+                const { getSession } = await import('@/lib/auth');
+                const session = await getSession();
+                viewer = session?.user || null;
             } catch {
                 viewer = null;
             }
@@ -229,7 +226,7 @@ export async function GET(request: Request) {
                     }
                     if (engagement >= 5) {
                         reasons.push(`Popular: ${post.likesCount} likes, ${post.repostsCount} reposts`);
-                    } else if (engagement > 0) {
+                    } else if (post.repliesCount > 0) {
                         reasons.push(`Active conversation: ${post.repliesCount} replies`);
                     }
                     if (ageHours <= 6) {
@@ -264,21 +261,7 @@ export async function GET(request: Request) {
                 })
                 .slice(0, limit);
 
-            return NextResponse.json({
-                posts: rankedPosts,
-                meta: {
-                    algorithm: 'curated-v1',
-                    windowHours: CURATION_WINDOW_HOURS,
-                    seedLimit,
-                    weights: {
-                        engagement: 1.4,
-                        recency: 1.1,
-                        followBoost: 0.9,
-                        selfBoost: 0.5,
-                    },
-                },
-                nextCursor: rankedPosts.length === limit ? rankedPosts[rankedPosts.length - 1]?.id : null,
-            });
+            feedPosts = rankedPosts;
         } else {
             // Home timeline - need auth
             try {
@@ -315,12 +298,60 @@ export async function GET(request: Request) {
             }
         }
 
+        // Populate isLiked and isReposted for authenticated users
+        try {
+            const { getSession } = await import('@/lib/auth');
+            const session = await getSession();
+
+            if (session?.user && feedPosts && feedPosts.length > 0) {
+                const viewer = session.user;
+                const postIds = feedPosts.map(p => p.id).filter(Boolean);
+
+                if (postIds.length > 0) {
+                    const viewerLikes = await db.query.likes.findMany({
+                        where: and(
+                            eq(likes.userId, viewer.id),
+                            inArray(likes.postId, postIds)
+                        ),
+                    });
+                    const likedPostIds = new Set(viewerLikes.map(l => l.postId));
+
+                    const viewerReposts = await db.query.posts.findMany({
+                        where: and(
+                            eq(posts.userId, viewer.id),
+                            inArray(posts.repostOfId, postIds)
+                        ),
+                    });
+                    const repostedPostIds = new Set(viewerReposts.map(r => r.repostOfId));
+
+                    feedPosts = feedPosts.map(p => ({
+                        ...p,
+                        isLiked: likedPostIds.has(p.id),
+                        isReposted: repostedPostIds.has(p.id),
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error('Error populating interaction flags:', error);
+        }
+
         return NextResponse.json({
-            posts: feedPosts,
-            nextCursor: feedPosts.length === limit ? feedPosts[feedPosts.length - 1]?.id : null,
+            posts: feedPosts || [],
+            meta: type === 'curated' ? {
+                algorithm: 'curated-v1',
+                windowHours: CURATION_WINDOW_HOURS,
+                seedLimit: Math.min(limit * CURATION_SEED_MULTIPLIER, CURATION_SEED_CAP),
+                weights: {
+                    engagement: 1.4,
+                    recency: 1.1,
+                    followBoost: 0.9,
+                    selfBoost: 0.5,
+                },
+            } : undefined,
+            nextCursor: (feedPosts?.length === limit) ? feedPosts[feedPosts.length - 1]?.id : null,
         });
     } catch (error) {
-        console.error('Get feed error:', error);
+        console.error('Get feed error details:', error);
         return NextResponse.json(
             { error: 'Failed to get feed' },
             { status: 500 }

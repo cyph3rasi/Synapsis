@@ -1354,8 +1354,11 @@ a.btn-primary:visited {
 
 .link-preview-image img {
   width: 100%;
-  max-height: 240px;
-  object-fit: cover;
+  height: auto;
+  max-height: 400px;
+  display: block;
+  object-fit: contain;
+  background: var(--background-tertiary);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1432,4 +1435,91 @@ a.btn-primary:visited {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+/* Reply Styles */
+.post-reply-to {
+  font-size: 13px;
+  color: var(--foreground-tertiary);
+  margin-bottom: 8px;
+}
+
+.post-reply-to a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.compose-reply-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.compose-reply-info {
+  font-size: 13px;
+  color: var(--foreground-secondary);
+}
+
+.compose-reply-handle {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.compose-reply-cancel {
+  background: transparent;
+  border: none;
+  color: var(--foreground-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.compose-reply-cancel:hover {
+  color: var(--error);
+}
+
+/* Clickable Post Card */
+.post {
+  position: relative;
+}
+
+.post-link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.post-header,
+.post-reply-to,
+.post-media-grid,
+.link-preview-card,
+.post-actions,
+.post-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Post Detail Styles */
+.post.detail {
+  padding: 24px;
+}
+
+.post.detail .post-content {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.post.detail .post-time {
+  font-size: 14px;
+}
+
+/* Thread view styles */
+.thread-line {
+  margin-left: 20px;
+  border-left: 1px solid var(--border);
 }
