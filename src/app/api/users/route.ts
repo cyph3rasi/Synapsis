@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
                 createdAt: users.createdAt,
             })
             .from(users)
-            .where(sql`${users.status} IS NULL OR ${users.status} != 'suspended'`)
+            .where(sql`${users.isSuspended} IS FALSE`)
             .orderBy(desc(users.createdAt))
             .limit(limit);
 
