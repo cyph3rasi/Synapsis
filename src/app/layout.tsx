@@ -28,6 +28,8 @@ export const metadata: Metadata = {
 // This is appropriate for a social network where all content is user-generated
 export const dynamic = 'force-dynamic';
 
+// This is appropriate for a social network where all content is user-generated
+
 export default function RootLayout({
   children,
 }: {
