@@ -2,21 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon } from '@/components/Icons';
+import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/components/Icons';
 import { Post } from '@/lib/types';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface PostCardProps {
     post: Post;
     onLike?: (id: string, currentLiked: boolean) => void;
     onRepost?: (id: string, currentReposted: boolean) => void;
     onComment?: (post: Post) => void;
+    onDelete?: (id: string) => void;
     isDetail?: boolean;
 }
 
-export function PostCard({ post, onLike, onRepost, onComment, isDetail }: PostCardProps) {
+export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail }: PostCardProps) {
+    const { user: currentUser } = useAuth();
     const [liked, setLiked] = useState(post.isLiked || false);
     const [reposted, setReposted] = useState(post.isReposted || false);
     const [reporting, setReporting] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     // Sync state if post changes (e.g. after a re-render from parent)
     useEffect(() => {
@@ -87,6 +91,28 @@ export function PostCard({ post, onLike, onRepost, onComment, isDetail }: PostCa
             alert('Report failed. Please try again.');
         } finally {
             setReporting(false);
+        }
+    };
+    const handleDelete = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (deleting) return;
+        if (!window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/posts/${post.id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                onDelete?.(post.id);
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to delete post');
+            }
+        } catch {
+            alert('Failed to delete post');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -174,6 +200,12 @@ export function PostCard({ post, onLike, onRepost, onComment, isDetail }: PostCa
                     <FlagIcon />
                     <span>{reporting ? '...' : ''}</span>
                 </button>
+                {currentUser?.id === post.author.id && (
+                    <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
+                        <TrashIcon />
+                        <span>{deleting ? '...' : ''}</span>
+                    </button>
+                )}
             </div>
         </article>
     );

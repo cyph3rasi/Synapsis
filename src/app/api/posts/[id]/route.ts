@@ -94,3 +94,59 @@ export async function GET(
         );
     }
 }
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { requireAuth } = await import('@/lib/auth');
+        const user = await requireAuth();
+        const { id } = await params;
+
+        const post = await db.query.posts.findFirst({
+            where: eq(posts.id, id),
+        });
+
+        if (!post) {
+            return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+        }
+
+        if (post.userId !== user.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        // 1. If it's a reply, decrement parent's repliesCount
+        if (post.replyToId) {
+            const parentPost = await db.query.posts.findFirst({
+                where: eq(posts.id, post.replyToId),
+            });
+            if (parentPost && parentPost.repliesCount > 0) {
+                await db.update(posts)
+                    .set({ repliesCount: parentPost.repliesCount - 1 })
+                    .where(eq(posts.id, post.replyToId));
+            }
+        }
+
+        // 2. Delete the post (cascades to media, likes, notifications)
+        await db.delete(posts).where(eq(posts.id, id));
+
+        // 3. Decrement user's postsCount
+        if (user.postsCount > 0) {
+            await db.update(users)
+                .set({ postsCount: user.postsCount - 1 })
+                .where(eq(users.id, user.id));
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Delete post error:', error);
+        if (error instanceof Error && error.message === 'Authentication required') {
+            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        }
+        return NextResponse.json(
+            { error: 'Failed to delete post' },
+            { status: 500 }
+        );
+    }
+}

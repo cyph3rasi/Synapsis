@@ -59,6 +59,7 @@ export default function ProfilePage() {
         bio: '',
         avatarUrl: '',
         headerUrl: '',
+        website: '',
     });
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -112,6 +113,7 @@ export default function ProfilePage() {
                 bio: user.bio || '',
                 avatarUrl: user.avatarUrl || '',
                 headerUrl: user.headerUrl || '',
+                website: user.website || '',
             });
         }
     }, [user, currentUser]);
@@ -353,6 +355,26 @@ export default function ProfilePage() {
                             <span>Joined {formatDate(user.createdAt || new Date().toISOString())}</span>
                         </div>
 
+                        {user.website && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginTop: '4px',
+                                color: 'var(--accent)',
+                                fontSize: '14px',
+                            }}>
+                                <Link
+                                    href={user.website.startsWith('http') ? user.website : `https://${user.website}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: 'inherit', textDecoration: 'none' }}
+                                >
+                                    {user.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                                </Link>
+                            </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
                             <button
                                 onClick={() => setActiveTab('following')}
@@ -404,6 +426,16 @@ export default function ProfilePage() {
                                         onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
                                         maxLength={160}
                                         style={{ minHeight: '80px', resize: 'vertical' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Website</label>
+                                    <input
+                                        className="input"
+                                        placeholder="https://example.com"
+                                        value={profileForm.website}
+                                        onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })}
+                                        maxLength={100}
                                     />
                                 </div>
                                 <div>

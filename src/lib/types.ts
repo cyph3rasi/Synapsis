@@ -8,6 +8,7 @@ export interface User {
     followersCount?: number;
     followingCount?: number;
     postsCount?: number;
+    website?: string | null;
     createdAt?: string;
     movedTo?: string | null;
 }

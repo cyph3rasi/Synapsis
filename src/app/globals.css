@@ -373,6 +373,10 @@ a.btn-primary:visited {
   color: var(--accent);
 }
 
+.post-action.delete-action:hover {
+  color: #ef4444;
+}
+
 /* User rows (followers/following) */
 .user-row {
   display: flex;

@@ -9,6 +9,7 @@ const updateProfileSchema = z.object({
     bio: z.string().max(160).optional().nullable(),
     avatarUrl: z.string().url().optional().nullable(),
     headerUrl: z.string().url().optional().nullable(),
+    website: z.string().url().or(z.string().length(0)).optional().nullable(),
 });
 
 export async function GET() {
@@ -31,6 +32,7 @@ export async function GET() {
                 displayName: session.user.displayName,
                 avatarUrl: session.user.avatarUrl,
                 bio: session.user.bio,
+                website: session.user.website,
             },
         });
     } catch (error) {
@@ -54,6 +56,7 @@ export async function PATCH(request: Request) {
             bio?: string | null;
             avatarUrl?: string | null;
             headerUrl?: string | null;
+            website?: string | null;
             updatedAt?: Date;
         } = {};
 
@@ -61,6 +64,7 @@ export async function PATCH(request: Request) {
         if (data.bio !== undefined) updateData.bio = data.bio === '' ? null : data.bio;
         if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl === '' ? null : data.avatarUrl;
         if (data.headerUrl !== undefined) updateData.headerUrl = data.headerUrl === '' ? null : data.headerUrl;
+        if (data.website !== undefined) updateData.website = data.website === '' ? null : data.website;
 
         if (Object.keys(updateData).length === 0) {
             return NextResponse.json({
@@ -71,6 +75,7 @@ export async function PATCH(request: Request) {
                     avatarUrl: currentUser.avatarUrl,
                     bio: currentUser.bio,
                     headerUrl: currentUser.headerUrl,
+                    website: currentUser.website,
                     followersCount: currentUser.followersCount,
                     followingCount: currentUser.followingCount,
                     postsCount: currentUser.postsCount,
@@ -94,6 +99,7 @@ export async function PATCH(request: Request) {
                 avatarUrl: updatedUser.avatarUrl,
                 bio: updatedUser.bio,
                 headerUrl: updatedUser.headerUrl,
+                website: updatedUser.website,
                 followersCount: updatedUser.followersCount,
                 followingCount: updatedUser.followingCount,
                 postsCount: updatedUser.postsCount,

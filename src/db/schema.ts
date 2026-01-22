@@ -49,6 +49,7 @@ export const users = pgTable('users', {
   followersCount: integer('followers_count').default(0).notNull(),
   followingCount: integer('following_count').default(0).notNull(),
   postsCount: integer('posts_count').default(0).notNull(),
+  website: text('website'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
