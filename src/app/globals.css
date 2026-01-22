@@ -58,6 +58,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hide scrollbars globally but keep functionality */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
 /* Links */
 a {
   color: var(--accent);
@@ -1336,6 +1348,7 @@ a.btn-primary:visited {
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--foreground-secondary);
 }
+
 /* Link Preview Styles */
 .link-preview-card {
   display: block;
@@ -1401,7 +1414,7 @@ a.btn-primary:visited {
   right: 8px;
   width: 20px;
   height: 20px;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   border: none;
   border-radius: 50%;
