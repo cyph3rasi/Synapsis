@@ -227,12 +227,14 @@ a.btn-primary:visited {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
 }
 
 .main {
   flex: 1;
   max-width: 600px;
   min-width: 0;
+  min-height: 100vh;
   border-right: 1px solid var(--border);
 }
 
@@ -240,9 +242,11 @@ a.btn-primary:visited {
   width: 320px;
   flex-shrink: 0;
   padding: 16px;
+  padding-bottom: 32px;
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
 }
 
 /* Post */

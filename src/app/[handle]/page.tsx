@@ -381,14 +381,14 @@ export default function ProfilePage() {
                     <div style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'flex-end',
-                        marginTop: '-48px',
+                        alignItems: 'flex-start',
                     }}>
                         <div className="avatar avatar-lg" style={{
                             width: '96px',
                             height: '96px',
                             fontSize: '36px',
                             border: '4px solid var(--background)',
+                            marginTop: '-48px',
                         }}>
                             {user.avatarUrl ? (
                                 <img src={user.avatarUrl} alt={user.displayName || user.handle} />
@@ -397,21 +397,22 @@ export default function ProfilePage() {
                             )}
                         </div>
 
-                        {!isOwnProfile && currentUser && (
-                            <button
-                                className={`btn ${isFollowing ? '' : 'btn-primary'}`}
-                                onClick={handleFollow}
-                                style={{ marginBottom: '12px' }}
-                            >
-                                {isFollowing ? 'Following' : 'Follow'}
-                            </button>
-                        )}
+                        <div style={{ paddingTop: '12px' }}>
+                            {!isOwnProfile && currentUser && (
+                                <button
+                                    className={`btn ${isFollowing ? '' : 'btn-primary'}`}
+                                    onClick={handleFollow}
+                                >
+                                    {isFollowing ? 'Following' : 'Follow'}
+                                </button>
+                            )}
 
-                        {isOwnProfile && (
-                            <button className="btn" style={{ marginBottom: '12px' }} onClick={() => setIsEditing(!isEditing)}>
-                                {isEditing ? 'Close' : 'Edit Profile'}
-                            </button>
-                        )}
+                            {isOwnProfile && (
+                                <button className="btn" onClick={() => setIsEditing(!isEditing)}>
+                                    {isEditing ? 'Close' : 'Edit Profile'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* User Info */}
