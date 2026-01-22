@@ -1,108 +1,97 @@
-# Project Synapsis
+# Synapsis
 
-An open-source, federated social network designed as global communication infrastructure.
+Synapsis is an open-source, federated social network built to serve as global communication infrastructure. It is designed to be lightweight, easy to deploy, and interoperable with the broader fediverse.
 
 ## Features
 
-- **Federation**: ActivityPub-compatible, interoperable with Mastodon and other fediverse platforms
-- **Global Identity**: Portable identity backed by DIDs - your handle works everywhere
-- **Easy Deployment**: Deploy to Vercel with one click, no Docker or complex setup required
-- **Modern UX**: Clean, Vercel-inspired dark theme with responsive design
-- **Transparent Feeds**: Chronological and curated feeds with clear algorithms
-- **Moderation**: Admin dashboard for reports, post removals, and user actions
+- **Federation Ready**: Built with ActivityPub compatibility in mind (WebFinger, NodeInfo).
+- **Identity**: Portable identity system backed by user handles.
+- **Modern UI**: Clean, responsive interface inspired by Vercel's design system.
+- **Rich Media**: Support for image uploads and media galleries.
+- **Moderation**: Built-in admin dashboard for user management and content moderation.
+- **Setup Wizard**: User-friendly `/install` flow to get your node running in minutes.
+- **Curated Feeds**: Smart feed algorithms to highlight engaging content.
 
-## Quick Start
+## Tech Stack
+
+- **Framework**: [Next.js 15+](https://nextjs.org/) (App Router)
+- **Database**: PostgreSQL (via [Neon](https://neon.tech) / Drizzle ORM)
+- **Styling**: Tailwind CSS v4 & custom Vercel-like design system
+- **Authentication**: Auth.js (NextAuth)
+- **Type Safety**: TypeScript
+
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- A Neon PostgreSQL database (free tier available at https://neon.tech)
-- An Upstash Redis database (free tier available at https://upstash.com)
+- A PostgreSQL database (e.g., [Neon](https://neon.tech))
 
-### Setup
+### Installation
 
-1. Clone the repository:
+1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/synapsis.git
-   cd synapsis
+   git clone https://github.com/cyph3rasi/Synapsis.git
+   cd Synapsis
    ```
 
-2. Install dependencies:
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-3. Copy the environment example and configure:
+3. **Configure Environment**
+   Copy the example environment file:
    ```bash
    cp .env.example .env
    ```
 
-4. Update `.env` with your database credentials:
-   ```
-   DATABASE_URL=postgresql://...
-   UPSTASH_REDIS_REST_URL=https://...
-   UPSTASH_REDIS_REST_TOKEN=...
-  AUTH_SECRET=generate-a-random-string
-  NEXT_PUBLIC_NODE_DOMAIN=your-domain.com
-  NEXT_PUBLIC_NODE_NAME=My Synapsis Node
-  ADMIN_EMAILS=comma,separated,emails
-  ```
+   Update `.env` with your credentials:
+   ```env
+   # Database (PostgreSQL connection string)
+   DATABASE_URL="postgresql://user:password@host/dbname..."
 
-5. Run database migrations:
+   # Auth (Generate with: openssl rand -base64 33)
+   AUTH_SECRET="your-secret-key"
+
+   # Node Configuration
+   NEXT_PUBLIC_NODE_DOMAIN="your-domain.com"
+   NEXT_PUBLIC_NODE_NAME="My Synapsis Node"
+
+   # Admin Access (Comma-separated emails)
+   ADMIN_EMAILS="admin@example.com,moderator@example.com"
+   ```
+
+4. **Initialize Database**
+   Push the schema to your database:
    ```bash
    npm run db:push
    ```
 
-6. Start the development server:
+5. **Start Development Server**
    ```bash
    npm run dev
    ```
+   Visit `http://localhost:3000` to see your node.
 
-### Deploy to Vercel
+### Initial Setup
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/synapsis)
+1. Go to `http://localhost:3000` (or your deployed URL).
+2. You will be redirected to the **Setup Wizard** (`/install`) if the node is not configured.
+3. Follow the wizard to verify your environment and database connection.
+4. **Register your first account**.
+5. Add your email to `ADMIN_EMAILS` in your `.env` file to grant yourself admin privileges.
+6. Restart the server (if running locally) to apply the admin changes.
 
-1. Click the button above
-2. Connect your Neon PostgreSQL and Upstash Redis
-3. Configure environment variables
-4. Deploy!
+## Deployment
 
-## Architecture
+This project is optimized for deployment on **Vercel**.
 
-- **Frontend**: Next.js 14+ with App Router
-- **Backend**: Next.js API Routes (serverless)
-- **Database**: PostgreSQL via Neon
-- **Cache**: Redis via Upstash
-- **Federation**: ActivityPub protocol
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Create account
-- `POST /api/auth/login` - Login
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Get current user
-
-### Posts
-- `POST /api/posts` - Create a post
-- `GET /api/posts` - Get feed
-- `POST /api/posts/[id]/like` - Like a post
-- `DELETE /api/posts/[id]/like` - Unlike a post
-- `POST /api/posts/[id]/repost` - Repost
-
-### Federation
-- `GET /.well-known/webfinger` - WebFinger discovery
-- `GET /.well-known/nodeinfo` - NodeInfo discovery
-- `GET /nodeinfo/2.1` - Node metadata
-- `GET /.well-known/synapsis-handles` - Handle registry export
-- `POST /api/federation/handles` - Ingest handle registry from peers
-- `POST /api/federation/gossip` - Pull registry from peer nodes (admin)
-- `GET /api/handles/resolve` - Resolve handle to DID
-
-### Installation
-- `GET /install` - Setup wizard
-- `GET /api/install/status` - Installation status
+1. Push your code to a Git repository.
+2. Import the project into Vercel.
+3. Add the required environment variables (`DATABASE_URL`, `AUTH_SECRET`, etc.) in the Vercel project settings.
+4. Deploy.
 
 ## License
 
-Apache 2.0 License - see LICENSE file for details.
+Licensed under the **Apache 2.0 License**. See [LICENSE](LICENSE) for details.
