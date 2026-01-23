@@ -1444,6 +1444,7 @@ a.btn-primary:visited {
 
 .link-preview-card.mini .link-preview-image img {
   height: 80px;
+  object-fit: cover;
   border-bottom: none;
   border-right: 1px solid var(--border);
 }
