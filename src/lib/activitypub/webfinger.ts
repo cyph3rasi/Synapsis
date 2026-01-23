@@ -25,7 +25,7 @@ export function generateWebFingerResponse(
     handle: string,
     nodeDomain: string
 ): WebFingerResponse {
-    const actorUrl = `https://${nodeDomain}/users/${handle}`;
+    const actorUrl = `https://${nodeDomain}/api/users/${handle}`;
 
     return {
         subject: `acct:${handle}@${nodeDomain}`,
@@ -39,7 +39,7 @@ export function generateWebFingerResponse(
             {
                 rel: 'http://webfinger.net/rel/profile-page',
                 type: 'text/html',
-                href: actorUrl,
+                href: `https://${nodeDomain}/${handle}`,
             },
         ],
     };

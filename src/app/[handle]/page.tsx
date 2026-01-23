@@ -292,7 +292,7 @@ export default function ProfilePage() {
                                 rel="noopener noreferrer"
                                 style={{ color: 'var(--accent)' }}
                             >
-                                {user.movedTo.replace('https://', '').replace('/users/', '/@')}
+                                {user.movedTo.replace('https://', '').replace('/api/users/', '/@').replace('/users/', '/@')}
                             </a>
                         </div>
                     </div>

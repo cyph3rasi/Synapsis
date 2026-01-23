@@ -49,7 +49,7 @@ export interface ActivityPubActor {
  * Convert a Synapsis user to an ActivityPub Actor
  */
 export function userToActor(user: User, nodeDomain: string): ActivityPubActor {
-    const actorUrl = `https://${nodeDomain}/users/${user.handle}`;
+    const actorUrl = `https://${nodeDomain}/api/users/${user.handle}`;
 
     const actor: ActivityPubActor = {
         '@context': [
@@ -114,12 +114,12 @@ export function userToActor(user: User, nodeDomain: string): ActivityPubActor {
  * Get the actor URL for a user
  */
 export function getActorUrl(handle: string, nodeDomain: string): string {
-    return `https://${nodeDomain}/users/${handle}`;
+    return `https://${nodeDomain}/api/users/${handle}`;
 }
 
 /**
  * Get the inbox URL for a user
  */
 export function getInboxUrl(handle: string, nodeDomain: string): string {
-    return `https://${nodeDomain}/users/${handle}/inbox`;
+    return `https://${nodeDomain}/api/users/${handle}/inbox`;
 }
