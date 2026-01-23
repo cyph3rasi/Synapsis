@@ -204,6 +204,15 @@ a.btn-primary:visited {
   object-fit: cover;
 }
 
+.user-row .avatar {
+  flex-shrink: 0;
+}
+
+.user-row .avatar img {
+  object-fit: contain;
+  background: var(--background-tertiary);
+}
+
 .avatar-sm {
   width: 32px;
   height: 32px;

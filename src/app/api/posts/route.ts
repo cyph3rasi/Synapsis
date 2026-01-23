@@ -89,7 +89,33 @@ export async function POST(request: Request) {
             }
         }
 
-        // TODO: Federate the post to followers
+        // Federate the post to remote followers (non-blocking)
+        (async () => {
+            try {
+                const { createCreateActivity } = await import('@/lib/activitypub/activities');
+                const { getFollowerInboxes, deliverToFollowers } = await import('@/lib/activitypub/outbox');
+
+                const followerInboxes = await getFollowerInboxes(user.id);
+                if (followerInboxes.length === 0) {
+                    return; // No remote followers to notify
+                }
+
+                const createActivity = createCreateActivity(post, user, nodeDomain);
+
+                const privateKey = user.privateKeyEncrypted;
+                if (!privateKey) {
+                    console.error('[Federation] User has no private key for signing');
+                    return;
+                }
+
+                const keyId = `https://${nodeDomain}/users/${user.handle}#main-key`;
+                const result = await deliverToFollowers(createActivity, followerInboxes, privateKey, keyId);
+                console.log(`[Federation] Post ${post.id} delivered to ${result.delivered}/${followerInboxes.length} inboxes (${result.failed} failed)`);
+            } catch (err) {
+                console.error('[Federation] Error federating post:', err);
+            }
+        })();
+
 
         return NextResponse.json({ success: true, post: { ...post, media: attachedMedia } });
     } catch (error) {

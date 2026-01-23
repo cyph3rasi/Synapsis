@@ -34,10 +34,10 @@ export default function SettingsPage() {
                 }}>
                     <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Rocket size={18} />
-                        Account Migration
+                        Export Account
                     </div>
                     <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
-                        Export your account or import from another Synapsis node
+                        Download a backup of your account and content
                     </div>
                 </Link>
 

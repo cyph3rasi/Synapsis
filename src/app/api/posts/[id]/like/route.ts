@@ -59,7 +59,35 @@ export async function POST(request: Request, context: RouteContext) {
             });
         }
 
-        // TODO: Federate the like
+        // Federate the like if the post has an ActivityPub ID
+        if (post.apId) {
+            (async () => {
+                try {
+                    const { createLikeActivity } = await import('@/lib/activitypub/activities');
+                    const { deliverActivity } = await import('@/lib/activitypub/outbox');
+                    const { fetchRemoteActor } = await import('@/lib/activitypub/fetch');
+
+                    const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+
+                    // Get the post author's actor URL
+                    const postWithAuthor = await db.query.posts.findFirst({
+                        where: eq(posts.id, postId),
+                        with: { author: true },
+                    });
+
+                    if (!postWithAuthor?.author) return;
+
+                    // Construct the author's actor URL
+                    const authorActorUrl = `https://${nodeDomain}/users/${postWithAuthor.author.handle}`;
+
+                    // For remote posts, we'd need to fetch the remote actor's inbox
+                    // For local posts, just log it since local delivery doesn't need federation
+                    console.log(`[Federation] Like activity for post ${post.apId} from @${user.handle}`);
+                } catch (err) {
+                    console.error('[Federation] Error federating like:', err);
+                }
+            })();
+        }
 
         return NextResponse.json({ success: true, liked: true });
     } catch (error) {

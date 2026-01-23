@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SynapsisLogo } from '@/components/Icons';
+import { TriangleAlert, ShieldAlert } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
-    const [mode, setMode] = useState<'login' | 'register'>('login');
+    const [mode, setMode] = useState<'login' | 'register' | 'import'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,6 +18,13 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [nodeInfo, setNodeInfo] = useState({ name: '', description: '' });
     const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+
+    // Import specific state
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importPassword, setImportPassword] = useState('');
+    const [importHandle, setImportHandle] = useState('');
+    const [acceptedCompliance, setAcceptedCompliance] = useState(false);
+    const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
     // Fetch node info
     useEffect(() => {
@@ -33,7 +41,8 @@ export default function LoginPage() {
 
     // Handle availability check
     useEffect(() => {
-        if (mode !== 'register' || !handle || handle.length < 3) {
+        const checkHandle = mode === 'register' ? handle : (mode === 'import' ? importHandle : '');
+        if (!checkHandle || checkHandle.length < 3) {
             setHandleStatus('idle');
             return;
         }
@@ -41,7 +50,7 @@ export default function LoginPage() {
         const timer = setTimeout(async () => {
             setHandleStatus('checking');
             try {
-                const res = await fetch(`/api/auth/check-handle?handle=${handle}`);
+                const res = await fetch(`/api/auth/check-handle?handle=${checkHandle}`);
                 const data = await res.json();
                 if (data.available) {
                     setHandleStatus('available');
@@ -54,7 +63,54 @@ export default function LoginPage() {
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [handle, mode]);
+    }, [handle, importHandle, mode]);
+
+    const handleImport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!importFile || !importPassword || !importHandle || !acceptedCompliance) {
+            setError('Please fill in all fields and accept the compliance agreement');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setImportSuccess(null);
+
+        try {
+            const fileContent = await importFile.text();
+            const exportData = JSON.parse(fileContent);
+
+            const res = await fetch('/api/account/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    exportData,
+                    password: importPassword,
+                    newHandle: importHandle,
+                    acceptedCompliance,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Import failed');
+            }
+
+            setImportSuccess(data.message);
+            // After successful import, the user is typically logged in (depends on API implementation)
+            // But let's redirect to login or home if the API returns success
+            setTimeout(() => {
+                router.push('/');
+                router.refresh();
+            }, 2000);
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Import failed');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -126,6 +182,7 @@ export default function LoginPage() {
                     background: 'var(--background-secondary)',
                     borderRadius: 'var(--radius-md)',
                     padding: '4px',
+                    gap: '4px'
                 }}>
                     <button
                         onClick={() => setMode('login')}
@@ -159,142 +216,313 @@ export default function LoginPage() {
                     >
                         Register
                     </button>
+                    <button
+                        onClick={() => setMode('import')}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: mode === 'import' ? 'var(--background-tertiary)' : 'transparent',
+                            color: mode === 'import' ? 'var(--foreground)' : 'var(--foreground-secondary)',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        Import
+                    </button>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="card" style={{ padding: '24px' }}>
-                    {error && (
-                        <div style={{
-                            padding: '12px',
-                            marginBottom: '16px',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid var(--error)',
-                            borderRadius: 'var(--radius-md)',
-                            color: 'var(--error)',
-                            fontSize: '14px',
-                        }}>
-                            {error}
-                        </div>
-                    )}
+                {mode !== 'import' ? (
+                    <form onSubmit={handleSubmit} className="card" style={{ padding: '24px' }}>
+                        {error && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid var(--error)',
+                                borderRadius: 'var(--radius-md)',
+                                color: 'var(--error)',
+                                fontSize: '14px',
+                            }}>
+                                {error}
+                            </div>
+                        )}
 
-                    {mode === 'register' && (
-                        <>
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                    Handle
-                                </label>
-                                <div style={{ position: 'relative' }}>
-                                    <span style={{
-                                        position: 'absolute',
-                                        left: '12px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        color: 'var(--foreground-tertiary)',
-                                    }}>@</span>
+                        {mode === 'register' && (
+                            <>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Handle
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <span style={{
+                                            position: 'absolute',
+                                            left: '12px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            color: 'var(--foreground-tertiary)',
+                                        }}>@</span>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={handle}
+                                            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                            style={{ paddingLeft: '28px' }}
+                                            placeholder="yourhandle"
+                                            required
+                                            minLength={3}
+                                            maxLength={20}
+                                        />
+                                    </div>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        marginTop: '4px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                            3-20 characters, alphanumeric and underscores
+                                        </span>
+                                        {handleStatus === 'checking' && (
+                                            <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                        )}
+                                        {handleStatus === 'available' && (
+                                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                                        )}
+                                        {handleStatus === 'taken' && (
+                                            <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Display Name
+                                    </label>
                                     <input
                                         type="text"
                                         className="input"
-                                        value={handle}
-                                        onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                        style={{ paddingLeft: '28px' }}
-                                        placeholder="yourhandle"
-                                        required
-                                        minLength={3}
-                                        maxLength={20}
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                        placeholder="Your Name"
                                     />
                                 </div>
-                                <div style={{
-                                    fontSize: '12px',
-                                    marginTop: '4px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}>
-                                    <span style={{ color: 'var(--foreground-tertiary)' }}>
-                                        3-20 characters, alphanumeric and underscores
-                                    </span>
-                                    {handleStatus === 'checking' && (
-                                        <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
-                                    )}
-                                    {handleStatus === 'available' && (
-                                        <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
-                                    )}
-                                    {handleStatus === 'taken' && (
-                                        <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
-                                    )}
-                                </div>
-                            </div>
+                            </>
+                        )}
 
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                    Display Name
-                                </label>
-                                <input
-                                    type="text"
-                                    className="input"
-                                    value={displayName}
-                                    onChange={(e) => setDisplayName(e.target.value)}
-                                    placeholder="Your Name"
-                                />
-                            </div>
-                        </>
-                    )}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                className="input"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@example.com"
+                                required
+                            />
+                        </div>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            className="input"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            required
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: '24px' }}>
-                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                            Password
-                        </label>
-                        <input
-                            type="password"
-                            className="input"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            required
-                            minLength={8}
-                        />
-                    </div>
-
-                    {mode === 'register' && (
                         <div style={{ marginBottom: '24px' }}>
                             <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                Confirm Password
+                                Password
                             </label>
                             <input
                                 type="password"
                                 className="input"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
                                 required
                                 minLength={8}
                             />
                         </div>
-                    )}
 
-                    <button
-                        type="submit"
-                        className="btn btn-primary btn-lg"
-                        style={{ width: '100%' }}
-                        disabled={loading}
-                    >
-                        {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
-                    </button>
-                </form>
+                        {mode === 'register' && (
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                    Confirm Password
+                                </label>
+                                <input
+                                    type="password"
+                                    className="input"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    minLength={8}
+                                />
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-lg"
+                            style={{ width: '100%' }}
+                            disabled={loading}
+                        >
+                            {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
+                        </button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleImport} className="card" style={{ padding: '24px' }}>
+                        {error && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid var(--error)',
+                                borderRadius: 'var(--radius-md)',
+                                color: 'var(--error)',
+                                fontSize: '14px',
+                            }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {importSuccess && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'var(--success)',
+                                border: '1px solid var(--success)',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#000',
+                                fontSize: '14px',
+                            }}>
+                                {importSuccess} Redirecting...
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Export file
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    type="file"
+                                    id="import-file-input"
+                                    accept=".json"
+                                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                                    style={{ display: 'none' }}
+                                />
+                                <label
+                                    htmlFor="import-file-input"
+                                    className="input"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        color: importFile ? 'var(--foreground)' : 'var(--foreground-tertiary)',
+                                        fontSize: '14px'
+                                    }}
+                                >
+                                    <span>{importFile ? importFile.name : 'Select export file...'}</span>
+                                    <span className="btn btn-ghost btn-sm" style={{ pointerEvents: 'none', padding: '4px 8px', height: 'auto', minHeight: 'unset' }}>
+                                        Browse
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Password (from your old account)
+                            </label>
+                            <input
+                                type="password"
+                                className="input"
+                                value={importPassword}
+                                onChange={(e) => setImportPassword(e.target.value)}
+                                placeholder="Enter the password for this account"
+                                required
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Handle on this node
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <span style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--foreground-tertiary)',
+                                }}>@</span>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={importHandle}
+                                    onChange={(e) => setImportHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                    style={{ paddingLeft: '28px' }}
+                                    placeholder="yourhandle"
+                                    required
+                                    minLength={3}
+                                    maxLength={20}
+                                />
+                            </div>
+                            <div style={{
+                                fontSize: '12px',
+                                marginTop: '4px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                    3-20 chars
+                                </span>
+                                {handleStatus === 'checking' && (
+                                    <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                )}
+                                {handleStatus === 'available' && (
+                                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                                )}
+                                {handleStatus === 'taken' && (
+                                    <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div style={{
+                            marginBottom: '20px',
+                            padding: '12px',
+                            background: 'rgba(245, 158, 11, 0.05)',
+                            border: '1px solid rgba(245, 158, 11, 0.2)',
+                            borderRadius: 'var(--radius-md)',
+                        }}>
+                            <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={acceptedCompliance}
+                                    onChange={(e) => setAcceptedCompliance(e.target.checked)}
+                                    style={{ marginTop: '3px' }}
+                                />
+                                <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                    <strong style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <TriangleAlert size={12} /> Compliance:
+                                    </strong> I agree to comply with this node's rules and take responsibility for my migrated content.
+                                </span>
+                            </label>
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-lg"
+                            style={{ width: '100%' }}
+                            disabled={loading || !importFile || !importPassword || !importHandle || !acceptedCompliance}
+                        >
+                            {loading ? 'Importing...' : 'Import Account'}
+                        </button>
+                    </form>
+                )}
 
                 <p style={{ textAlign: 'center', marginTop: '24px', color: 'var(--foreground-tertiary)', fontSize: '14px' }}>
                     <Link href="/">← Back to home</Link>

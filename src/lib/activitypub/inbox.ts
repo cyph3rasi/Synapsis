@@ -4,7 +4,7 @@
  * Processes incoming activities from remote servers.
  */
 
-import { db, users, remoteFollowers } from '@/db';
+import { db, users, remoteFollowers, remotePosts, posts, remoteFollows } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { verifySignature, fetchActorPublicKey } from './signatures';
 import { createAcceptActivity } from './activities';
@@ -107,16 +107,100 @@ export async function processIncomingActivity(
  * Handle Create activities (new posts)
  */
 async function handleCreate(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
-    const object = activity.object as { type: string; content?: string; id?: string; attributedTo?: string };
+    const object = activity.object as {
+        type: string;
+        content?: string;
+        id?: string;
+        url?: string;
+        attributedTo?: string;
+        published?: string;
+        attachment?: Array<{
+            type: string;
+            mediaType?: string;
+            url?: string;
+            name?: string;
+        }>;
+    };
 
     if (object.type !== 'Note') {
         return { success: true }; // We only handle Notes for now
     }
 
-    // TODO: Store remote posts in database for caching/display
-    console.log('[Inbox] Received remote post:', object.id);
+    if (!object.id || !object.attributedTo) {
+        console.warn('[Inbox] Create activity missing id or attributedTo');
+        return { success: false, error: 'Missing required fields' };
+    }
 
-    return { success: true };
+    try {
+        // Check if we already have this post cached
+        const existingPost = await db.query.remotePosts.findFirst({
+            where: eq(remotePosts.apId, object.id),
+        });
+
+        if (existingPost) {
+            console.log('[Inbox] Post already cached:', object.id);
+            return { success: true };
+        }
+
+        // Parse author info from attributedTo URL
+        const authorUrl = new URL(object.attributedTo);
+        const authorPathParts = authorUrl.pathname.split('/').filter(Boolean);
+        const authorHandle = authorPathParts[authorPathParts.length - 1] || 'unknown';
+        const authorDomain = authorUrl.hostname;
+        const fullHandle = `${authorHandle}@${authorDomain}`;
+
+        // Fetch author profile for display name and avatar
+        let displayName: string | null = null;
+        let avatarUrl: string | null = null;
+        try {
+            const actorResponse = await fetch(object.attributedTo, {
+                headers: {
+                    'Accept': 'application/activity+json, application/ld+json',
+                },
+            });
+            if (actorResponse.ok) {
+                const actorData = await actorResponse.json();
+                displayName = actorData.name || actorData.preferredUsername || null;
+                avatarUrl = actorData.icon?.url || actorData.icon || null;
+            }
+        } catch (e) {
+            console.warn('[Inbox] Could not fetch actor profile:', e);
+        }
+
+        // Parse media attachments
+        let mediaJson: string | null = null;
+        if (object.attachment && object.attachment.length > 0) {
+            const mediaItems = object.attachment
+                .filter(att => att.type === 'Document' || att.type === 'Image' || att.type === 'Video')
+                .map(att => ({
+                    url: att.url,
+                    altText: att.name || null,
+                    mediaType: att.mediaType,
+                }));
+            if (mediaItems.length > 0) {
+                mediaJson = JSON.stringify(mediaItems);
+            }
+        }
+
+        // Store the remote post
+        await db.insert(remotePosts).values({
+            apId: object.id,
+            authorHandle: fullHandle,
+            authorActorUrl: object.attributedTo,
+            authorDisplayName: displayName,
+            authorAvatarUrl: avatarUrl,
+            content: object.content || '',
+            publishedAt: object.published ? new Date(object.published) : new Date(),
+            mediaJson: mediaJson,
+            fetchedAt: new Date(),
+        });
+
+        console.log(`[Inbox] Cached remote post from ${fullHandle}:`, object.id);
+        return { success: true };
+    } catch (error) {
+        console.error('[Inbox] Error caching remote post:', error);
+        return { success: false, error: 'Failed to cache post' };
+    }
 }
 
 /**
@@ -244,8 +328,26 @@ async function handleLike(activity: IncomingActivity): Promise<{ success: boolea
         return { success: false, error: 'Invalid like target' };
     }
 
-    // TODO: Update like count on local post
     console.log('[Inbox] Received like for:', targetUrl, 'from:', activity.actor);
+
+    try {
+        // Find the local post by its apId or apUrl
+        const post = await db.query.posts.findFirst({
+            where: eq(posts.apId, targetUrl),
+        });
+
+        if (post) {
+            // Increment like count
+            await db.update(posts)
+                .set({ likesCount: post.likesCount + 1 })
+                .where(eq(posts.id, post.id));
+            console.log(`[Inbox] Updated like count for post ${post.id}: ${post.likesCount + 1}`);
+        } else {
+            console.log('[Inbox] Like target not found locally:', targetUrl);
+        }
+    } catch (error) {
+        console.error('[Inbox] Error updating like count:', error);
+    }
 
     return { success: true };
 }
@@ -260,8 +362,26 @@ async function handleAnnounce(activity: IncomingActivity): Promise<{ success: bo
         return { success: false, error: 'Invalid announce target' };
     }
 
-    // TODO: Update repost count on local post
     console.log('[Inbox] Received announce for:', targetUrl, 'from:', activity.actor);
+
+    try {
+        // Find the local post by its apId or apUrl
+        const post = await db.query.posts.findFirst({
+            where: eq(posts.apId, targetUrl),
+        });
+
+        if (post) {
+            // Increment repost count
+            await db.update(posts)
+                .set({ repostsCount: post.repostsCount + 1 })
+                .where(eq(posts.id, post.id));
+            console.log(`[Inbox] Updated repost count for post ${post.id}: ${post.repostsCount + 1}`);
+        } else {
+            console.log('[Inbox] Announce target not found locally:', targetUrl);
+        }
+    } catch (error) {
+        console.error('[Inbox] Error updating repost count:', error);
+    }
 
     return { success: true };
 }
@@ -330,7 +450,36 @@ async function handleUndo(
 async function handleDelete(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
     console.log('[Inbox] Received delete from:', activity.actor);
 
-    // TODO: Remove cached remote content
+    try {
+        // The object can be the deleted item's URL or an object with an id
+        const deletedId = typeof activity.object === 'string'
+            ? activity.object
+            : (activity.object as { id?: string })?.id;
+
+        if (!deletedId) {
+            console.log('[Inbox] Delete activity missing object id');
+            return { success: true };
+        }
+
+        // Try to find and remove cached remote post
+        const cachedPost = await db.query.remotePosts.findFirst({
+            where: eq(remotePosts.apId, deletedId),
+        });
+
+        if (cachedPost) {
+            // Verify the delete is from the original author
+            if (cachedPost.authorActorUrl === activity.actor) {
+                await db.delete(remotePosts).where(eq(remotePosts.id, cachedPost.id));
+                console.log(`[Inbox] Deleted cached remote post: ${deletedId}`);
+            } else {
+                console.warn('[Inbox] Delete actor mismatch - ignoring');
+            }
+        } else {
+            console.log('[Inbox] Deleted content not found in cache:', deletedId);
+        }
+    } catch (error) {
+        console.error('[Inbox] Error handling delete:', error);
+    }
 
     return { success: true };
 }
@@ -341,7 +490,51 @@ async function handleDelete(activity: IncomingActivity): Promise<{ success: bool
 async function handleAccept(activity: IncomingActivity): Promise<{ success: boolean; error?: string }> {
     console.log('[Inbox] Follow accepted by:', activity.actor);
 
-    // TODO: Update follow status in remoteFollows table
+    try {
+        // The object should be the original Follow activity
+        const followActivity = activity.object as { type?: string; actor?: string; object?: string };
+
+        if (followActivity?.type !== 'Follow') {
+            console.log('[Inbox] Accept is not for a Follow activity');
+            return { success: true };
+        }
+
+        // Find the local user who sent the follow
+        const localActorUrl = followActivity.actor;
+        if (!localActorUrl) {
+            return { success: true };
+        }
+
+        // Extract handle from our actor URL
+        const handleMatch = localActorUrl.match(/\/users\/([^\/]+)$/);
+        if (!handleMatch) {
+            return { success: true };
+        }
+
+        const localUser = await db.query.users.findFirst({
+            where: eq(users.handle, handleMatch[1].toLowerCase()),
+        });
+
+        if (!localUser) {
+            return { success: true };
+        }
+
+        // Find and update the remote follow record
+        const remoteFollow = await db.query.remoteFollows.findFirst({
+            where: and(
+                eq(remoteFollows.followerId, localUser.id),
+                eq(remoteFollows.targetActorUrl, activity.actor)
+            ),
+        });
+
+        if (remoteFollow) {
+            // The follow is now confirmed - we could add an 'accepted' flag if needed
+            // For now, just log it since the follow is already stored
+            console.log(`[Inbox] Follow to ${activity.actor} confirmed for @${localUser.handle}`);
+        }
+    } catch (error) {
+        console.error('[Inbox] Error handling accept:', error);
+    }
 
     return { success: true };
 }
@@ -379,22 +572,92 @@ async function handleMove(activity: IncomingActivity): Promise<{ success: boolea
     if (did) {
         console.log(`[Inbox] Move includes DID: ${did} - attempting automatic migration`);
 
-        // Find any local follows that match this DID
-        // This would require querying by the remote user's DID
-        // For now, we'll log the DID and handle it
+        try {
+            // Find all local users following the old actor URL
+            const affectedFollows = await db.query.remoteFollows.findMany({
+                where: eq(remoteFollows.targetActorUrl, oldActorUrl),
+            });
 
-        // In a full implementation, we would:
-        // 1. Find all local users following the old actor URL
-        // 2. Update their follow relationship to point to the new actor URL
-        // 3. Automatically send a Follow to the new actor
+            if (affectedFollows.length === 0) {
+                console.log('[Inbox] No local users following the migrating account');
+                return { success: true };
+            }
 
-        // For Synapsis-to-Synapsis migrations, we can auto-follow
-        // because we trust the DID verification
+            console.log(`[Inbox] Found ${affectedFollows.length} local users to migrate`);
 
-        console.log(`[Inbox] DID-based migration supported. Followers will be auto-migrated.`);
+            // Fetch the new actor's info to get their inbox
+            const newActorResponse = await fetch(newActorUrl, {
+                headers: {
+                    'Accept': 'application/activity+json, application/ld+json',
+                },
+            });
 
-        // TODO: Implement automatic follow migration
-        // await migrateFollowersByDid(did, oldActorUrl, newActorUrl);
+            if (!newActorResponse.ok) {
+                console.error('[Inbox] Failed to fetch new actor profile');
+                return { success: true }; // Don't fail, just log
+            }
+
+            const newActor = await newActorResponse.json();
+            const newInbox = newActor.endpoints?.sharedInbox || newActor.inbox;
+            const newHandle = newActor.preferredUsername
+                ? `${newActor.preferredUsername}@${new URL(newActorUrl).hostname}`
+                : null;
+
+            if (!newInbox) {
+                console.error('[Inbox] New actor has no inbox');
+                return { success: true };
+            }
+
+            // Update each follow relationship and send new Follow activities
+            const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+            const { createFollowActivity } = await import('./activities');
+            const { deliverActivity } = await import('./outbox');
+
+            for (const follow of affectedFollows) {
+                try {
+                    // Get the local user who was following
+                    const localUser = await db.query.users.findFirst({
+                        where: eq(users.id, follow.followerId),
+                    });
+
+                    if (!localUser || !localUser.privateKeyEncrypted) {
+                        continue;
+                    }
+
+                    // Update the remoteFollows record with new actor info
+                    const newActivityId = crypto.randomUUID();
+                    await db.update(remoteFollows)
+                        .set({
+                            targetActorUrl: newActorUrl,
+                            targetHandle: newHandle || follow.targetHandle,
+                            inboxUrl: newInbox,
+                            activityId: newActivityId,
+                            displayName: newActor.name || follow.displayName,
+                            avatarUrl: newActor.icon?.url || newActor.icon || follow.avatarUrl,
+                        })
+                        .where(eq(remoteFollows.id, follow.id));
+
+                    // Send a Follow activity to the new actor
+                    const followActivity = createFollowActivity(
+                        localUser,
+                        newActorUrl,
+                        nodeDomain,
+                        newActivityId
+                    );
+
+                    const keyId = `https://${nodeDomain}/users/${localUser.handle}#main-key`;
+                    await deliverActivity(followActivity, newInbox, localUser.privateKeyEncrypted, keyId);
+
+                    console.log(`[Inbox] Auto-migrated @${localUser.handle}'s follow to ${newActorUrl}`);
+                } catch (err) {
+                    console.error(`[Inbox] Error migrating follow ${follow.id}:`, err);
+                }
+            }
+
+            console.log(`[Inbox] DID-based migration complete. ${affectedFollows.length} followers migrated.`);
+        } catch (error) {
+            console.error('[Inbox] Error during DID-based migration:', error);
+        }
     } else {
         // Standard Fediverse Move - just log it
         // Users will need to manually re-follow

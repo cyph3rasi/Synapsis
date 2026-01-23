@@ -55,9 +55,9 @@ export async function GET(request: Request, context: RouteContext) {
         const remoteFollowing = userRemoteFollowing.map(f => ({
             id: f.targetActorUrl,
             handle: f.targetHandle,
-            displayName: f.targetHandle.split('@')[0], // Use username part as display name
-            avatarUrl: null,
-            bio: null,
+            displayName: f.displayName || f.targetHandle.split('@')[0], // Use stored display name or username part
+            avatarUrl: f.avatarUrl,
+            bio: f.bio,
             isRemote: true,
         }));
 

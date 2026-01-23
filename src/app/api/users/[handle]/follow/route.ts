@@ -19,6 +19,12 @@ const parseRemoteHandle = (handle: string) => {
     return null;
 };
 
+// Strip HTML tags from a string (for Mastodon bios that come as HTML)
+const stripHtml = (html: string | null | undefined): string | null => {
+    if (!html) return null;
+    return html.replace(/<[^>]*>/g, '').trim() || null;
+};
+
 // Check follow status
 export async function GET(request: Request, context: RouteContext) {
     try {
@@ -126,12 +132,26 @@ export async function POST(request: Request, context: RouteContext) {
             if (!result.success) {
                 return NextResponse.json({ error: result.error || 'Failed to follow remote user' }, { status: 502 });
             }
+
+            // Extract avatar URL from remote profile
+            let avatarUrl: string | null = null;
+            if (remoteProfile.icon) {
+                if (typeof remoteProfile.icon === 'string') {
+                    avatarUrl = remoteProfile.icon;
+                } else if (typeof remoteProfile.icon === 'object' && remoteProfile.icon.url) {
+                    avatarUrl = remoteProfile.icon.url;
+                }
+            }
+
             await db.insert(remoteFollows).values({
                 followerId: currentUser.id,
                 targetHandle,
                 targetActorUrl: remoteProfile.id,
                 inboxUrl: targetInbox,
                 activityId,
+                displayName: remoteProfile.name || null,
+                bio: stripHtml(remoteProfile.summary),
+                avatarUrl,
             });
 
             // Update the user's following count

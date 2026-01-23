@@ -95,11 +95,31 @@ export async function deliverToFollowers(
 
 /**
  * Get followers' inboxes for delivery
- * This would query the database for follower inbox URLs
+ * Queries the remoteFollowers table for inbox URLs of remote users following this user
  */
 export async function getFollowerInboxes(userId: string): Promise<string[]> {
-    // TODO: Query database for followers and their inbox URLs
-    // For local followers: use their local inbox
-    // For remote followers: use their remote inbox (stored when they followed)
-    return [];
+    try {
+        const { db, remoteFollowers } = await import('@/db');
+        const { eq } = await import('drizzle-orm');
+
+        if (!db) {
+            console.warn('[Outbox] Database not available for follower query');
+            return [];
+        }
+
+        // Get all remote followers of this user
+        const followers = await db.query.remoteFollowers.findMany({
+            where: eq(remoteFollowers.userId, userId),
+        });
+
+        // Prefer shared inbox when available (more efficient)
+        const inboxes = followers.map(f => f.sharedInboxUrl || f.inboxUrl);
+
+        // Deduplicate (shared inboxes may appear multiple times)
+        return [...new Set(inboxes)];
+    } catch (error) {
+        console.error('[Outbox] Error fetching follower inboxes:', error);
+        return [];
+    }
 }
+

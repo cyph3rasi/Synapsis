@@ -18,6 +18,12 @@ interface UserSummary {
     avatarUrl?: string | null;
 }
 
+// Strip HTML tags from a string
+const stripHtml = (html: string | null | undefined): string | null => {
+    if (!html) return null;
+    return html.replace(/<[^>]*>/g, '').trim() || null;
+};
+
 function UserRow({ user }: { user: UserSummary }) {
     return (
         <Link href={`/${user.handle}`} className="user-row">
@@ -31,8 +37,8 @@ function UserRow({ user }: { user: UserSummary }) {
             <div className="user-row-content">
                 <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
                 <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
-                {user.bio && (
-                    <div className="user-row-bio">{user.bio}</div>
+                {user.bio && stripHtml(user.bio) && (
+                    <div className="user-row-bio">{stripHtml(user.bio)}</div>
                 )}
             </div>
         </Link>

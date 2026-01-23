@@ -199,6 +199,10 @@ export const remoteFollows = pgTable('remote_follows', {
   targetActorUrl: text('target_actor_url').notNull(),
   inboxUrl: text('inbox_url').notNull(),
   activityId: text('activity_id').notNull(), // UUID token for activity URL
+  // Cached profile data for display
+  displayName: text('display_name'),
+  bio: text('bio'),
+  avatarUrl: text('avatar_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('remote_follows_follower_idx').on(table.followerId),

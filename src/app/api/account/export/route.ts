@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, verifyPassword } from '@/lib/auth';
-import { db, posts, media, follows, users } from '@/db';
+import { db, posts, media, follows, users, remoteFollows } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
 
@@ -45,6 +45,10 @@ interface ExportPost {
 interface ExportFollowing {
     actorUrl: string;
     handle: string;
+    isRemote?: boolean;
+    displayName?: string | null;
+    bio?: string | null;
+    avatarUrl?: string | null;
 }
 
 /**
@@ -120,12 +124,16 @@ export async function POST(req: NextRequest) {
             orderBy: (posts, { desc }) => [desc(posts.createdAt)],
         });
 
-        // Fetch user's following list
+        // Fetch user's following list (local and remote)
         const userFollowing = await db.query.follows.findMany({
             where: eq(follows.followerId, user.id),
             with: {
                 following: true,
             },
+        });
+
+        const userRemoteFollowing = await db.query.remoteFollows.findMany({
+            where: eq(remoteFollows.followerId, user.id),
         });
 
         // Build export data
@@ -141,10 +149,23 @@ export async function POST(req: NextRequest) {
             })),
         }));
 
-        const exportFollowing: ExportFollowing[] = userFollowing.map(f => ({
-            actorUrl: `https://${nodeDomain}/users/${f.following.handle}`,
-            handle: f.following.handle,
-        }));
+        const exportFollowing: ExportFollowing[] = [
+            // Local follows
+            ...userFollowing.map(f => ({
+                actorUrl: `https://${nodeDomain}/users/${f.following.handle}`,
+                handle: f.following.handle,
+                isRemote: false,
+            })),
+            // Remote follows
+            ...userRemoteFollowing.map(f => ({
+                actorUrl: f.targetActorUrl,
+                handle: f.targetHandle,
+                isRemote: true,
+                displayName: f.displayName,
+                bio: f.bio,
+                avatarUrl: f.avatarUrl,
+            })),
+        ];
 
         const profile: ExportProfile = {
             displayName: user.displayName,
