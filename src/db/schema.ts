@@ -206,6 +206,24 @@ export const remoteFollows = pgTable('remote_follows', {
 ]);
 
 // ============================================
+// REMOTE FOLLOWERS (followers from federated instances)
+// ============================================
+
+export const remoteFollowers = pgTable('remote_followers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }), // Local user being followed
+  actorUrl: text('actor_url').notNull().unique(), // Remote actor URL (unique per local user)
+  inboxUrl: text('inbox_url').notNull(), // Remote user's inbox
+  sharedInboxUrl: text('shared_inbox_url'), // Optional shared inbox
+  handle: text('handle'), // Remote user's handle (e.g., user@mastodon.social)
+  activityId: text('activity_id'), // The Follow activity ID
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('remote_followers_user_idx').on(table.userId),
+  index('remote_followers_actor_idx').on(table.actorUrl),
+]);
+
+// ============================================
 // LIKES
 // ============================================
 
