@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { SearchIcon, TrendingIcon, UsersIcon, HeartIcon, RepeatIcon, MessageIcon } from '@/components/Icons';
+import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
+import { PostCard } from '@/components/PostCard';
+import { Post } from '@/lib/types';
 
 interface User {
     id: string;
@@ -12,99 +14,6 @@ interface User {
     bio?: string;
     profileUrl?: string | null;
     isRemote?: boolean;
-}
-
-interface MediaItem {
-    id: string;
-    url: string;
-    altText?: string | null;
-}
-
-interface Post {
-    id: string;
-    content: string;
-    createdAt: string;
-    likesCount: number;
-    repostsCount: number;
-    repliesCount: number;
-    author: User;
-    media?: MediaItem[];
-}
-
-
-
-function PostCard({ post }: { post: Post }) {
-    const [liked, setLiked] = useState(false);
-    const [reposted, setReposted] = useState(false);
-
-    const formatTime = (dateStr: string) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diff = now.getTime() - date.getTime();
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        if (minutes < 1) return 'now';
-        if (minutes < 60) return `${minutes}m`;
-        if (hours < 24) return `${hours}h`;
-        if (days < 7) return `${days}d`;
-        return date.toLocaleDateString();
-    };
-
-    const handleLike = async () => {
-        setLiked(!liked);
-        await fetch(`/api/posts/${post.id}/like`, { method: 'POST' });
-    };
-
-    const handleRepost = async () => {
-        setReposted(!reposted);
-        await fetch(`/api/posts/${post.id}/repost`, { method: 'POST' });
-    };
-
-    return (
-        <article className="post">
-            <div className="post-header">
-                <div className="avatar">
-                    {post.author.avatarUrl ? (
-                        <img src={post.author.avatarUrl} alt={post.author.displayName} />
-                    ) : (
-                        post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
-                    )}
-                </div>
-                <div className="post-author">
-                    <Link href={`/${post.author.handle}`} className="post-handle">
-                        {post.author.displayName || post.author.handle}
-                    </Link>
-                    <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
-                </div>
-            </div>
-            <div className="post-content">{post.content}</div>
-            {post.media && post.media.length > 0 && (
-                <div className="post-media-grid">
-                    {post.media.map((item) => (
-                        <div className="post-media-item" key={item.id}>
-                            <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
-                        </div>
-                    ))}
-                </div>
-            )}
-            <div className="post-actions">
-                <button className="post-action" onClick={() => { }}>
-                    <MessageIcon />
-                    <span>{post.repliesCount || ''}</span>
-                </button>
-                <button className={`post-action ${reposted ? 'reposted' : ''}`} onClick={handleRepost}>
-                    <RepeatIcon />
-                    <span>{post.repostsCount + (reposted ? 1 : 0) || ''}</span>
-                </button>
-                <button className={`post-action ${liked ? 'liked' : ''}`} onClick={handleLike}>
-                    <HeartIcon filled={liked} />
-                    <span>{post.likesCount + (liked ? 1 : 0) || ''}</span>
-                </button>
-            </div>
-        </article>
-    );
 }
 
 function UserCard({ user }: { user: User }) {
@@ -193,6 +102,16 @@ export default function ExplorePage() {
         }
     };
 
+    const handleLike = async (postId: string, currentLiked: boolean) => {
+        const method = currentLiked ? 'DELETE' : 'POST';
+        await fetch(`/api/posts/${postId}/like`, { method });
+    };
+
+    const handleRepost = async (postId: string, currentReposted: boolean) => {
+        const method = currentReposted ? 'DELETE' : 'POST';
+        await fetch(`/api/posts/${postId}/repost`, { method });
+    };
+
     return (
         <div className="explore-page">
             <header className="explore-header">
@@ -246,7 +165,7 @@ export default function ExplorePage() {
                     ) : (
                         <div className="explore-posts">
                             {trendingPosts.map((post) => (
-                                <PostCard key={post.id} post={post} />
+                                <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} />
                             ))}
                         </div>
                     )
@@ -289,7 +208,7 @@ export default function ExplorePage() {
                                     <h2>Posts</h2>
                                     <div className="explore-posts">
                                         {searchResults.posts.map((post) => (
-                                            <PostCard key={post.id} post={post} />
+                                            <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} />
                                         ))}
                                     </div>
                                 </div>
