@@ -83,6 +83,10 @@ export default function Home() {
     await fetch(`/api/posts/${postId}/repost`, { method });
   };
 
+  const handleDelete = (postId: string) => {
+    setPosts(prev => prev.filter(p => p.id !== postId));
+  };
+
   return (
     <>
       <header style={{
@@ -157,6 +161,7 @@ export default function Home() {
             post={post}
             onLike={handleLike}
             onRepost={handleRepost}
+            onDelete={handleDelete}
             onComment={(p) => {
               setReplyingTo(p);
               window.scrollTo({ top: 0, behavior: 'smooth' });

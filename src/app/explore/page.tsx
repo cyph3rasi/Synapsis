@@ -113,6 +113,14 @@ export default function ExplorePage() {
         await fetch(`/api/posts/${postId}/repost`, { method });
     };
 
+    const handleDelete = (postId: string) => {
+        setTrendingPosts(prev => prev.filter(p => p.id !== postId));
+        setSearchResults(prev => ({
+            ...prev,
+            posts: prev.posts.filter(p => p.id !== postId)
+        }));
+    };
+
     return (
         <div className="explore-page">
             <header className="explore-header">
@@ -166,7 +174,7 @@ export default function ExplorePage() {
                     ) : (
                         <div className="explore-posts">
                             {trendingPosts.map((post) => (
-                                <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} />
+                                <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
                             ))}
                         </div>
                     )
@@ -209,7 +217,7 @@ export default function ExplorePage() {
                                     <h2>Posts</h2>
                                     <div className="explore-posts">
                                         {searchResults.posts.map((post) => (
-                                            <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} />
+                                            <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
                                         ))}
                                     </div>
                                 </div>

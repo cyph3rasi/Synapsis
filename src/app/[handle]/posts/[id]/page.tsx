@@ -68,6 +68,17 @@ export default function PostDetailPage() {
         await fetch(`/api/posts/${postId}/repost`, { method });
     };
 
+    const handleDelete = (postId: string) => {
+        if (postId === id) {
+            router.push(`/${handle}`);
+        } else {
+            setReplies(prev => prev.filter(r => r.id !== postId));
+            if (post) {
+                setPost({ ...post, repliesCount: Math.max(0, post.repliesCount - 1) });
+            }
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
@@ -113,6 +124,7 @@ export default function PostDetailPage() {
                 isDetail
                 onLike={handleLike}
                 onRepost={handleRepost}
+                onDelete={handleDelete}
                 onComment={() => {
                     const composer = document.querySelector('.compose-input') as HTMLTextAreaElement;
                     composer?.focus();
@@ -137,6 +149,7 @@ export default function PostDetailPage() {
                         post={reply}
                         onLike={handleLike}
                         onRepost={handleRepost}
+                        onDelete={handleDelete}
                         onComment={(p) => {
                             // In detail view, commenting on a reply should probably just focus the main composer
                             // but we could also implement nested replies later. 

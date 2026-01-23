@@ -110,6 +110,16 @@ export default function ProfilePage() {
         router.push(`/${post.author.handle}/posts/${post.id}`);
     };
 
+    const handleDelete = (postId: string) => {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        if (user && isOwnProfile) {
+            setUser({
+                ...user,
+                postsCount: (user.postsCount || 0) - 1
+            });
+        }
+    };
+
     useEffect(() => {
         if (user && currentUser?.handle === user.handle) {
             setProfileForm({
@@ -582,6 +592,7 @@ export default function ProfilePage() {
                             onLike={handleLike}
                             onRepost={handleRepost}
                             onComment={handleComment}
+                            onDelete={handleDelete}
                         />
                     ))
                 )

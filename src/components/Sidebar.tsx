@@ -62,17 +62,17 @@ export function Sidebar() {
             </nav>
             {user && (
                 <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div className="avatar avatar-sm">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                        <div className="avatar avatar-sm" style={{ flexShrink: 0 }}>
                             {user.avatarUrl ? (
                                 <img src={user.avatarUrl} alt={user.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             ) : (
                                 (user.displayName?.charAt(0) || user.handle.charAt(0)).toUpperCase()
                             )}
                         </div>
-                        <div>
-                            <div style={{ fontWeight: 600, fontSize: '14px' }}>{user.displayName}</div>
-                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName}</div>
+                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatFullHandle(user.handle)}</div>
                         </div>
                     </div>
                 </div>
