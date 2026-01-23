@@ -71,6 +71,19 @@ const stripFirstUrl = (text: string, url: string) => {
     return `${before} ${after}`.trim();
 };
 
+// Normalize content for deduplication (strip HTML entities, URLs, whitespace)
+const normalizeForDedup = (content: string): string => {
+    return content
+        .replace(/&[a-z]+;/gi, '') // Remove HTML entities like &lsquo;
+        .replace(/&#\d+;/g, '') // Remove numeric entities
+        .replace(/https?:\/\/[^\s]+/gi, '') // Remove URLs
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .toLowerCase()
+        .trim()
+        .slice(0, 100); // Compare first 100 chars
+};
+
 const parseRemoteHandle = (handle: string) => {
     const clean = handle.toLowerCase().replace(/^@/, '');
     const parts = clean.split('@').filter(Boolean);
@@ -134,6 +147,7 @@ export async function GET(request: Request, context: RouteContext) {
             };
             const posts = [];
             const seenIds = new Set<string>();
+            const seenContentKeys = new Set<string>(); // For content-based dedup
             const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
@@ -146,7 +160,15 @@ export async function GET(request: Request, context: RouteContext) {
                 if (seenIds.has(postId)) {
                     continue;
                 }
+
+                // Content-based dedup: similar content = skip
+                const contentKey = normalizeForDedup(object.content || '');
+                if (seenContentKeys.has(contentKey)) {
+                    continue;
+                }
+
                 seenIds.add(postId);
+                seenContentKeys.add(contentKey);
 
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
@@ -202,6 +224,7 @@ export async function GET(request: Request, context: RouteContext) {
             };
             const posts = [];
             const seenIds = new Set<string>();
+            const seenContentKeys = new Set<string>(); // For content-based dedup
             const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
@@ -214,7 +237,15 @@ export async function GET(request: Request, context: RouteContext) {
                 if (seenIds.has(postId)) {
                     continue;
                 }
+
+                // Content-based dedup: similar content = skip
+                const contentKey = normalizeForDedup(object.content || '');
+                if (seenContentKeys.has(contentKey)) {
+                    continue;
+                }
+
                 seenIds.add(postId);
+                seenContentKeys.add(contentKey);
 
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
