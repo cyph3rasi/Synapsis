@@ -186,8 +186,8 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     {remaining}
                 </span>
                 <div className="compose-actions">
-                    <label className="btn btn-ghost btn-sm compose-media-button" title="Add media">
-                        {isUploading ? '...' : <ImageIcon size={18} />}
+                    <label className="compose-media-button" title="Add media">
+                        {isUploading ? '...' : <ImageIcon size={20} />}
                         <input
                             type="file"
                             accept="image/*"

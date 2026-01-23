@@ -340,7 +340,8 @@ a.btn-primary:visited {
 
 .video-embed-container {
   position: relative;
-  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  padding-bottom: 56.25%;
+  /* 16:9 aspect ratio */
   height: 0;
   overflow: hidden;
   border-radius: var(--radius-md);
@@ -503,6 +504,20 @@ a.btn-primary:visited {
 .compose-media-button {
   position: relative;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  color: var(--foreground-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.compose-media-button:hover {
+  background: var(--background-tertiary);
+  color: var(--accent);
 }
 
 .compose-media-input {
