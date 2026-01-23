@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
+import { ImageIcon } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
 
 interface ComposeProps {
@@ -185,8 +186,8 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     {remaining}
                 </span>
                 <div className="compose-actions">
-                    <label className="btn btn-ghost btn-sm compose-media-button">
-                        {isUploading ? 'Uploading...' : 'Add media'}
+                    <label className="btn btn-ghost btn-sm compose-media-button" title="Add media">
+                        {isUploading ? '...' : <ImageIcon size={18} />}
                         <input
                             type="file"
                             accept="image/*"

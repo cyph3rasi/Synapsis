@@ -22,7 +22,7 @@ export function VideoEmbed({ url }: VideoEmbedProps) {
 
     if (youtubeId) {
         return (
-            <div className="video-embed-container">
+            <div className="video-embed-container" onClick={(e) => e.stopPropagation()}>
                 <iframe
                     src={`https://www.youtube.com/embed/${youtubeId}`}
                     title="YouTube video player"
@@ -36,7 +36,7 @@ export function VideoEmbed({ url }: VideoEmbedProps) {
 
     if (vimeoId) {
         return (
-            <div className="video-embed-container">
+            <div className="video-embed-container" onClick={(e) => e.stopPropagation()}>
                 <iframe
                     src={`https://player.vimeo.com/video/${vimeoId}`}
                     title="Vimeo video player"
