@@ -32,7 +32,7 @@ export default function GuidePage() {
                     <li><a href="#how-synapsis-is-different" style={{ color: 'var(--foreground-secondary)' }}>2. How Synapsis is Different</a></li>
                     <li><a href="#following-remote-users" style={{ color: 'var(--foreground-secondary)' }}>3. Following Users on Other Servers</a></li>
                     <li><a href="#how-others-follow-you" style={{ color: 'var(--foreground-secondary)' }}>4. How Others Follow You</a></li>
-                    <li><a href="#portable-identity" style={{ color: 'var(--foreground-secondary)' }}>5. Portable Identity & The Future</a></li>
+                    <li><a href="#portable-identity" style={{ color: 'var(--foreground-secondary)' }}>5. Portable Identity & Account Migration</a></li>
                 </ul>
             </nav>
 
@@ -84,12 +84,8 @@ export default function GuidePage() {
                     <ul style={{ listStyle: 'disc', paddingLeft: '20px', color: 'var(--foreground-secondary)', lineHeight: 1.7 }}>
                         <li><strong style={{ color: 'var(--foreground)' }}>You own your identity.</strong> Your DID is generated from a cryptographic key pair that only you control.</li>
                         <li><strong style={{ color: 'var(--foreground)' }}>Authenticity.</strong> Every post you make is cryptographically signed, proving it came from you.</li>
-                        <li><strong style={{ color: 'var(--foreground)' }}>Future portability.</strong> The architecture is designed so that, in the future, you could move your identity to a different node without losing your followers.</li>
                     </ul>
                 </div>
-                <p style={{ color: 'var(--foreground-tertiary)', lineHeight: 1.7, fontSize: '13px' }}>
-                    <em>Note: Full account migration is a future feature. Today, DIDs establish the foundation for this capability.</em>
-                </p>
             </section>
 
             {/* Section 3 */}
