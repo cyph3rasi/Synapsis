@@ -113,6 +113,51 @@ export async function POST(request: Request) {
     }
 }
 
+// Helper to transform cached remote posts to match local post format
+// Also deduplicates by apId to prevent showing same post multiple times
+const transformRemotePosts = (remotePostsData: typeof remotePosts.$inferSelect[]) => {
+    const seenApIds = new Set<string>();
+    const uniquePosts: typeof remotePosts.$inferSelect[] = [];
+
+    for (const rp of remotePostsData) {
+        if (!seenApIds.has(rp.apId)) {
+            seenApIds.add(rp.apId);
+            uniquePosts.push(rp);
+        }
+    }
+
+    return uniquePosts.map(rp => {
+        const mediaData = rp.mediaJson ? JSON.parse(rp.mediaJson) : [];
+        return {
+            id: rp.id,
+            content: rp.content,
+            createdAt: rp.publishedAt,
+            likesCount: 0,
+            repostsCount: 0,
+            repliesCount: 0,
+            isRemote: true,
+            apId: rp.apId,
+            linkPreviewUrl: rp.linkPreviewUrl,
+            linkPreviewTitle: rp.linkPreviewTitle,
+            linkPreviewDescription: rp.linkPreviewDescription,
+            linkPreviewImage: rp.linkPreviewImage,
+            author: {
+                id: rp.authorActorUrl,
+                handle: rp.authorHandle,
+                displayName: rp.authorDisplayName,
+                avatarUrl: rp.authorAvatarUrl,
+                isRemote: true,
+            },
+            media: mediaData.map((m: { url: string; altText?: string }, idx: number) => ({
+                id: `${rp.id}-media-${idx}`,
+                url: m.url,
+                altText: m.altText || null,
+            })),
+            replyTo: null,
+        };
+    });
+};
+
 // Get timeline / feed
 export async function GET(request: Request) {
     try {
@@ -133,8 +178,8 @@ export async function GET(request: Request) {
         );
 
         if (type === 'public') {
-            // Public timeline - all posts
-            feedPosts = await db.query.posts.findMany({
+            // Public timeline - all local posts + all cached remote posts
+            const localPosts = await db.query.posts.findMany({
                 where: baseFilter,
                 with: {
                     author: true,
@@ -144,8 +189,21 @@ export async function GET(request: Request) {
                     },
                 },
                 orderBy: [desc(posts.createdAt)],
-                limit,
+                limit: limit * 2,
             });
+
+            // Get all cached remote posts
+            const remotePostsData = await db.query.remotePosts.findMany({
+                orderBy: [desc(remotePosts.publishedAt)],
+                limit: limit,
+            });
+
+            const transformedRemote = transformRemotePosts(remotePostsData);
+
+            // Merge and sort by date
+            feedPosts = [...localPosts, ...transformedRemote]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, limit) as any;
         } else if (type === 'user' && userId) {
             // User's posts
             feedPosts = await db.query.posts.findMany({
@@ -184,7 +242,18 @@ export async function GET(request: Request) {
                 limit: seedLimit,
             });
 
+            // Also get cached remote posts for the curated feed
+            const remotePostsData = await db.query.remotePosts.findMany({
+                orderBy: [desc(remotePosts.publishedAt)],
+                limit: Math.floor(seedLimit / 2),
+            });
+            const transformedRemote = transformRemotePosts(remotePostsData);
+
+            // Combine local and remote for ranking
+            const allSeedPosts = [...seedPosts, ...transformedRemote];
+
             let followingIds = new Set<string>();
+            let followingRemoteHandles = new Set<string>();
             let mutedIds = new Set<string>();
             let blockedIds = new Set<string>();
 
@@ -193,6 +262,12 @@ export async function GET(request: Request) {
                     .from(follows)
                     .where(eq(follows.followerId, viewer.id));
                 followingIds = new Set(followRows.map(row => row.followingId));
+
+                // Also get remote follows for boost
+                const remoteFollowRows = await db.query.remoteFollows.findMany({
+                    where: eq(remoteFollows.followerId, viewer.id),
+                });
+                followingRemoteHandles = new Set(remoteFollowRows.map(row => row.targetHandle));
 
                 const muteRows = await db.select({ mutedUserId: mutes.mutedUserId })
                     .from(mutes)
@@ -206,27 +281,35 @@ export async function GET(request: Request) {
             }
 
             const now = Date.now();
-            const rankedPosts = seedPosts
-                .filter(post => !mutedIds.has(post.author.id) && !blockedIds.has(post.author.id))
-                .map(post => {
+            const rankedPosts = allSeedPosts
+                .filter((post: any) => !mutedIds.has(post.author.id) && !blockedIds.has(post.author.id))
+                .map((post: any) => {
                     const createdAt = new Date(post.createdAt).getTime();
                     const ageHours = Math.max(0, (now - createdAt) / 3600000);
-                    const engagement = post.likesCount + post.repostsCount * 2 + post.repliesCount * 0.5;
+                    const engagement = (post.likesCount || 0) + (post.repostsCount || 0) * 2 + (post.repliesCount || 0) * 0.5;
                     const engagementScore = Math.log1p(Math.max(0, engagement));
                     const recencyScore = Math.max(0, 1 - ageHours / CURATION_WINDOW_HOURS);
 
-                    const followBoost = viewer && followingIds.has(post.author.id) ? 0.9 : 0;
+                    const isRemote = post.isRemote === true;
+                    const followBoost = viewer && (
+                        followingIds.has(post.author.id) ||
+                        (isRemote && followingRemoteHandles.has(post.author.handle))
+                    ) ? 0.9 : 0;
                     const selfBoost = viewer && post.author.id === viewer.id ? 0.5 : 0;
+                    const federatedBoost = isRemote ? 0.3 : 0; // Small boost for federated content diversity
 
-                    const score = engagementScore * 1.4 + recencyScore * 1.1 + followBoost + selfBoost;
+                    const score = engagementScore * 1.4 + recencyScore * 1.1 + followBoost + selfBoost + federatedBoost;
 
                     const reasons: string[] = [];
+                    if (isRemote) {
+                        reasons.push(`From the fediverse`);
+                    }
                     if (followBoost > 0) {
                         reasons.push(`You follow @${post.author.handle}`);
                     }
                     if (engagement >= 5) {
-                        reasons.push(`Popular: ${post.likesCount} likes, ${post.repostsCount} reposts`);
-                    } else if (post.repliesCount > 0) {
+                        reasons.push(`Popular: ${post.likesCount || 0} likes, ${post.repostsCount || 0} reposts`);
+                    } else if ((post.repliesCount || 0) > 0) {
                         reasons.push(`Active conversation: ${post.repliesCount} replies`);
                     }
                     if (ageHours <= 6) {
@@ -246,14 +329,14 @@ export async function GET(request: Request) {
                             score: Number(score.toFixed(3)),
                             reasons,
                             engagement: {
-                                likes: post.likesCount,
-                                reposts: post.repostsCount,
-                                replies: post.repliesCount,
+                                likes: post.likesCount || 0,
+                                reposts: post.repostsCount || 0,
+                                replies: post.repliesCount || 0,
                             },
                         },
                     };
                 })
-                .sort((a, b) => {
+                .sort((a: any, b: any) => {
                     if (b.feedMeta.score !== a.feedMeta.score) {
                         return b.feedMeta.score - a.feedMeta.score;
                     }
@@ -297,37 +380,8 @@ export async function GET(request: Request) {
                     });
                 }
 
-                // Transform remote posts to match local post format
-                const transformedRemotePosts = remotePostsData.map(rp => {
-                    const mediaData = rp.mediaJson ? JSON.parse(rp.mediaJson) : [];
-                    return {
-                        id: rp.id,
-                        content: rp.content,
-                        createdAt: rp.publishedAt,
-                        likesCount: 0,
-                        repostsCount: 0,
-                        repliesCount: 0,
-                        isRemote: true,
-                        apId: rp.apId,
-                        linkPreviewUrl: rp.linkPreviewUrl,
-                        linkPreviewTitle: rp.linkPreviewTitle,
-                        linkPreviewDescription: rp.linkPreviewDescription,
-                        linkPreviewImage: rp.linkPreviewImage,
-                        author: {
-                            id: rp.authorActorUrl,
-                            handle: rp.authorHandle,
-                            displayName: rp.authorDisplayName,
-                            avatarUrl: rp.authorAvatarUrl,
-                            isRemote: true,
-                        },
-                        media: mediaData.map((m: { url: string; altText?: string }, idx: number) => ({
-                            id: `${rp.id}-media-${idx}`,
-                            url: m.url,
-                            altText: m.altText || null,
-                        })),
-                        replyTo: null,
-                    };
-                });
+                // Transform remote posts to match local post format (with deduplication)
+                const transformedRemotePosts = transformRemotePosts(remotePostsData);
 
                 // Merge and sort by date
                 const allPosts = [...localPosts, ...transformedRemotePosts]

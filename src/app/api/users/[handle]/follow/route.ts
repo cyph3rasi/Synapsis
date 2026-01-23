@@ -134,6 +134,11 @@ export async function POST(request: Request, context: RouteContext) {
                 activityId,
             });
 
+            // Update the user's following count
+            await db.update(users)
+                .set({ followingCount: currentUser.followingCount + 1 })
+                .where(eq(users.id, currentUser.id));
+
             // Cache the remote user's recent posts in the background
             const origin = new URL(request.url).origin;
             cacheRemoteUserPosts(remoteProfile, targetHandle, origin, 20)
@@ -251,6 +256,12 @@ export async function DELETE(request: Request, context: RouteContext) {
                 return NextResponse.json({ error: result.error || 'Failed to unfollow remote user' }, { status: 502 });
             }
             await db.delete(remoteFollows).where(eq(remoteFollows.id, existingRemoteFollow.id));
+
+            // Update the user's following count
+            await db.update(users)
+                .set({ followingCount: Math.max(0, currentUser.followingCount - 1) })
+                .where(eq(users.id, currentUser.id));
+
             return NextResponse.json({ success: true, following: false, remote: true });
         }
 

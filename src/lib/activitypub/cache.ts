@@ -197,7 +197,7 @@ export async function cacheRemoteUserPosts(
                 linkPreviewDescription: linkPreview?.description || null,
                 linkPreviewImage: linkPreview?.image || null,
                 mediaJson: mediaJson.length > 0 ? JSON.stringify(mediaJson) : null,
-            });
+            }).onConflictDoNothing();
 
             cached++;
         } catch (error) {
