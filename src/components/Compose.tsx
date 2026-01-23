@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
+import { VideoEmbed } from '@/components/VideoEmbed';
 
 interface ComposeProps {
     onPost: (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string) => void;
@@ -159,17 +160,20 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     >
                         x
                     </button>
-                    <div className="link-preview-card mini">
-                        {linkPreview.image && (
-                            <div className="link-preview-image">
-                                <img src={linkPreview.image} alt="" />
+                    <VideoEmbed url={linkPreview.url} />
+                    {!linkPreview.url.match(/(youtube\.com|youtu\.be|vimeo\.com)/) && (
+                        <div className="link-preview-card mini">
+                            {linkPreview.image && (
+                                <div className="link-preview-image">
+                                    <img src={linkPreview.image} alt="" />
+                                </div>
+                            )}
+                            <div className="link-preview-info">
+                                <div className="link-preview-title">{linkPreview.title}</div>
+                                <div className="link-preview-url">{new URL(linkPreview.url.startsWith('http') ? linkPreview.url : `https://${linkPreview.url}`).hostname}</div>
                             </div>
-                        )}
-                        <div className="link-preview-info">
-                            <div className="link-preview-title">{linkPreview.title}</div>
-                            <div className="link-preview-url">{new URL(linkPreview.url.startsWith('http') ? linkPreview.url : `https://${linkPreview.url}`).hostname}</div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 
