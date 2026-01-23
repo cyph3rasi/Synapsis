@@ -113,17 +113,36 @@ export async function POST(request: Request) {
     }
 }
 
+// Normalize content for deduplication (strip HTML entities, URLs, whitespace)
+const normalizeForDedup = (content: string): string => {
+    return content
+        .replace(/&[a-z]+;/gi, '') // Remove HTML entities like &lsquo;
+        .replace(/&#\d+;/g, '') // Remove numeric entities
+        .replace(/https?:\/\/[^\s]+/gi, '') // Remove URLs
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .toLowerCase()
+        .trim()
+        .slice(0, 100); // Compare first 100 chars
+};
+
 // Helper to transform cached remote posts to match local post format
-// Also deduplicates by apId to prevent showing same post multiple times
+// Deduplicates by apId AND by similar content from same author
 const transformRemotePosts = (remotePostsData: typeof remotePosts.$inferSelect[]) => {
     const seenApIds = new Set<string>();
+    const seenContentKeys = new Set<string>(); // author+normalizedContent
     const uniquePosts: typeof remotePosts.$inferSelect[] = [];
 
     for (const rp of remotePostsData) {
-        if (!seenApIds.has(rp.apId)) {
-            seenApIds.add(rp.apId);
-            uniquePosts.push(rp);
-        }
+        if (seenApIds.has(rp.apId)) continue;
+
+        // Content-based dedup: same author + similar content = skip
+        const contentKey = `${rp.authorHandle}:${normalizeForDedup(rp.content)}`;
+        if (seenContentKeys.has(contentKey)) continue;
+
+        seenApIds.add(rp.apId);
+        seenContentKeys.add(contentKey);
+        uniquePosts.push(rp);
     }
 
     return uniquePosts.map(rp => {
