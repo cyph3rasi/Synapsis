@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 interface User {
     id: string;
@@ -28,7 +29,7 @@ function UserCard({ user }: { user: User }) {
             </div>
             <div className="user-card-info">
                 <div className="user-card-name">{user.displayName || user.handle}</div>
-                <div className="user-card-handle">@{user.handle}</div>
+                <div className="user-card-handle">{formatFullHandle(user.handle)}</div>
                 {user.bio && <div className="user-card-bio">{user.bio}</div>}
             </div>
         </Link>

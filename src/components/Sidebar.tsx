@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo, BookOpenIcon, SettingsIcon } from './Icons';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
@@ -71,7 +72,7 @@ export function Sidebar() {
                         </div>
                         <div>
                             <div style={{ fontWeight: 600, fontSize: '14px' }}>{user.displayName}</div>
-                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>@{user.handle}</div>
+                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
                         </div>
                     </div>
                 </div>

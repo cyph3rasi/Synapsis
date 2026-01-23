@@ -8,6 +8,7 @@ import { PostCard } from '@/components/PostCard';
 import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Rocket } from 'lucide-react';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 interface UserSummary {
     id: string;
@@ -29,7 +30,7 @@ function UserRow({ user }: { user: UserSummary }) {
             </div>
             <div className="user-row-content">
                 <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
-                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>@{user.handle}</div>
+                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
                 {user.bio && (
                     <div className="user-row-bio">{user.bio}</div>
                 )}
@@ -340,7 +341,7 @@ export default function ProfilePage() {
                     {/* User Info */}
                     <div style={{ padding: '12px 0' }}>
                         <h2 style={{ fontSize: '20px', fontWeight: 700 }}>{user.displayName || user.handle}</h2>
-                        <p style={{ color: 'var(--foreground-tertiary)' }}>@{user.handle}</p>
+                        <p style={{ color: 'var(--foreground-tertiary)' }}>{formatFullHandle(user.handle)}</p>
 
                         {user.bio && (
                             <p style={{ marginTop: '12px', lineHeight: 1.5 }}>{user.bio}</p>

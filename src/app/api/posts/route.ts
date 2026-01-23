@@ -25,7 +25,7 @@ const createPostSchema = z.object({
         title: z.string().optional(),
         description: z.string().optional(),
         image: z.string().url().optional().nullable(),
-    }).optional(),
+    }).optional().nullable(),
 });
 
 // Create a new post

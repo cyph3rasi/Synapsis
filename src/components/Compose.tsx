@@ -5,6 +5,7 @@ import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
 import { ImageIcon } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 interface ComposeProps {
     onPost: (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string) => void;
@@ -121,7 +122,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
             {replyingTo && !isReply && (
                 <div className="compose-reply-target">
                     <div className="compose-reply-info">
-                        Replying to <span className="compose-reply-handle">@{replyingTo.author.handle}</span>
+                        Replying to <span className="compose-reply-handle">{formatFullHandle(replyingTo.author.handle)}</span>
                     </div>
                     <button type="button" className="compose-reply-cancel" onClick={onCancelReply}>
                         Cancel

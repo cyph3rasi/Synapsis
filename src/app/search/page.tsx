@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 interface User {
     id: string;
@@ -97,7 +98,7 @@ function UserCard({ user }: { user: User }) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
-                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '14px' }}>@{user.handle}</div>
+                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '14px' }}>{formatFullHandle(user.handle)}</div>
                 {user.bio && (
                     <div style={{
                         color: 'var(--foreground-secondary)',
@@ -148,7 +149,7 @@ function PostCard({ post }: { post: Post }) {
                     <Link href={`/@${post.author?.handle}`} className="post-handle">
                         {post.author?.displayName || post.author?.handle}
                     </Link>
-                    <span className="post-time">@{post.author?.handle} · {formatTime(post.createdAt)}</span>
+                    <span className="post-time">{formatFullHandle(post.author?.handle || '')} · {formatTime(post.createdAt)}</span>
                 </div>
             </div>
             <div className="post-content">{post.content}</div>

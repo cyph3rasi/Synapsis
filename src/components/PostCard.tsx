@@ -6,6 +6,7 @@ import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/compo
 import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
+import { formatFullHandle } from '@/lib/utils/handle';
 
 interface PostCardProps {
     post: Post;
@@ -159,13 +160,13 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                     <Link href={`/${post.author.handle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                         {post.author.displayName || post.author.handle}
                     </Link>
-                    <span className="post-time">@{post.author.handle} · {formatTime(post.createdAt)}</span>
+                    <span className="post-time">{formatFullHandle(post.author.handle)} · {formatTime(post.createdAt)}</span>
                 </div>
             </div>
 
             {post.replyTo && (
                 <div className="post-reply-to">
-                    Replied to <Link href={`/${post.replyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>@{post.replyTo.author.handle}</Link>
+                    Replied to <Link href={`/${post.replyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(post.replyTo.author.handle)}</Link>
                 </div>
             )}
 
