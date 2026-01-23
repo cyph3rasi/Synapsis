@@ -51,6 +51,7 @@ export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
     const [followers, setFollowers] = useState<UserSummary[]>([]);
     const [following, setFollowing] = useState<UserSummary[]>([]);
+    const [postsLoading, setPostsLoading] = useState(true);
     const [followersLoading, setFollowersLoading] = useState(false);
     const [followingLoading, setFollowingLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -84,10 +85,12 @@ export default function ProfilePage() {
             })
             .catch(() => setLoading(false));
 
+        setPostsLoading(true);
         fetch(`/api/users/${handle}/posts`)
             .then(res => res.json())
             .then(data => setPosts(data.posts || []))
-            .catch(() => { });
+            .catch(() => { })
+            .finally(() => setPostsLoading(false));
     }, [handle]);
 
     const handleLike = async (postId: string, currentLiked: boolean) => {
@@ -562,14 +565,18 @@ export default function ProfilePage() {
 
             {/* Content */}
             {activeTab === 'posts' && (
-                posts.length === 0 ? (
+                postsLoading ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>Loading...</p>
+                    </div>
+                ) : posts.length === 0 ? (
                     <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
                         <p>No posts yet</p>
                     </div>
                 ) : (
-                    posts.map(post => (
+                    posts.map((post, index) => (
                         <PostCard
-                            key={post.id}
+                            key={`${post.id}-${index}`}
                             post={post}
                             onLike={handleLike}
                             onRepost={handleRepost}

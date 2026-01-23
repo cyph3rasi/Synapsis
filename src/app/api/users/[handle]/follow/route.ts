@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { resolveRemoteUser } from '@/lib/activitypub/fetch';
 import { createFollowActivity, createUndoActivity } from '@/lib/activitypub/activities';
 import { deliverActivity } from '@/lib/activitypub/outbox';
+import { cacheRemoteUserPosts } from '@/lib/activitypub/cache';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
@@ -132,6 +133,13 @@ export async function POST(request: Request, context: RouteContext) {
                 inboxUrl: targetInbox,
                 activityId,
             });
+
+            // Cache the remote user's recent posts in the background
+            const origin = new URL(request.url).origin;
+            cacheRemoteUserPosts(remoteProfile, targetHandle, origin, 20)
+                .then(result => console.log(`Cached ${result.cached} posts for ${targetHandle}`))
+                .catch(err => console.error('Error caching remote posts:', err));
+
             return NextResponse.json({ success: true, following: true, remote: true });
         }
 

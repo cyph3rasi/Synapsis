@@ -133,6 +133,7 @@ export async function GET(request: Request, context: RouteContext) {
                 bio: sanitizeText(remoteProfile.summary),
             };
             const posts = [];
+            const seenIds = new Set<string>();
             const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
@@ -140,13 +141,20 @@ export async function GET(request: Request, context: RouteContext) {
                 if (!object || typeof object === 'string' || object.type !== 'Note') {
                     continue;
                 }
+                // Deduplicate by object ID
+                const postId = object.id || activity.id;
+                if (seenIds.has(postId)) {
+                    continue;
+                }
+                seenIds.add(postId);
+
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
                 const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
                 const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl, origin) : null;
                 const contentText = linkPreview && normalizedUrl ? stripFirstUrl(text, normalizedUrl) : text;
                 posts.push({
-                    id: object.id || activity.id,
+                    id: postId,
                     content: contentText || '',
                     createdAt: object.published || activity.published || new Date().toISOString(),
                     likesCount: 0,
@@ -156,7 +164,7 @@ export async function GET(request: Request, context: RouteContext) {
                     media: attachments
                         .filter((attachment: any) => attachment?.url)
                         .map((attachment: any, index: number) => ({
-                            id: `${object.id || activity.id || 'media'}-${index}`,
+                            id: `${postId || 'media'}-${index}`,
                             url: attachment.url,
                             altText: sanitizeText(attachment.name) || null,
                         })),
@@ -193,6 +201,7 @@ export async function GET(request: Request, context: RouteContext) {
                 bio: sanitizeText(remoteProfile.summary),
             };
             const posts = [];
+            const seenIds = new Set<string>();
             const origin = new URL(request.url).origin;
             for (const item of outboxItems) {
                 const activity = item?.type === 'Create' ? item : null;
@@ -200,13 +209,20 @@ export async function GET(request: Request, context: RouteContext) {
                 if (!object || typeof object === 'string' || object.type !== 'Note') {
                     continue;
                 }
+                // Deduplicate by object ID
+                const postId = object.id || activity.id;
+                if (seenIds.has(postId)) {
+                    continue;
+                }
+                seenIds.add(postId);
+
                 const attachments = Array.isArray(object.attachment) ? object.attachment : [];
                 const { text, urls } = extractTextAndUrls(object.content);
                 const normalizedUrl = urls.length > 0 ? normalizeUrl(urls[0]) : null;
                 const linkPreview = normalizedUrl ? await fetchLinkPreview(normalizedUrl, origin) : null;
                 const contentText = linkPreview && normalizedUrl ? stripFirstUrl(text, normalizedUrl) : text;
                 posts.push({
-                    id: object.id || activity.id,
+                    id: postId,
                     content: contentText || '',
                     createdAt: object.published || activity.published || new Date().toISOString(),
                     likesCount: 0,
@@ -216,7 +232,7 @@ export async function GET(request: Request, context: RouteContext) {
                     media: attachments
                         .filter((attachment: any) => attachment?.url)
                         .map((attachment: any, index: number) => ({
-                            id: `${object.id || activity.id || 'media'}-${index}`,
+                            id: `${postId || 'media'}-${index}`,
                             url: attachment.url,
                             altText: sanitizeText(attachment.name) || null,
                         })),

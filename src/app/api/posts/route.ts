@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, posts, users, media, follows, mutes, blocks, likes } from '@/db';
+import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts } from '@/db';
 import { requireAuth } from '@/lib/auth';
 import { eq, desc, and, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -267,9 +267,8 @@ export async function GET(request: Request) {
             try {
                 const user = await requireAuth();
 
-                // Get posts from people the user follows + their own posts
-                // For now, just return all posts (we'll add following filter later)
-                feedPosts = await db.query.posts.findMany({
+                // Get local posts from people the user follows + their own posts
+                const localPosts = await db.query.posts.findMany({
                     where: baseFilter,
                     with: {
                         author: true,
@@ -279,8 +278,63 @@ export async function GET(request: Request) {
                         },
                     },
                     orderBy: [desc(posts.createdAt)],
-                    limit,
+                    limit: limit * 2, // Get more to account for mixing with remote
                 });
+
+                // Get handles of remote users we follow
+                const followedRemoteUsers = await db.query.remoteFollows.findMany({
+                    where: eq(remoteFollows.followerId, user.id),
+                });
+                const followedRemoteHandles = followedRemoteUsers.map(f => f.targetHandle);
+
+                // Get cached remote posts from followed users
+                let remotePostsData: typeof remotePosts.$inferSelect[] = [];
+                if (followedRemoteHandles.length > 0) {
+                    remotePostsData = await db.query.remotePosts.findMany({
+                        where: inArray(remotePosts.authorHandle, followedRemoteHandles),
+                        orderBy: [desc(remotePosts.publishedAt)],
+                        limit: limit,
+                    });
+                }
+
+                // Transform remote posts to match local post format
+                const transformedRemotePosts = remotePostsData.map(rp => {
+                    const mediaData = rp.mediaJson ? JSON.parse(rp.mediaJson) : [];
+                    return {
+                        id: rp.id,
+                        content: rp.content,
+                        createdAt: rp.publishedAt,
+                        likesCount: 0,
+                        repostsCount: 0,
+                        repliesCount: 0,
+                        isRemote: true,
+                        apId: rp.apId,
+                        linkPreviewUrl: rp.linkPreviewUrl,
+                        linkPreviewTitle: rp.linkPreviewTitle,
+                        linkPreviewDescription: rp.linkPreviewDescription,
+                        linkPreviewImage: rp.linkPreviewImage,
+                        author: {
+                            id: rp.authorActorUrl,
+                            handle: rp.authorHandle,
+                            displayName: rp.authorDisplayName,
+                            avatarUrl: rp.authorAvatarUrl,
+                            isRemote: true,
+                        },
+                        media: mediaData.map((m: { url: string; altText?: string }, idx: number) => ({
+                            id: `${rp.id}-media-${idx}`,
+                            url: m.url,
+                            altText: m.altText || null,
+                        })),
+                        replyTo: null,
+                    };
+                });
+
+                // Merge and sort by date
+                const allPosts = [...localPosts, ...transformedRemotePosts]
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .slice(0, limit);
+
+                feedPosts = allPosts as any;
             } catch {
                 // Not authenticated, return public timeline
                 feedPosts = await db.query.posts.findMany({
@@ -305,7 +359,7 @@ export async function GET(request: Request) {
 
             if (session?.user && feedPosts && feedPosts.length > 0) {
                 const viewer = session.user;
-                const postIds = feedPosts.map(p => p.id).filter(Boolean);
+                const postIds = feedPosts.map((p: { id: string }) => p.id).filter(Boolean);
 
                 if (postIds.length > 0) {
                     const viewerLikes = await db.query.likes.findMany({
@@ -324,7 +378,7 @@ export async function GET(request: Request) {
                     });
                     const repostedPostIds = new Set(viewerReposts.map(r => r.repostOfId));
 
-                    feedPosts = feedPosts.map(p => ({
+                    feedPosts = feedPosts.map((p: { id: string }) => ({
                         ...p,
                         isLiked: likedPostIds.has(p.id),
                         isReposted: repostedPostIds.has(p.id),

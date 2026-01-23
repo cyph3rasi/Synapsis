@@ -224,6 +224,35 @@ export const remoteFollowers = pgTable('remote_followers', {
 ]);
 
 // ============================================
+// REMOTE POSTS (cached posts from federated users)
+// ============================================
+
+export const remotePosts = pgTable('remote_posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  apId: text('ap_id').notNull().unique(), // ActivityPub ID (URL) of the post
+  authorHandle: text('author_handle').notNull(), // e.g., user@mastodon.social
+  authorActorUrl: text('author_actor_url').notNull(), // Remote actor URL
+  authorDisplayName: text('author_display_name'),
+  authorAvatarUrl: text('author_avatar_url'),
+  content: text('content').notNull(),
+  publishedAt: timestamp('published_at').notNull(), // Original publish time
+  // Link preview
+  linkPreviewUrl: text('link_preview_url'),
+  linkPreviewTitle: text('link_preview_title'),
+  linkPreviewDescription: text('link_preview_description'),
+  linkPreviewImage: text('link_preview_image'),
+  // Media attachments stored as JSON
+  mediaJson: text('media_json'), // JSON array of {url, altText}
+  // Metadata
+  fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('remote_posts_author_idx').on(table.authorHandle),
+  index('remote_posts_published_idx').on(table.publishedAt),
+  index('remote_posts_ap_id_idx').on(table.apId),
+]);
+
+// ============================================
 // LIKES
 // ============================================
 
