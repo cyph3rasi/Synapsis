@@ -113,9 +113,10 @@ export async function POST(request: Request) {
     }
 }
 
-// Normalize content for deduplication (strip HTML entities, URLs, whitespace)
+// Normalize content for deduplication (strip HTML entities, URLs, whitespace, category suffixes)
 const normalizeForDedup = (content: string): string => {
     return content
+        .replace(/Posted into [\w\s-]+/gi, '') // Remove "Posted into [Category]" patterns
         .replace(/&[a-z]+;/gi, '') // Remove HTML entities like &lsquo;
         .replace(/&#\d+;/g, '') // Remove numeric entities
         .replace(/https?:\/\/[^\s]+/gi, '') // Remove URLs
@@ -123,7 +124,7 @@ const normalizeForDedup = (content: string): string => {
         .replace(/\s+/g, ' ') // Normalize whitespace
         .toLowerCase()
         .trim()
-        .slice(0, 100); // Compare first 100 chars
+        .slice(0, 50); // Compare first 50 chars (article title)
 };
 
 // Helper to transform cached remote posts to match local post format
