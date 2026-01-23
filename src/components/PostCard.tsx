@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/components/Icons';
 import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { VideoEmbed } from '@/components/VideoEmbed';
 
 interface PostCardProps {
     post: Post;
@@ -181,6 +182,10 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
             )}
 
             {post.linkPreviewUrl && (
+                <VideoEmbed url={post.linkPreviewUrl} />
+            )}
+
+            {post.linkPreviewUrl && !post.linkPreviewUrl.match(/(youtube\.com|youtu\.be|vimeo\.com)/) && (
                 <a
                     href={post.linkPreviewUrl}
                     target="_blank"
