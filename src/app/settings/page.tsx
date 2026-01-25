@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
-import { Rocket, Shield, Bell, Bot } from 'lucide-react';
+import { Rocket, Shield, Bell, Bot, Eye, UserX } from 'lucide-react';
 
 export default function SettingsPage() {
     return (
@@ -38,6 +38,38 @@ export default function SettingsPage() {
                     </div>
                     <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
                         Create and manage automated bots
+                    </div>
+                </Link>
+
+                <Link href="/settings/content" className="card" style={{
+                    display: 'block',
+                    padding: '20px',
+                    textDecoration: 'none',
+                    color: 'var(--foreground)',
+                    transition: 'border-color 0.15s ease',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Eye size={18} />
+                        Content Settings
+                    </div>
+                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
+                        NSFW preferences and content visibility
+                    </div>
+                </Link>
+
+                <Link href="/settings/moderation" className="card" style={{
+                    display: 'block',
+                    padding: '20px',
+                    textDecoration: 'none',
+                    color: 'var(--foreground)',
+                    transition: 'border-color 0.15s ease',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <UserX size={18} />
+                        Moderation
+                    </div>
+                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
+                        Blocked users and muted nodes
                     </div>
                 </Link>
 

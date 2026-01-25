@@ -61,4 +61,5 @@ export interface Post {
         handle: string;
         ownerId: string;
     } | null;
+    nodeDomain?: string | null; // Domain of the node this post came from (for swarm posts)
 }

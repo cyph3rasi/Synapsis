@@ -16,6 +16,8 @@ export const nodes = pgTable('nodes', {
   logoUrl: text('logo_url'),
   accentColor: text('accent_color').default('#FFFFFF'),
   publicKey: text('public_key'),
+  // NSFW settings
+  isNsfw: boolean('is_nsfw').default(false).notNull(), // Entire node is NSFW
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -40,6 +42,10 @@ export const users = pgTable('users', {
   // Bot-related fields
   isBot: boolean('is_bot').default(false).notNull(),
   botOwnerId: uuid('bot_owner_id'),
+  // NSFW settings
+  isNsfw: boolean('is_nsfw').default(false).notNull(), // Account produces NSFW content
+  nsfwEnabled: boolean('nsfw_enabled').default(false).notNull(), // User wants to see NSFW content
+  ageVerifiedAt: timestamp('age_verified_at'), // When user confirmed 18+
   // Moderation fields
   isSuspended: boolean('is_suspended').default(false).notNull(),
   suspensionReason: text('suspension_reason'),
@@ -64,6 +70,7 @@ export const users = pgTable('users', {
   index('users_silenced_idx').on(table.isSilenced),
   index('users_is_bot_idx').on(table.isBot),
   index('users_bot_owner_idx').on(table.botOwnerId),
+  index('users_nsfw_idx').on(table.isNsfw),
   foreignKey({
     columns: [table.botOwnerId],
     foreignColumns: [table.id],
@@ -101,6 +108,9 @@ export const posts = pgTable('posts', {
   likesCount: integer('likes_count').default(0).notNull(),
   repostsCount: integer('reposts_count').default(0).notNull(),
   repliesCount: integer('replies_count').default(0).notNull(),
+  // NSFW
+  isNsfw: boolean('is_nsfw').default(false).notNull(), // This specific post is NSFW
+  // Moderation
   isRemoved: boolean('is_removed').default(false).notNull(),
   removedAt: timestamp('removed_at'),
   removedBy: uuid('removed_by').references(() => users.id),
@@ -121,6 +131,7 @@ export const posts = pgTable('posts', {
   index('posts_created_at_idx').on(table.createdAt),
   index('posts_reply_to_idx').on(table.replyToId),
   index('posts_removed_idx').on(table.isRemoved),
+  index('posts_nsfw_idx').on(table.isNsfw),
 ]);
 
 export const postsRelations = relations(posts, ({ one, many }) => ({
@@ -386,7 +397,19 @@ export const blocks = pgTable('blocks', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('blocks_user_idx').on(table.userId),
+  index('blocks_blocked_user_idx').on(table.blockedUserId),
 ]);
+
+export const blocksRelations = relations(blocks, ({ one }) => ({
+  user: one(users, {
+    fields: [blocks.userId],
+    references: [users.id],
+  }),
+  blockedUser: one(users, {
+    fields: [blocks.blockedUserId],
+    references: [users.id],
+  }),
+}));
 
 export const mutes = pgTable('mutes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -395,7 +418,37 @@ export const mutes = pgTable('mutes', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('mutes_user_idx').on(table.userId),
+  index('mutes_muted_user_idx').on(table.mutedUserId),
 ]);
+
+export const mutesRelations = relations(mutes, ({ one }) => ({
+  user: one(users, {
+    fields: [mutes.userId],
+    references: [users.id],
+  }),
+  mutedUser: one(users, {
+    fields: [mutes.mutedUserId],
+    references: [users.id],
+  }),
+}));
+
+// Muted nodes - hide all content from specific swarm nodes
+export const mutedNodes = pgTable('muted_nodes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  nodeDomain: text('node_domain').notNull(), // Domain of the muted node
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('muted_nodes_user_idx').on(table.userId),
+  index('muted_nodes_domain_idx').on(table.nodeDomain),
+]);
+
+export const mutedNodesRelations = relations(mutedNodes, ({ one }) => ({
+  user: one(users, {
+    fields: [mutedNodes.userId],
+    references: [users.id],
+  }),
+}));
 
 // ============================================
 // REPORTS (moderation)
@@ -658,3 +711,108 @@ export const botRateLimitsRelations = relations(botRateLimits, ({ one }) => ({
     references: [bots.id],
   }),
 }));
+
+// ============================================
+// SWARM - Node Discovery Network
+// ============================================
+
+/**
+ * Discovered nodes in the swarm network.
+ * Tracks all known Synapsis nodes discovered through gossip or seed nodes.
+ */
+export const swarmNodes = pgTable('swarm_nodes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  domain: text('domain').notNull().unique(),
+  
+  // Node metadata (fetched from remote)
+  name: text('name'),
+  description: text('description'),
+  logoUrl: text('logo_url'),
+  publicKey: text('public_key'),
+  softwareVersion: text('software_version'),
+  
+  // Stats (updated periodically)
+  userCount: integer('user_count'),
+  postCount: integer('post_count'),
+  
+  // NSFW flag (synced from remote node)
+  isNsfw: boolean('is_nsfw').default(false).notNull(),
+  
+  // Discovery metadata
+  discoveredVia: text('discovered_via'), // Domain of node that told us about this one
+  discoveredAt: timestamp('discovered_at').defaultNow().notNull(),
+  
+  // Health tracking
+  lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
+  lastSyncAt: timestamp('last_sync_at'),
+  consecutiveFailures: integer('consecutive_failures').default(0).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  
+  // Trust/reputation (for future spam prevention)
+  trustScore: integer('trust_score').default(50).notNull(), // 0-100
+  
+  // Capabilities
+  capabilities: text('capabilities'), // JSON array: ["handles", "gossip", "relay"]
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('swarm_nodes_domain_idx').on(table.domain),
+  index('swarm_nodes_active_idx').on(table.isActive),
+  index('swarm_nodes_last_seen_idx').on(table.lastSeenAt),
+  index('swarm_nodes_trust_idx').on(table.trustScore),
+  index('swarm_nodes_nsfw_idx').on(table.isNsfw),
+]);
+
+/**
+ * Seed nodes - well-known entry points to the swarm.
+ * These are the bootstrap nodes that new nodes contact first.
+ */
+export const swarmSeeds = pgTable('swarm_seeds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  domain: text('domain').notNull().unique(),
+  
+  // Priority for connection order (lower = higher priority)
+  priority: integer('priority').default(100).notNull(),
+  
+  // Whether this seed is enabled
+  isEnabled: boolean('is_enabled').default(true).notNull(),
+  
+  // Health tracking
+  lastContactAt: timestamp('last_contact_at'),
+  consecutiveFailures: integer('consecutive_failures').default(0).notNull(),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('swarm_seeds_enabled_idx').on(table.isEnabled),
+  index('swarm_seeds_priority_idx').on(table.priority),
+]);
+
+/**
+ * Swarm sync log - tracks gossip exchanges between nodes.
+ */
+export const swarmSyncLog = pgTable('swarm_sync_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  // Which node we synced with
+  remoteDomain: text('remote_domain').notNull(),
+  
+  // Direction: 'push' (we sent) or 'pull' (we received)
+  direction: text('direction').notNull(),
+  
+  // What was synced
+  nodesReceived: integer('nodes_received').default(0).notNull(),
+  nodesSent: integer('nodes_sent').default(0).notNull(),
+  handlesReceived: integer('handles_received').default(0).notNull(),
+  handlesSent: integer('handles_sent').default(0).notNull(),
+  
+  // Result
+  success: boolean('success').notNull(),
+  errorMessage: text('error_message'),
+  durationMs: integer('duration_ms'),
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('swarm_sync_log_remote_idx').on(table.remoteDomain),
+  index('swarm_sync_log_created_idx').on(table.createdAt),
+]);

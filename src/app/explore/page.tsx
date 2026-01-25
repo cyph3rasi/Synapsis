@@ -6,7 +6,7 @@ import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
 import { formatFullHandle } from '@/lib/utils/handle';
-import { Bot, Globe, Server } from 'lucide-react';
+import { Bot, Network, Server } from 'lucide-react';
 
 interface User {
     id: string;
@@ -58,11 +58,28 @@ function UserCard({ user }: { user: User }) {
     );
 }
 
+interface SwarmPost {
+    id: string;
+    content: string;
+    createdAt: string;
+    author: {
+        handle: string;
+        displayName: string;
+        avatarUrl?: string;
+    };
+    nodeDomain: string;
+    likeCount: number;
+    repostCount: number;
+    replyCount: number;
+    mediaUrls?: string[];
+}
+
 export default function ExplorePage() {
     const [query, setQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'node' | 'fediverse' | 'users' | 'search'>('node');
+    const [activeTab, setActiveTab] = useState<'node' | 'swarm' | 'users' | 'search'>('node');
     const [nodePosts, setNodePosts] = useState<Post[]>([]);
-    const [fediversePosts, setFediversePosts] = useState<Post[]>([]);
+    const [swarmPosts, setSwarmPosts] = useState<SwarmPost[]>([]);
+    const [swarmSources, setSwarmSources] = useState<{ domain: string; postCount: number }[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [searchResults, setSearchResults] = useState<{ posts: Post[]; users: User[] }>({ posts: [], users: [] });
     const [loading, setLoading] = useState(true);
@@ -87,23 +104,24 @@ export default function ExplorePage() {
     }, []);
 
     useEffect(() => {
-        // Load fediverse posts when tab changes
-        if (activeTab === 'fediverse' && fediversePosts.length === 0) {
-            const loadFediverse = async () => {
+        // Load swarm posts when tab changes
+        if (activeTab === 'swarm' && swarmPosts.length === 0) {
+            const loadSwarm = async () => {
                 setLoading(true);
                 try {
-                    const res = await fetch('/api/posts?type=curated&limit=20');
+                    const res = await fetch('/api/posts/swarm');
                     const data = await res.json();
-                    setFediversePosts(data.posts || []);
+                    setSwarmPosts(data.posts || []);
+                    setSwarmSources(data.sources || []);
                 } catch {
-                    setFediversePosts([]);
+                    setSwarmPosts([]);
                 } finally {
                     setLoading(false);
                 }
             };
-            loadFediverse();
+            loadSwarm();
         }
-    }, [activeTab, fediversePosts.length]);
+    }, [activeTab, swarmPosts.length]);
 
     useEffect(() => {
         // Load users when tab changes to users
@@ -157,7 +175,7 @@ export default function ExplorePage() {
 
     const handleDelete = (postId: string) => {
         setNodePosts(prev => prev.filter(p => p.id !== postId));
-        setFediversePosts(prev => prev.filter(p => p.id !== postId));
+        setSwarmPosts(prev => prev.filter(p => p.id !== postId));
         setSearchResults(prev => ({
             ...prev,
             posts: prev.posts.filter(p => p.id !== postId)
@@ -188,11 +206,11 @@ export default function ExplorePage() {
                     <span>Node</span>
                 </button>
                 <button
-                    className={`explore-tab ${activeTab === 'fediverse' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('fediverse')}
+                    className={`explore-tab ${activeTab === 'swarm' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('swarm')}
                 >
-                    <Globe size={18} />
-                    <span>Fediverse</span>
+                    <Network size={18} />
+                    <span>Swarm</span>
                 </button>
                 <button
                     className={`explore-tab ${activeTab === 'users' ? 'active' : ''}`}
@@ -238,25 +256,62 @@ export default function ExplorePage() {
                     )
                 )}
 
-                {activeTab === 'fediverse' && (
+                {activeTab === 'swarm' && (
                     loading ? (
-                        <div className="explore-loading">Loading fediverse posts...</div>
-                    ) : fediversePosts.length === 0 ? (
+                        <div className="explore-loading">Loading swarm posts...</div>
+                    ) : swarmPosts.length === 0 ? (
                         <div className="explore-empty">
-                            <Globe size={24} />
-                            <p>No fediverse posts yet</p>
+                            <Network size={24} />
+                            <p>No swarm posts yet</p>
+                            <p style={{ fontSize: '14px', opacity: 0.7, marginTop: '8px' }}>
+                                Posts from other Synapsis nodes will appear here
+                            </p>
                         </div>
                     ) : (
                         <>
                             <div className="feed-meta card">
-                                <div className="feed-meta-title">Fediverse feed</div>
+                                <div className="feed-meta-title">Swarm feed</div>
                                 <div className="feed-meta-body">
-                                    This feed shows posts from across the fediverse, including content from accounts that users on this node follow. Discover new voices and conversations from the wider federated network.
+                                    Posts from across the Synapsis network. Currently showing posts from {swarmSources.filter(s => s.postCount > 0).length} node{swarmSources.filter(s => s.postCount > 0).length !== 1 ? 's' : ''}.
                                 </div>
                             </div>
                             <div className="explore-posts">
-                                {fediversePosts.map((post) => (
-                                    <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
+                                {swarmPosts.map((post) => (
+                                    <div key={`${post.nodeDomain}:${post.id}`} className="swarm-post-wrapper">
+                                        <div className="swarm-post-card card">
+                                            <div className="swarm-post-header">
+                                                <div className="avatar">
+                                                    {post.author.avatarUrl ? (
+                                                        <img src={post.author.avatarUrl} alt={post.author.displayName} />
+                                                    ) : (
+                                                        post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="swarm-post-meta">
+                                                    <span className="swarm-post-author">{post.author.displayName}</span>
+                                                    <span className="swarm-post-handle">@{post.author.handle}@{post.nodeDomain}</span>
+                                                </div>
+                                            </div>
+                                            <div className="swarm-post-content">{post.content}</div>
+                                            {post.mediaUrls && post.mediaUrls.length > 0 && (
+                                                <div className="swarm-post-media">
+                                                    {post.mediaUrls.map((url, i) => (
+                                                        <img key={i} src={url} alt="" />
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="swarm-post-footer">
+                                                <span className="swarm-post-time">
+                                                    {new Date(post.createdAt).toLocaleString()}
+                                                </span>
+                                                <span className="swarm-post-stats">
+                                                    {post.likeCount > 0 && `${post.likeCount} likes`}
+                                                    {post.likeCount > 0 && post.repostCount > 0 && ' · '}
+                                                    {post.repostCount > 0 && `${post.repostCount} reposts`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </>

@@ -20,6 +20,7 @@ const createPostSchema = z.object({
     content: z.string().min(1).max(POST_MAX_LENGTH),
     replyToId: z.string().uuid().optional(),
     mediaIds: z.array(z.string().uuid()).max(4).optional(),
+    isNsfw: z.boolean().optional(),
     linkPreview: z.object({
         url: z.string().url(),
         title: z.string().optional(),
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
             userId: user.id,
             content: data.content,
             replyToId: data.replyToId,
+            isNsfw: data.isNsfw || user.isNsfw || false, // Inherit from account if account is NSFW
             apId: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
             apUrl: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
             linkPreviewUrl: data.linkPreview?.url,
@@ -282,6 +284,7 @@ export async function GET(request: Request) {
                 limit,
             });
         } else if (type === 'curated') {
+            // Curated feed - swarm posts only (no fediverse)
             let viewer = null;
             try {
                 const { getSession } = await import('@/lib/auth');
@@ -291,48 +294,40 @@ export async function GET(request: Request) {
                 viewer = null;
             }
 
-            const seedLimit = Math.min(limit * CURATION_SEED_MULTIPLIER, CURATION_SEED_CAP);
-            const seedPosts = await db.query.posts.findMany({
-                where: baseFilter,
-                with: {
-                    author: true,
-                    bot: true,
-                    media: true,
-                    replyTo: {
-                        with: { author: true },
-                    },
+            // Fetch swarm posts
+            const { fetchSwarmTimeline } = await import('@/lib/swarm/timeline');
+            const swarmResult = await fetchSwarmTimeline(10, 30);
+            
+            // Transform swarm posts to match local post format
+            const swarmPosts = swarmResult.posts.map(sp => ({
+                id: `swarm:${sp.nodeDomain}:${sp.id}`,
+                content: sp.content,
+                createdAt: new Date(sp.createdAt),
+                likesCount: sp.likeCount,
+                repostsCount: sp.repostCount,
+                repliesCount: sp.replyCount,
+                isSwarm: true,
+                nodeDomain: sp.nodeDomain,
+                author: {
+                    id: `swarm:${sp.nodeDomain}:${sp.author.handle}`,
+                    handle: sp.author.handle,
+                    displayName: sp.author.displayName,
+                    avatarUrl: sp.author.avatarUrl,
+                    isSwarm: true,
+                    nodeDomain: sp.nodeDomain,
                 },
-                orderBy: [desc(posts.createdAt)],
-                limit: seedLimit,
-            });
+                media: sp.mediaUrls?.map((url, idx) => ({
+                    id: `swarm:${sp.nodeDomain}:${sp.id}:media:${idx}`,
+                    url,
+                    altText: null,
+                })) || [],
+                replyTo: null,
+            }));
 
-            // Also get cached remote posts for the curated feed
-            const remotePostsData = await db.query.remotePosts.findMany({
-                orderBy: [desc(remotePosts.publishedAt)],
-                limit: Math.floor(seedLimit / 2),
-            });
-            const transformedRemote = transformRemotePosts(remotePostsData);
-
-            // Combine local and remote for ranking
-            const allSeedPosts = [...seedPosts, ...transformedRemote];
-
-            let followingIds = new Set<string>();
-            let followingRemoteHandles = new Set<string>();
             let mutedIds = new Set<string>();
             let blockedIds = new Set<string>();
 
             if (viewer) {
-                const followRows = await db.select({ followingId: follows.followingId })
-                    .from(follows)
-                    .where(eq(follows.followerId, viewer.id));
-                followingIds = new Set(followRows.map(row => row.followingId));
-
-                // Also get remote follows for boost
-                const remoteFollowRows = await db.query.remoteFollows.findMany({
-                    where: eq(remoteFollows.followerId, viewer.id),
-                });
-                followingRemoteHandles = new Set(remoteFollowRows.map(row => row.targetHandle));
-
                 const muteRows = await db.select({ mutedUserId: mutes.mutedUserId })
                     .from(mutes)
                     .where(eq(mutes.userId, viewer.id));
@@ -345,7 +340,7 @@ export async function GET(request: Request) {
             }
 
             const now = Date.now();
-            const rankedPosts = allSeedPosts
+            const rankedPosts = swarmPosts
                 .filter((post: any) => !mutedIds.has(post.author.id) && !blockedIds.has(post.author.id))
                 .map((post: any) => {
                     const createdAt = new Date(post.createdAt).getTime();
@@ -354,23 +349,10 @@ export async function GET(request: Request) {
                     const engagementScore = Math.log1p(Math.max(0, engagement));
                     const recencyScore = Math.max(0, 1 - ageHours / CURATION_WINDOW_HOURS);
 
-                    const isRemote = post.isRemote === true;
-                    const followBoost = viewer && (
-                        followingIds.has(post.author.id) ||
-                        (isRemote && followingRemoteHandles.has(post.author.handle))
-                    ) ? 0.9 : 0;
-                    const selfBoost = viewer && post.author.id === viewer.id ? 0.5 : 0;
-                    const federatedBoost = isRemote ? 0.3 : 0; // Small boost for federated content diversity
-
-                    const score = engagementScore * 1.4 + recencyScore * 1.1 + followBoost + selfBoost + federatedBoost;
+                    const score = engagementScore * 1.4 + recencyScore * 1.1;
 
                     const reasons: string[] = [];
-                    if (isRemote) {
-                        reasons.push(`From the fediverse`);
-                    }
-                    if (followBoost > 0) {
-                        reasons.push(`You follow @${post.author.handle}`);
-                    }
+                    reasons.push(`From ${post.nodeDomain}`);
                     if (engagement >= 5) {
                         reasons.push(`Popular: ${post.likesCount || 0} likes, ${post.repostsCount || 0} reposts`);
                     } else if ((post.repliesCount || 0) > 0) {
@@ -380,10 +362,8 @@ export async function GET(request: Request) {
                         reasons.push('Posted recently');
                     } else if (ageHours <= 24) {
                         reasons.push('Posted today');
-                    } else if (ageHours <= CURATION_WINDOW_HOURS) {
-                        reasons.push('Recent');
                     }
-                    if (reasons.length === 0) {
+                    if (reasons.length === 1) {
                         reasons.push('New post');
                     }
 

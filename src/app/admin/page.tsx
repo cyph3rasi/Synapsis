@@ -70,6 +70,7 @@ export default function AdminPage() {
         bannerUrl: '',
         logoUrl: '',
         accentColor: '#00D4AA',
+        isNsfw: false,
     });
     const [savingSettings, setSavingSettings] = useState(false);
     const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -136,6 +137,7 @@ export default function AdminPage() {
                 bannerUrl: data.bannerUrl || '',
                 logoUrl: data.logoUrl || '',
                 accentColor: data.accentColor || '#00D4AA',
+                isNsfw: data.isNsfw || false,
             });
         } catch {
             // error
@@ -680,6 +682,49 @@ export default function AdminPage() {
                                     placeholder="Community rules and guidelines."
                                     rows={5}
                                 />
+                            </div>
+
+                            <div style={{ 
+                                padding: '16px', 
+                                background: nodeSettings.isNsfw ? 'rgba(239, 68, 68, 0.1)' : 'var(--background-secondary)', 
+                                borderRadius: '8px',
+                                border: nodeSettings.isNsfw ? '1px solid var(--error)' : '1px solid var(--border)',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>
+                                            NSFW Node
+                                        </label>
+                                        <p style={{ fontSize: '12px', color: 'var(--foreground-secondary)', margin: 0 }}>
+                                            {nodeSettings.isNsfw 
+                                                ? 'This node is marked as NSFW. All content will be hidden from users who haven\'t enabled NSFW viewing.'
+                                                : 'Enable this if your node primarily hosts adult or sensitive content. All posts from this node will be treated as NSFW across the swarm.'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        className={`btn btn-sm ${nodeSettings.isNsfw ? 'btn-primary' : 'btn-ghost'}`}
+                                        style={{ 
+                                            background: nodeSettings.isNsfw ? 'var(--error)' : undefined,
+                                            flexShrink: 0,
+                                        }}
+                                        onClick={() => {
+                                            if (!nodeSettings.isNsfw) {
+                                                const confirmed = window.confirm(
+                                                    'Are you sure you want to mark this node as NSFW?\n\n' +
+                                                    'All content from this node will be hidden from users who haven\'t enabled NSFW viewing. ' +
+                                                    'This affects the entire swarm.'
+                                                );
+                                                if (confirmed) {
+                                                    setNodeSettings({ ...nodeSettings, isNsfw: true });
+                                                }
+                                            } else {
+                                                setNodeSettings({ ...nodeSettings, isNsfw: false });
+                                            }
+                                        }}
+                                    >
+                                        {nodeSettings.isNsfw ? 'Remove NSFW' : 'Mark as NSFW'}
+                                    </button>
+                                </div>
                             </div>
 
                             <div style={{ paddingTop: '8px' }}>

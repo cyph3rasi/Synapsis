@@ -55,11 +55,11 @@ export default function Home() {
     loadFeed(feedType);
   }, [feedType]);
 
-  const handlePost = async (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string) => {
+  const handlePost = async (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => {
     const res = await fetch('/api/posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, mediaIds, linkPreview, replyToId }),
+      body: JSON.stringify({ content, mediaIds, linkPreview, replyToId, isNsfw }),
     });
 
     if (res.ok) {

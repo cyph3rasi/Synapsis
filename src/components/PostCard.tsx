@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/components/Icons';
-import { Bot } from 'lucide-react';
+import { Bot, MoreHorizontal, UserX, VolumeX, Globe } from 'lucide-react';
 import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useToast } from '@/lib/contexts/ToastContext';
@@ -33,16 +33,18 @@ interface PostCardProps {
     onRepost?: (id: string, currentReposted: boolean) => void;
     onComment?: (post: Post) => void;
     onDelete?: (id: string) => void;
+    onHide?: (id: string) => void; // Called when post should be hidden (block/mute)
     isDetail?: boolean;
 }
 
-export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail }: PostCardProps) {
+export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail }: PostCardProps) {
     const { user: currentUser } = useAuth();
     const { showToast } = useToast();
     const [liked, setLiked] = useState(post.isLiked || false);
     const [reposted, setReposted] = useState(post.isReposted || false);
     const [reporting, setReporting] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
 
     // Sync state if post changes (e.g. after a re-render from parent)
     useEffect(() => {
@@ -147,6 +149,95 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
             showToast('Failed to delete post', 'error');
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleBlockUser = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(false);
+        
+        if (!currentUser) {
+            showToast('Please log in to block users', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/users/${post.author.handle}/block`, {
+                method: 'POST',
+            });
+            if (res.ok) {
+                showToast(`Blocked @${post.author.handle}`, 'success');
+                onHide?.(post.id);
+            } else {
+                showToast('Failed to block user', 'error');
+            }
+        } catch {
+            showToast('Failed to block user', 'error');
+        }
+    };
+
+    const handleMuteUser = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(false);
+        
+        if (!currentUser) {
+            showToast('Please log in to mute users', 'error');
+            return;
+        }
+
+        // For now, muting a user is the same as blocking but with different messaging
+        // Could be expanded to just hide posts without breaking follows
+        try {
+            const res = await fetch(`/api/users/${post.author.handle}/block`, {
+                method: 'POST',
+            });
+            if (res.ok) {
+                showToast(`Muted @${post.author.handle}`, 'success');
+                onHide?.(post.id);
+            } else {
+                showToast('Failed to mute user', 'error');
+            }
+        } catch {
+            showToast('Failed to mute user', 'error');
+        }
+    };
+
+    const handleMuteNode = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowMenu(false);
+
+        if (!currentUser) {
+            showToast('Please log in to mute nodes', 'error');
+            return;
+        }
+
+        // Extract node domain from the post
+        const nodeDomain = post.nodeDomain || (post.author.handle.includes('@') 
+            ? post.author.handle.split('@')[1] 
+            : null);
+
+        if (!nodeDomain) {
+            showToast('Cannot determine node for this post', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/settings/muted-nodes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain: nodeDomain }),
+            });
+            if (res.ok) {
+                showToast(`Muted node: ${nodeDomain}`, 'success');
+                onHide?.(post.id);
+            } else {
+                showToast('Failed to mute node', 'error');
+            }
+        } catch {
+            showToast('Failed to mute node', 'error');
         }
     };
 
@@ -290,6 +381,124 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                     </div>
                     <span className="post-time">{formatFullHandle(post.author.handle)} · {formatTime(post.createdAt)}</span>
                 </div>
+                {currentUser && currentUser.id !== post.author.id && (
+                    <div style={{ position: 'relative', marginLeft: 'auto' }}>
+                        <button
+                            className="post-menu-btn"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowMenu(!showMenu);
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '4px',
+                                cursor: 'pointer',
+                                color: 'var(--foreground-tertiary)',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <MoreHorizontal size={18} />
+                        </button>
+                        {showMenu && (
+                            <>
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        inset: 0,
+                                        zIndex: 99,
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setShowMenu(false);
+                                    }}
+                                />
+                                <div
+                                    className="post-menu-dropdown"
+                                    style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        top: '100%',
+                                        marginTop: '4px',
+                                        background: 'var(--background-secondary)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: 'var(--radius-md)',
+                                        minWidth: '180px',
+                                        zIndex: 100,
+                                        overflow: 'hidden',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    }}
+                                >
+                                    <button
+                                        onClick={handleMuteUser}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            background: 'none',
+                                            border: 'none',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            color: 'var(--foreground)',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                        }}
+                                    >
+                                        <VolumeX size={16} />
+                                        Mute
+                                    </button>
+                                    <button
+                                        onClick={handleBlockUser}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            background: 'none',
+                                            border: 'none',
+                                            textAlign: 'left',
+                                            cursor: 'pointer',
+                                            color: 'var(--foreground)',
+                                            fontSize: '14px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                        }}
+                                    >
+                                        <UserX size={16} />
+                                        Block
+                                    </button>
+                                    {(post.nodeDomain || post.author.handle.includes('@')) && (
+                                        <button
+                                            onClick={handleMuteNode}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                background: 'none',
+                                                border: 'none',
+                                                textAlign: 'left',
+                                                cursor: 'pointer',
+                                                color: 'var(--foreground)',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                borderTop: '1px solid var(--border)',
+                                            }}
+                                        >
+                                            <Globe size={16} />
+                                            Mute node
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
             </div>
 
             {post.replyTo && (

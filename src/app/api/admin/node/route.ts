@@ -25,6 +25,7 @@ export async function PATCH(req: NextRequest) {
                 bannerUrl: data.bannerUrl,
                 logoUrl: data.logoUrl,
                 accentColor: data.accentColor,
+                isNsfw: data.isNsfw ?? false,
             }).returning();
         } else {
             [node] = await db.update(nodes)
@@ -36,6 +37,7 @@ export async function PATCH(req: NextRequest) {
                     bannerUrl: data.bannerUrl,
                     logoUrl: data.logoUrl,
                     accentColor: data.accentColor,
+                    isNsfw: data.isNsfw ?? node.isNsfw,
                     updatedAt: new Date(),
                 })
                 .where(eq(nodes.id, node.id))

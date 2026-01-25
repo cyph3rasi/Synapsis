@@ -7,7 +7,7 @@ import { ArrowLeftIcon, CalendarIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
-import { Rocket } from 'lucide-react';
+import { Rocket, MoreHorizontal } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { Bot } from 'lucide-react';
 
@@ -102,6 +102,8 @@ export default function ProfilePage() {
     });
     const [saveError, setSaveError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
 
     useEffect(() => {
         setIsEditing(false);
@@ -173,6 +175,7 @@ export default function ProfilePage() {
     useEffect(() => {
         if (!currentUser || !user || currentUser.handle === user.handle) {
             setIsFollowing(false);
+            setIsBlocked(false);
             return;
         }
 
@@ -180,6 +183,11 @@ export default function ProfilePage() {
             .then(res => res.json())
             .then(data => setIsFollowing(!!data.following))
             .catch(() => setIsFollowing(false));
+
+        fetch(`/api/users/${handle}/block`)
+            .then(res => res.json())
+            .then(data => setIsBlocked(!!data.blocked))
+            .catch(() => setIsBlocked(false));
     }, [currentUser, user, handle]);
 
     useEffect(() => {
@@ -223,6 +231,22 @@ export default function ProfilePage() {
                 ...user,
                 followersCount: isFollowing ? (user.followersCount || 0) - 1 : (user.followersCount || 0) + 1,
             });
+        }
+    };
+
+    const handleBlock = async () => {
+        if (!currentUser) return;
+
+        const method = isBlocked ? 'DELETE' : 'POST';
+        const res = await fetch(`/api/users/${handle}/block`, { method });
+
+        if (res.ok) {
+            setIsBlocked(!isBlocked);
+            if (!isBlocked) {
+                // If blocking, also unfollow
+                setIsFollowing(false);
+            }
+            setShowMenu(false);
         }
     };
 
@@ -377,14 +401,67 @@ export default function ProfilePage() {
                             )}
                         </div>
 
-                        <div style={{ paddingTop: '12px' }}>
+                        <div style={{ paddingTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                             {!isOwnProfile && currentUser && (
-                                <button
-                                    className={`btn ${isFollowing ? '' : 'btn-primary'}`}
-                                    onClick={handleFollow}
-                                >
-                                    {isFollowing ? 'Following' : 'Follow'}
-                                </button>
+                                <>
+                                    {!isBlocked && (
+                                        <button
+                                            className={`btn ${isFollowing ? '' : 'btn-primary'}`}
+                                            onClick={handleFollow}
+                                        >
+                                            {isFollowing ? 'Following' : 'Follow'}
+                                        </button>
+                                    )}
+                                    <div style={{ position: 'relative' }}>
+                                        <button
+                                            className="btn btn-ghost"
+                                            onClick={() => setShowMenu(!showMenu)}
+                                            style={{ padding: '8px' }}
+                                        >
+                                            <MoreHorizontal size={20} />
+                                        </button>
+                                        {showMenu && (
+                                            <>
+                                                <div
+                                                    style={{
+                                                        position: 'fixed',
+                                                        inset: 0,
+                                                        zIndex: 99,
+                                                    }}
+                                                    onClick={() => setShowMenu(false)}
+                                                />
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    right: 0,
+                                                    top: '100%',
+                                                    marginTop: '4px',
+                                                    background: 'var(--background-secondary)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    minWidth: '160px',
+                                                    zIndex: 100,
+                                                    overflow: 'hidden',
+                                                }}>
+                                                    <button
+                                                        onClick={handleBlock}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px 16px',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            textAlign: 'left',
+                                                            cursor: 'pointer',
+                                                            color: isBlocked ? 'var(--foreground)' : 'var(--error)',
+                                                            fontSize: '14px',
+                                                        }}
+                                                    >
+                                                        {isBlocked ? 'Unblock user' : 'Block user'}
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </>
                             )}
 
                             {isOwnProfile && (

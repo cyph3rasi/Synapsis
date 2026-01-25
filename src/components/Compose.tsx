@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, AlertTriangle } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import { formatFullHandle } from '@/lib/utils/handle';
 
 interface ComposeProps {
-    onPost: (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string) => void;
+    onPost: (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => void;
     replyingTo?: Post | null;
     onCancelReply?: () => void;
     placeholder?: string;
@@ -24,8 +24,22 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
     const [linkPreview, setLinkPreview] = useState<any>(null);
     const [fetchingPreview, setFetchingPreview] = useState(false);
     const [lastDetectedUrl, setLastDetectedUrl] = useState<string | null>(null);
+    const [isNsfw, setIsNsfw] = useState(false);
+    const [canPostNsfw, setCanPostNsfw] = useState(false);
     const maxLength = 400;
     const remaining = maxLength - content.length;
+
+    // Check if user can post NSFW content
+    useEffect(() => {
+        fetch('/api/settings/nsfw')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.nsfwEnabled) {
+                    setCanPostNsfw(true);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     // Detect URLs in content
     useEffect(() => {
@@ -62,11 +76,12 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
     const handleSubmit = async () => {
         if (!content.trim() || isPosting || isUploading) return;
         setIsPosting(true);
-        await onPost(content, attachments.map((item) => item.id).filter(Boolean), linkPreview, replyingTo?.id);
+        await onPost(content, attachments.map((item) => item.id).filter(Boolean), linkPreview, replyingTo?.id, isNsfw);
         setContent('');
         setAttachments([]);
         setLinkPreview(null);
         setLastDetectedUrl(null);
+        setIsNsfw(false);
         setIsPosting(false);
     };
 
@@ -183,9 +198,22 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                 <div className="compose-media-error">{uploadError}</div>
             )}
             <div className="compose-footer">
-                <span className={`compose-counter ${remaining < 50 ? (remaining < 0 ? 'error' : 'warning') : ''}`}>
-                    {remaining}
-                </span>
+                <div className="compose-footer-left">
+                    <span className={`compose-counter ${remaining < 50 ? (remaining < 0 ? 'error' : 'warning') : ''}`}>
+                        {remaining}
+                    </span>
+                    {canPostNsfw && (
+                        <label className="compose-nsfw-toggle" title="Mark as sensitive content">
+                            <input
+                                type="checkbox"
+                                checked={isNsfw}
+                                onChange={(e) => setIsNsfw(e.target.checked)}
+                            />
+                            <AlertTriangle size={16} />
+                            <span>NSFW</span>
+                        </label>
+                    )}
+                </div>
                 <div className="compose-actions">
                     <label className="compose-media-button" title="Add media">
                         {isUploading ? '...' : <ImageIcon size={20} />}
