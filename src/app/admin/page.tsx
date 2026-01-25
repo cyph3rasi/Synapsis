@@ -69,7 +69,7 @@ export default function AdminPage() {
         rules: '',
         bannerUrl: '',
         logoUrl: '',
-        accentColor: '#00D4AA',
+        accentColor: '#FFFFFF',
         isNsfw: false,
     });
     const [savingSettings, setSavingSettings] = useState(false);
@@ -136,7 +136,7 @@ export default function AdminPage() {
                 rules: data.rules || '',
                 bannerUrl: data.bannerUrl || '',
                 logoUrl: data.logoUrl || '',
-                accentColor: data.accentColor || '#00D4AA',
+                accentColor: data.accentColor || '#FFFFFF',
                 isNsfw: data.isNsfw || false,
             });
         } catch {
@@ -626,7 +626,7 @@ export default function AdminPage() {
                                         className="input"
                                         value={nodeSettings.accentColor}
                                         onChange={(e) => setNodeSettings({ ...nodeSettings, accentColor: e.target.value })}
-                                        placeholder="#00D4AA"
+                                        placeholder="#FFFFFF"
                                     />
                                 </div>
                             </div>

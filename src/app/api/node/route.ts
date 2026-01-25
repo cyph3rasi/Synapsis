@@ -35,7 +35,7 @@ export async function GET() {
             return NextResponse.json({
                 name: process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node',
                 description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.',
-                accentColor: process.env.NEXT_PUBLIC_ACCENT_COLOR || '#00D4AA',
+                accentColor: process.env.NEXT_PUBLIC_ACCENT_COLOR || '#FFFFFF',
                 domain,
                 admins,
             });

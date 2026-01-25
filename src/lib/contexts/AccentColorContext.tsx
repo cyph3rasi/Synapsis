@@ -33,7 +33,7 @@ function applyAccentColor(color: string) {
 }
 
 export function AccentColorProvider({ children }: { children: ReactNode }) {
-    const [accentColor, setAccentColor] = useState('#00D4AA');
+    const [accentColor, setAccentColor] = useState('#FFFFFF');
 
     const refreshAccentColor = useCallback(() => {
         fetch('/api/node', { cache: 'no-store' })
