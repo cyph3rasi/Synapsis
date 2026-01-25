@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
-import { Rocket, Shield, Bell } from 'lucide-react';
+import { Rocket, Shield, Bell, Bot } from 'lucide-react';
 
 export default function SettingsPage() {
     return (
@@ -25,6 +25,22 @@ export default function SettingsPage() {
             </header>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <Link href="/settings/bots" className="card" style={{
+                    display: 'block',
+                    padding: '20px',
+                    textDecoration: 'none',
+                    color: 'var(--foreground)',
+                    transition: 'border-color 0.15s ease',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Bot size={18} />
+                        Bots
+                    </div>
+                    <div style={{ color: 'var(--foreground-secondary)', fontSize: '14px' }}>
+                        Create and manage automated bots
+                    </div>
+                </Link>
+
                 <Link href="/settings/migration" className="card" style={{
                     display: 'block',
                     padding: '20px',

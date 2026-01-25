@@ -31,18 +31,21 @@ export async function GET(request: Request) {
             limit,
         });
 
-        const sanitized = results.map((post) => ({
-            id: post.id,
-            content: post.content,
-            createdAt: post.createdAt,
-            isRemoved: post.isRemoved,
-            removedReason: post.removedReason,
-            author: {
-                id: post.author.id,
-                handle: post.author.handle,
-                displayName: post.author.displayName,
-            },
-        }));
+        const sanitized = results.map((post) => {
+            const author = post.author as { id: string; handle: string; displayName: string | null };
+            return {
+                id: post.id,
+                content: post.content,
+                createdAt: post.createdAt,
+                isRemoved: post.isRemoved,
+                removedReason: post.removedReason,
+                author: {
+                    id: author.id,
+                    handle: author.handle,
+                    displayName: author.displayName,
+                },
+            };
+        });
 
         return NextResponse.json({ posts: sanitized });
     } catch (error) {

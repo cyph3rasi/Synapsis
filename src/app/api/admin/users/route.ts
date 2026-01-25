@@ -24,6 +24,7 @@ export async function GET(request: Request) {
             isSilenced: users.isSilenced,
             silenceReason: users.silenceReason,
             createdAt: users.createdAt,
+            isBot: users.isBot,
         })
             .from(users)
             .orderBy(desc(users.createdAt))

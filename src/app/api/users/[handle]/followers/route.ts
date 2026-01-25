@@ -29,13 +29,15 @@ export async function GET(request: Request, context: RouteContext) {
         }
 
         // Get followers
-        const userFollowers = await db.query.follows.findMany({
-            where: eq(follows.followingId, user.id),
-            with: {
-                follower: true,
-            },
-            limit,
-        });
+        const userFollowers = await db
+            .select({
+                id: follows.id,
+                follower: users,
+            })
+            .from(follows)
+            .innerJoin(users, eq(follows.followerId, users.id))
+            .where(eq(follows.followingId, user.id))
+            .limit(limit);
 
         return NextResponse.json({
             followers: userFollowers.map(f => ({
@@ -44,6 +46,7 @@ export async function GET(request: Request, context: RouteContext) {
                 displayName: f.follower.displayName,
                 avatarUrl: f.follower.avatarUrl,
                 bio: f.follower.bio,
+                isBot: f.follower.isBot,
             })),
             nextCursor: userFollowers.length === limit ? userFollowers[userFollowers.length - 1]?.id : null,
         });

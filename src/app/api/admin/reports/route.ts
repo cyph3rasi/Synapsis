@@ -44,17 +44,20 @@ export async function GET(request: Request) {
             })
             : [];
 
-        const postTargets = postTargetsRaw.map((post) => ({
-            id: post.id,
-            content: post.content,
-            createdAt: post.createdAt,
-            isRemoved: post.isRemoved,
-            author: {
-                id: post.author.id,
-                handle: post.author.handle,
-                displayName: post.author.displayName,
-            },
-        }));
+        const postTargets = postTargetsRaw.map((post) => {
+            const author = post.author as { id: string; handle: string; displayName: string | null };
+            return {
+                id: post.id,
+                content: post.content,
+                createdAt: post.createdAt,
+                isRemoved: post.isRemoved,
+                author: {
+                    id: author.id,
+                    handle: author.handle,
+                    displayName: author.displayName,
+                },
+            };
+        });
 
         const userTargets = userTargetsRaw.map((user) => ({
             id: user.id,
@@ -67,24 +70,30 @@ export async function GET(request: Request) {
         const postMap = new Map(postTargets.map((post) => [post.id, post]));
         const userMap = new Map(userTargets.map((user) => [user.id, user]));
 
-        const reportsWithTargets = reportRows.map((report) => ({
-            id: report.id,
-            targetType: report.targetType,
-            targetId: report.targetId,
-            reason: report.reason,
-            status: report.status,
-            createdAt: report.createdAt,
-            reporter: report.reporter
-                ? { id: report.reporter.id, handle: report.reporter.handle }
-                : null,
-            resolver: report.resolver
-                ? { id: report.resolver.id, handle: report.resolver.handle }
-                : null,
-            target:
-                report.targetType === 'post'
-                    ? postMap.get(report.targetId) || null
-                    : userMap.get(report.targetId) || null,
-        }));
+        type UserInfo = { id: string; handle: string };
+        
+        const reportsWithTargets = reportRows.map((report) => {
+            const reporter = report.reporter as UserInfo | null;
+            const resolver = report.resolver as UserInfo | null;
+            return {
+                id: report.id,
+                targetType: report.targetType,
+                targetId: report.targetId,
+                reason: report.reason,
+                status: report.status,
+                createdAt: report.createdAt,
+                reporter: reporter
+                    ? { id: reporter.id, handle: reporter.handle }
+                    : null,
+                resolver: resolver
+                    ? { id: resolver.id, handle: resolver.handle }
+                    : null,
+                target:
+                    report.targetType === 'post'
+                        ? postMap.get(report.targetId) || null
+                        : userMap.get(report.targetId) || null,
+            };
+        });
 
         return NextResponse.json({ reports: reportsWithTargets });
     } catch (error) {

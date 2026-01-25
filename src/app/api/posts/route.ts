@@ -5,7 +5,7 @@ import { eq, desc, and, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
-const POST_MAX_LENGTH = 400;
+const POST_MAX_LENGTH = 600;
 const CURATION_WINDOW_HOURS = 72;
 const CURATION_SEED_MULTIPLIER = 5;
 const CURATION_SEED_CAP = 200;
@@ -229,6 +229,7 @@ export async function GET(request: Request) {
                 where: baseFilter,
                 with: {
                     author: true,
+                    bot: true,
                     media: true,
                     replyTo: {
                         with: { author: true },
@@ -256,6 +257,7 @@ export async function GET(request: Request) {
                 where: buildWhere(baseFilter, eq(posts.userId, userId)),
                 with: {
                     author: true,
+                    bot: true,
                     media: true,
                     replyTo: {
                         with: { author: true },
@@ -279,6 +281,7 @@ export async function GET(request: Request) {
                 where: baseFilter,
                 with: {
                     author: true,
+                    bot: true,
                     media: true,
                     replyTo: {
                         with: { author: true },
@@ -396,11 +399,21 @@ export async function GET(request: Request) {
             try {
                 const user = await requireAuth();
 
+                // Get IDs of users the current user follows
+                const followRows = await db.select({ followingId: follows.followingId })
+                    .from(follows)
+                    .where(eq(follows.followerId, user.id));
+                const followingIds = followRows.map(row => row.followingId);
+                
+                // Include own posts + posts from followed users
+                const allowedUserIds = [user.id, ...followingIds];
+
                 // Get local posts from people the user follows + their own posts
                 const localPosts = await db.query.posts.findMany({
-                    where: baseFilter,
+                    where: buildWhere(baseFilter, inArray(posts.userId, allowedUserIds)),
                     with: {
                         author: true,
+                        bot: true,
                         media: true,
                         replyTo: {
                             with: { author: true },
@@ -441,6 +454,7 @@ export async function GET(request: Request) {
                     where: baseFilter,
                     with: {
                         author: true,
+                        bot: true,
                         media: true,
                         replyTo: {
                             with: { author: true },

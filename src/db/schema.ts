@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, integer, boolean, index, foreignKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================
@@ -36,6 +36,10 @@ export const users = pgTable('users', {
   privateKeyEncrypted: text('private_key_encrypted'), // For ActivityPub signing
   publicKey: text('public_key').notNull(),
   nodeId: uuid('node_id').references(() => nodes.id),
+  // Bot-related fields
+  isBot: boolean('is_bot').default(false).notNull(),
+  botOwnerId: uuid('bot_owner_id'),
+  // Moderation fields
   isSuspended: boolean('is_suspended').default(false).notNull(),
   suspensionReason: text('suspension_reason'),
   suspendedAt: timestamp('suspended_at'),
@@ -57,6 +61,13 @@ export const users = pgTable('users', {
   index('users_did_idx').on(table.did),
   index('users_suspended_idx').on(table.isSuspended),
   index('users_silenced_idx').on(table.isSilenced),
+  index('users_is_bot_idx').on(table.isBot),
+  index('users_bot_owner_idx').on(table.botOwnerId),
+  foreignKey({
+    columns: [table.botOwnerId],
+    foreignColumns: [table.id],
+    name: 'users_bot_owner_id_users_id_fk'
+  }).onDelete('cascade'),
 ]);
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -64,9 +75,15 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     fields: [users.nodeId],
     references: [nodes.id],
   }),
+  botOwner: one(users, {
+    fields: [users.botOwnerId],
+    references: [users.id],
+    relationName: 'ownedBots',
+  }),
+  ownedBotUsers: many(users, { relationName: 'ownedBots' }),
   posts: many(posts),
-  followers: many(follows, { relationName: 'following' }),
-  following: many(follows, { relationName: 'follower' }),
+  followersRelation: many(follows, { relationName: 'following' }),
+  followingRelation: many(follows, { relationName: 'follower' }),
 }));
 
 // ============================================
@@ -76,6 +93,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 export const posts = pgTable('posts', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  botId: uuid('bot_id').references(() => bots.id, { onDelete: 'set null' }), // If posted by a bot
   content: text('content').notNull(),
   replyToId: uuid('reply_to_id'),
   repostOfId: uuid('repost_of_id'),
@@ -98,6 +116,7 @@ export const posts = pgTable('posts', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   index('posts_user_id_idx').on(table.userId),
+  index('posts_bot_id_idx').on(table.botId),
   index('posts_created_at_idx').on(table.createdAt),
   index('posts_reply_to_idx').on(table.replyToId),
   index('posts_removed_idx').on(table.isRemoved),
@@ -107,6 +126,10 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
   author: one(users, {
     fields: [posts.userId],
     references: [users.id],
+  }),
+  bot: one(bots, {
+    fields: [posts.botId],
+    references: [bots.id],
   }),
   removedByUser: one(users, {
     fields: [posts.removedBy],
@@ -402,5 +425,235 @@ export const reportsRelations = relations(reports, ({ one }) => ({
   resolver: one(users, {
     fields: [reports.resolvedBy],
     references: [users.id],
+  }),
+}));
+
+
+// ============================================
+// BOTS
+// ============================================
+
+export const bots = pgTable('bots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }), // The bot's own user account
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }), // The human who manages this bot
+  name: text('name').notNull(),
+
+  // Personality configuration (JSON)
+  personalityConfig: text('personality_config').notNull(), // JSON
+
+  // LLM configuration
+  llmProvider: text('llm_provider').notNull(), // openrouter, openai, anthropic
+  llmModel: text('llm_model').notNull(),
+  llmApiKeyEncrypted: text('llm_api_key_encrypted').notNull(),
+
+  // Scheduling
+  scheduleConfig: text('schedule_config'), // JSON
+  autonomousMode: boolean('autonomous_mode').default(false).notNull(),
+
+  // Status
+  isActive: boolean('is_active').default(true).notNull(),
+  isSuspended: boolean('is_suspended').default(false).notNull(),
+  suspensionReason: text('suspension_reason'),
+  suspendedAt: timestamp('suspended_at'),
+
+  // Timestamps
+  lastPostAt: timestamp('last_post_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('bots_user_id_idx').on(table.userId),
+  index('bots_owner_id_idx').on(table.ownerId),
+  index('bots_active_idx').on(table.isActive),
+]);
+
+export const botsRelations = relations(bots, ({ one, many }) => ({
+  user: one(users, {
+    fields: [bots.userId],
+    references: [users.id],
+    relationName: 'botUser',
+  }),
+  owner: one(users, {
+    fields: [bots.ownerId],
+    references: [users.id],
+    relationName: 'botOwner',
+  }),
+  contentSources: many(botContentSources),
+  mentions: many(botMentions),
+  activityLogs: many(botActivityLogs),
+  rateLimits: many(botRateLimits),
+}));
+
+// ============================================
+// BOT CONTENT SOURCES
+// ============================================
+
+export const botContentSources = pgTable('bot_content_sources', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  botId: uuid('bot_id').notNull().references(() => bots.id, { onDelete: 'cascade' }),
+
+  type: text('type').notNull(), // rss, reddit, news_api, brave_news
+  url: text('url').notNull(),
+  subreddit: text('subreddit'), // For Reddit sources
+  apiKeyEncrypted: text('api_key_encrypted'), // For news APIs
+  sourceConfig: text('source_config'), // JSON config for brave_news, news_api query builder
+
+  keywords: text('keywords'), // JSON array for filtering
+
+  isActive: boolean('is_active').default(true).notNull(),
+  lastFetchAt: timestamp('last_fetch_at'),
+  lastError: text('last_error'),
+  consecutiveErrors: integer('consecutive_errors').default(0).notNull(),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('bot_content_sources_bot_idx').on(table.botId),
+  index('bot_content_sources_type_idx').on(table.type),
+]);
+
+export const botContentSourcesRelations = relations(botContentSources, ({ one, many }) => ({
+  bot: one(bots, {
+    fields: [botContentSources.botId],
+    references: [bots.id],
+  }),
+  contentItems: many(botContentItems),
+}));
+
+// ============================================
+// BOT CONTENT ITEMS
+// ============================================
+
+export const botContentItems = pgTable('bot_content_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sourceId: uuid('source_id').notNull().references(() => botContentSources.id, { onDelete: 'cascade' }),
+
+  externalId: text('external_id').notNull(), // Unique ID from source
+  title: text('title').notNull(),
+  content: text('content'),
+  url: text('url').notNull(),
+
+  publishedAt: timestamp('published_at').notNull(),
+  fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
+
+  isProcessed: boolean('is_processed').default(false).notNull(),
+  processedAt: timestamp('processed_at'),
+  postId: uuid('post_id').references(() => posts.id, { onDelete: 'set null' }), // If a post was created
+
+  interestScore: integer('interest_score'), // LLM evaluation score
+  interestReason: text('interest_reason'),
+}, (table) => [
+  index('bot_content_items_source_idx').on(table.sourceId),
+  index('bot_content_items_processed_idx').on(table.isProcessed),
+  index('bot_content_items_external_idx').on(table.externalId),
+]);
+
+export const botContentItemsRelations = relations(botContentItems, ({ one }) => ({
+  source: one(botContentSources, {
+    fields: [botContentItems.sourceId],
+    references: [botContentSources.id],
+  }),
+  post: one(posts, {
+    fields: [botContentItems.postId],
+    references: [posts.id],
+  }),
+}));
+
+// ============================================
+// BOT MENTIONS
+// ============================================
+
+export const botMentions = pgTable('bot_mentions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  botId: uuid('bot_id').notNull().references(() => bots.id, { onDelete: 'cascade' }),
+  postId: uuid('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+
+  authorId: uuid('author_id').notNull().references(() => users.id),
+  content: text('content').notNull(),
+
+  isProcessed: boolean('is_processed').default(false).notNull(),
+  processedAt: timestamp('processed_at'),
+  responsePostId: uuid('response_post_id').references(() => posts.id),
+
+  // For federated mentions
+  isRemote: boolean('is_remote').default(false).notNull(),
+  remoteActorUrl: text('remote_actor_url'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('bot_mentions_bot_idx').on(table.botId),
+  index('bot_mentions_processed_idx').on(table.isProcessed),
+  index('bot_mentions_created_idx').on(table.createdAt),
+]);
+
+export const botMentionsRelations = relations(botMentions, ({ one }) => ({
+  bot: one(bots, {
+    fields: [botMentions.botId],
+    references: [bots.id],
+  }),
+  post: one(posts, {
+    fields: [botMentions.postId],
+    references: [posts.id],
+  }),
+  author: one(users, {
+    fields: [botMentions.authorId],
+    references: [users.id],
+  }),
+  responsePost: one(posts, {
+    fields: [botMentions.responsePostId],
+    references: [posts.id],
+  }),
+}));
+
+// ============================================
+// BOT ACTIVITY LOGS
+// ============================================
+
+export const botActivityLogs = pgTable('bot_activity_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  botId: uuid('bot_id').notNull().references(() => bots.id, { onDelete: 'cascade' }),
+
+  action: text('action').notNull(), // post_created, mention_response, etc.
+  details: text('details').notNull(), // JSON
+
+  success: boolean('success').notNull(),
+  errorMessage: text('error_message'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('bot_activity_logs_bot_idx').on(table.botId),
+  index('bot_activity_logs_action_idx').on(table.action),
+  index('bot_activity_logs_created_idx').on(table.createdAt),
+]);
+
+export const botActivityLogsRelations = relations(botActivityLogs, ({ one }) => ({
+  bot: one(bots, {
+    fields: [botActivityLogs.botId],
+    references: [bots.id],
+  }),
+}));
+
+// ============================================
+// BOT RATE LIMITS
+// ============================================
+
+export const botRateLimits = pgTable('bot_rate_limits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  botId: uuid('bot_id').notNull().references(() => bots.id, { onDelete: 'cascade' }),
+
+  windowStart: timestamp('window_start').notNull(),
+  windowType: text('window_type').notNull(), // daily, hourly
+  postCount: integer('post_count').default(0).notNull(),
+  replyCount: integer('reply_count').default(0).notNull(),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('bot_rate_limits_bot_window_idx').on(table.botId, table.windowStart),
+]);
+
+export const botRateLimitsRelations = relations(botRateLimits, ({ one }) => ({
+  bot: one(bots, {
+    fields: [botRateLimits.botId],
+    references: [bots.id],
   }),
 }));

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import AutoTextarea from '@/components/AutoTextarea';
+import { Bot } from 'lucide-react';
 
 type AdminUser = {
     id: string;
@@ -14,6 +15,7 @@ type AdminUser = {
     suspensionReason?: string | null;
     silenceReason?: string | null;
     createdAt: string;
+    isBot?: boolean;
 };
 
 type AdminPost = {
@@ -436,8 +438,26 @@ export default function AdminPage() {
                                                 @{user.handle} • {formatDate(user.createdAt)}
                                             </span>
                                         </div>
-                                        <div className="admin-row-body">
+                                        <div className="admin-row-body" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                             {user.displayName || user.handle}
+                                            {user.isBot && (
+                                                <span 
+                                                    style={{ 
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px',
+                                                        fontSize: '10px', 
+                                                        padding: '2px 6px', 
+                                                        borderRadius: '4px', 
+                                                        background: 'var(--accent-muted)', 
+                                                        color: 'var(--accent)',
+                                                        fontWeight: 500,
+                                                    }}
+                                                >
+                                                    <Bot size={12} />
+                                                    AI Account
+                                                </span>
+                                            )}
                                         </div>
                                         {user.suspensionReason && (
                                             <div className="admin-row-sub">Suspension: {user.suspensionReason}</div>

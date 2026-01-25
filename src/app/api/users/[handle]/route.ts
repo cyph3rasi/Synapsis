@@ -119,20 +119,39 @@ export async function GET(request: Request, context: RouteContext) {
         }
 
         // Return user profile (without sensitive data)
-        return NextResponse.json({
-            user: {
-                id: user.id,
-                handle: user.handle,
-                displayName: user.displayName,
-                bio: user.bio,
-                avatarUrl: user.avatarUrl,
-                headerUrl: user.headerUrl,
-                followersCount: user.followersCount,
-                followingCount: user.followingCount,
-                postsCount: user.postsCount,
-                createdAt: user.createdAt,
+        // Include bot info if this is a bot account
+        const userResponse: Record<string, unknown> = {
+            id: user.id,
+            handle: user.handle,
+            displayName: user.displayName,
+            bio: user.bio,
+            avatarUrl: user.avatarUrl,
+            headerUrl: user.headerUrl,
+            followersCount: user.followersCount,
+            followingCount: user.followingCount,
+            postsCount: user.postsCount,
+            createdAt: user.createdAt,
+            website: user.website,
+            movedTo: user.movedTo,
+            isBot: user.isBot,
+        };
+        
+        // If this is a bot, include owner info
+        if (user.isBot && user.botOwnerId) {
+            const owner = await db.query.users.findFirst({
+                where: eq(users.id, user.botOwnerId),
+            });
+            if (owner) {
+                userResponse.botOwner = {
+                    id: owner.id,
+                    handle: owner.handle,
+                    displayName: owner.displayName,
+                    avatarUrl: owner.avatarUrl,
+                };
             }
-        });
+        }
+        
+        return NextResponse.json({ user: userResponse });
     } catch (error) {
         console.error('Get user error:', error);
         return NextResponse.json({ error: 'Failed to get user' }, { status: 500 });

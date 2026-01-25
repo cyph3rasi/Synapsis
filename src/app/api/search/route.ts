@@ -11,6 +11,7 @@ type SearchUser = {
     bio: string | null;
     profileUrl?: string | null;
     isRemote?: boolean;
+    isBot?: boolean;
 };
 
 const decodeEntities = (value: string) =>
@@ -111,6 +112,7 @@ export async function GET(request: Request) {
                 displayName: users.displayName,
                 avatarUrl: users.avatarUrl,
                 bio: users.bio,
+                isBot: users.isBot,
             })
                 .from(users)
                 .where(userConditions)

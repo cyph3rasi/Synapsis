@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1769153858323,
+      "tag": "0000_clumsy_donald_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769153858324,
+      "tag": "0004_add_source_config",
+      "breakpoints": true
+    }
+  ]
+}

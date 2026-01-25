@@ -29,13 +29,15 @@ export async function GET(request: Request, context: RouteContext) {
         }
 
         // Get local following
-        const userFollowing = await db.query.follows.findMany({
-            where: eq(follows.followerId, user.id),
-            with: {
-                following: true,
-            },
-            limit,
-        });
+        const userFollowing = await db
+            .select({
+                id: follows.id,
+                following: users,
+            })
+            .from(follows)
+            .innerJoin(users, eq(follows.followingId, users.id))
+            .where(eq(follows.followerId, user.id))
+            .limit(limit);
 
         const localFollowing = userFollowing.map(f => ({
             id: f.following.id,
@@ -44,6 +46,7 @@ export async function GET(request: Request, context: RouteContext) {
             avatarUrl: f.following.avatarUrl,
             bio: f.following.bio,
             isRemote: false,
+            isBot: f.following.isBot,
         }));
 
         // Get remote following

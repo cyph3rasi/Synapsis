@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo, BookOpenIcon, SettingsIcon } from './Icons';
+import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo, BookOpenIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
 
 export function Sidebar() {
@@ -32,6 +32,12 @@ export function Sidebar() {
                     <BellIcon />
                     <span>Notifications</span>
                 </Link>
+                {user && (
+                    <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>
+                        <BotIcon />
+                        <span>Bots</span>
+                    </Link>
+                )}
                 <Link href="/guide" className={`nav-item ${pathname?.startsWith('/guide') ? 'active' : ''}`}>
                     <BookOpenIcon />
                     <span>Guide</span>

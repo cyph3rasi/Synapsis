@@ -13,6 +13,13 @@ export interface User {
     movedTo?: string | null;
     isRemote?: boolean;
     profileUrl?: string | null;
+    isBot?: boolean;
+    botOwner?: {
+        id: string;
+        handle: string;
+        displayName?: string | null;
+        avatarUrl?: string | null;
+    } | null;
 }
 
 export interface MediaItem {
@@ -48,4 +55,10 @@ export interface Post {
     } | null;
     isLiked?: boolean;
     isReposted?: boolean;
+    bot?: {
+        id: string;
+        name: string;
+        handle: string;
+        ownerId: string;
+    } | null;
 }

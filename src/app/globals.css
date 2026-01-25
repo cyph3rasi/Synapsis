@@ -357,6 +357,7 @@ a.btn-primary:visited {
   margin-bottom: 12px;
   border: 1px solid var(--border);
   background: #000;
+  z-index: 2;
 }
 
 .video-embed-container iframe {

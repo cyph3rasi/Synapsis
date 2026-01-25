@@ -144,18 +144,26 @@ export async function DELETE(
 ) {
     try {
         const { requireAuth } = await import('@/lib/auth');
+        const { bots } = await import('@/db');
         const user = await requireAuth();
         const { id } = await params;
 
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, id),
+            with: {
+                bot: true,
+            },
         });
 
         if (!post) {
             return NextResponse.json({ error: 'Post not found' }, { status: 404 });
         }
 
-        if (post.userId !== user.id) {
+        // Allow deletion if user owns the post OR if user owns the bot that made the post
+        const isPostOwner = post.userId === user.id;
+        const isBotOwner = post.bot && post.bot.ownerId === user.id;
+        
+        if (!isPostOwner && !isBotOwner) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
@@ -174,11 +182,14 @@ export async function DELETE(
         // 2. Delete the post (cascades to media, likes, notifications)
         await db.delete(posts).where(eq(posts.id, id));
 
-        // 3. Decrement user's postsCount
-        if (user.postsCount > 0) {
+        // 3. Decrement the post author's postsCount
+        const postAuthor = await db.query.users.findFirst({
+            where: eq(users.id, post.userId),
+        });
+        if (postAuthor && postAuthor.postsCount > 0) {
             await db.update(users)
-                .set({ postsCount: user.postsCount - 1 })
-                .where(eq(users.id, user.id));
+                .set({ postsCount: postAuthor.postsCount - 1 })
+                .where(eq(users.id, post.userId));
         }
 
         return NextResponse.json({ success: true });

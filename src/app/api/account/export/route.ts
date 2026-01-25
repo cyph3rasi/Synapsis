@@ -151,11 +151,14 @@ export async function POST(req: NextRequest) {
 
         const exportFollowing: ExportFollowing[] = [
             // Local follows
-            ...userFollowing.map(f => ({
-                actorUrl: `https://${nodeDomain}/users/${f.following.handle}`,
-                handle: f.following.handle,
-                isRemote: false,
-            })),
+            ...userFollowing.map(f => {
+                const followingUser = f.following as { handle: string };
+                return {
+                    actorUrl: `https://${nodeDomain}/users/${followingUser.handle}`,
+                    handle: followingUser.handle,
+                    isRemote: false,
+                };
+            }),
             // Remote follows
             ...userRemoteFollowing.map(f => ({
                 actorUrl: f.targetActorUrl,

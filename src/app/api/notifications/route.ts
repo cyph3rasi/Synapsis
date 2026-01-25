@@ -36,22 +36,29 @@ export async function GET(request: Request) {
             limit,
         });
 
-        const payload = rows.map((row) => ({
-            id: row.id,
-            type: row.type,
-            createdAt: row.createdAt,
-            readAt: row.readAt,
-            actor: row.actor ? {
-                id: row.actor.id,
-                handle: row.actor.handle,
-                displayName: row.actor.displayName,
-                avatarUrl: row.actor.avatarUrl,
-            } : null,
-            post: row.post ? {
-                id: row.post.id,
-                content: row.post.content,
-            } : null,
-        }));
+        type ActorInfo = { id: string; handle: string; displayName: string | null; avatarUrl: string | null };
+        type PostInfo = { id: string; content: string };
+
+        const payload = rows.map((row) => {
+            const actor = row.actor as ActorInfo | null;
+            const post = row.post as PostInfo | null;
+            return {
+                id: row.id,
+                type: row.type,
+                createdAt: row.createdAt,
+                readAt: row.readAt,
+                actor: actor ? {
+                    id: actor.id,
+                    handle: actor.handle,
+                    displayName: actor.displayName,
+                    avatarUrl: actor.avatarUrl,
+                } : null,
+                post: post ? {
+                    id: post.id,
+                    content: post.content,
+                } : null,
+            };
+        });
 
         return NextResponse.json({ notifications: payload });
     } catch (error) {

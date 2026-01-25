@@ -77,8 +77,9 @@ export async function POST(request: Request, context: RouteContext) {
 
                     if (!postWithAuthor?.author) return;
 
+                    const author = postWithAuthor.author as { handle: string };
                     // Construct the author's actor URL
-                    const authorActorUrl = `https://${nodeDomain}/users/${postWithAuthor.author.handle}`;
+                    const authorActorUrl = `https://${nodeDomain}/users/${author.handle}`;
 
                     // For remote posts, we'd need to fetch the remote actor's inbox
                     // For local posts, just log it since local delivery doesn't need federation

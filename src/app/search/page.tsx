@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
+import { Bot } from 'lucide-react';
 
 interface User {
     id: string;
@@ -15,6 +16,7 @@ interface User {
     bio?: string;
     profileUrl?: string | null;
     isRemote?: boolean;
+    isBot?: boolean;
 }
 
 
@@ -84,7 +86,27 @@ function UserCard({ user }: { user: User }) {
                 )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontWeight: 600 }}>{user.displayName || user.handle}</span>
+                    {user.isBot && (
+                        <span 
+                            style={{ 
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '10px', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px', 
+                                background: 'var(--accent-muted)', 
+                                color: 'var(--accent)',
+                                fontWeight: 500,
+                            }}
+                        >
+                            <Bot size={12} />
+                            AI Account
+                        </span>
+                    )}
+                </div>
                 <div style={{ color: 'var(--foreground-tertiary)', fontSize: '14px' }}>{formatFullHandle(user.handle)}</div>
                 {user.bio && (
                     <div style={{

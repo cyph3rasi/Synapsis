@@ -9,6 +9,14 @@ import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Rocket } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
+import { Bot } from 'lucide-react';
+
+interface BotOwner {
+    id: string;
+    handle: string;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+}
 
 interface UserSummary {
     id: string;
@@ -16,6 +24,7 @@ interface UserSummary {
     displayName?: string | null;
     bio?: string | null;
     avatarUrl?: string | null;
+    isBot?: boolean;
 }
 
 // Strip HTML tags from a string
@@ -35,7 +44,27 @@ function UserRow({ user }: { user: UserSummary }) {
                 )}
             </div>
             <div className="user-row-content">
-                <div style={{ fontWeight: 600 }}>{user.displayName || user.handle}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontWeight: 600 }}>{user.displayName || user.handle}</span>
+                    {user.isBot && (
+                        <span 
+                            style={{ 
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '10px', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px', 
+                                background: 'var(--accent-muted)', 
+                                color: 'var(--accent)',
+                                fontWeight: 500,
+                            }}
+                        >
+                            <Bot size={12} />
+                            AI Account
+                        </span>
+                    )}
+                </div>
                 <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
                 {user.bio && stripHtml(user.bio) && (
                     <div className="user-row-bio">{stripHtml(user.bio)}</div>
@@ -392,6 +421,36 @@ export default function ProfilePage() {
                                 >
                                     {user.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
                                 </Link>
+                            </div>
+                        )}
+
+                        {/* Bot indicator and owner info */}
+                        {user.isBot && (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginTop: '12px',
+                                padding: '8px 12px',
+                                background: 'var(--accent-muted)',
+                                borderRadius: 'var(--radius-md)',
+                                fontSize: '14px',
+                            }}>
+                                <Bot size={16} style={{ color: 'var(--accent)' }} />
+                                <span style={{ color: 'var(--foreground-secondary)' }}>
+                                    Automated account
+                                    {(user as any).botOwner && (
+                                        <>
+                                            {' · Managed by '}
+                                            <Link 
+                                                href={`/${(user as any).botOwner.handle}`}
+                                                style={{ color: 'var(--accent)', fontWeight: 500 }}
+                                            >
+                                                @{(user as any).botOwner.handle}
+                                            </Link>
+                                        </>
+                                    )}
+                                </span>
                             </div>
                         )}
 

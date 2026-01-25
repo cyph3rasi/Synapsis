@@ -6,6 +6,7 @@ import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
 import { formatFullHandle } from '@/lib/utils/handle';
+import { Bot } from 'lucide-react';
 
 interface User {
     id: string;
@@ -15,6 +16,7 @@ interface User {
     bio?: string;
     profileUrl?: string | null;
     isRemote?: boolean;
+    isBot?: boolean;
 }
 
 function UserCard({ user }: { user: User }) {
@@ -28,7 +30,27 @@ function UserCard({ user }: { user: User }) {
                 )}
             </div>
             <div className="user-card-info">
-                <div className="user-card-name">{user.displayName || user.handle}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="user-card-name">{user.displayName || user.handle}</span>
+                    {user.isBot && (
+                        <span 
+                            style={{ 
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '10px', 
+                                padding: '2px 6px', 
+                                borderRadius: '4px', 
+                                background: 'var(--accent-muted)', 
+                                color: 'var(--accent)',
+                                fontWeight: 500,
+                            }}
+                        >
+                            <Bot size={12} />
+                            AI Account
+                        </span>
+                    )}
+                </div>
                 <div className="user-card-handle">{formatFullHandle(user.handle)}</div>
                 {user.bio && <div className="user-card-bio">{user.bio}</div>}
             </div>
@@ -172,11 +194,19 @@ export default function ExplorePage() {
                             <p>No trending posts yet</p>
                         </div>
                     ) : (
-                        <div className="explore-posts">
-                            {trendingPosts.map((post) => (
-                                <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
-                            ))}
-                        </div>
+                        <>
+                            <div className="feed-meta card">
+                                <div className="feed-meta-title">Fediverse feed</div>
+                                <div className="feed-meta-body">
+                                    This feed shows posts from across the fediverse, including content from accounts that users on this node follow. Discover new voices and conversations from the wider federated network.
+                                </div>
+                            </div>
+                            <div className="explore-posts">
+                                {trendingPosts.map((post) => (
+                                    <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
+                                ))}
+                            </div>
+                        </>
                     )
                 )}
 

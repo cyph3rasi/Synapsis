@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
                 bio: users.bio,
                 avatarUrl: users.avatarUrl,
                 createdAt: users.createdAt,
+                isBot: users.isBot,
             })
             .from(users)
             .where(sql`${users.isSuspended} IS FALSE`)

@@ -3,10 +3,28 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/components/Icons';
+import { Bot } from 'lucide-react';
 import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import { formatFullHandle } from '@/lib/utils/handle';
+
+// Component for link preview image that hides on error
+function LinkPreviewImage({ src, alt }: { src: string; alt: string }) {
+    const [hasError, setHasError] = useState(false);
+    
+    if (hasError) return null;
+    
+    return (
+        <div className="link-preview-image">
+            <img 
+                src={src} 
+                alt={alt} 
+                onError={() => setHasError(true)}
+            />
+        </div>
+    );
+}
 
 interface PostCardProps {
     post: Post;
@@ -120,23 +138,98 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
 
     const postUrl = `/${post.author.handle}/posts/${post.id}`;
 
-    const renderContent = (content: string) => {
-        const parts = content.split(/(https?:\/\/[^\s]+)/g);
+    // Decode HTML entities from federated posts (e.g., &amp;rsquo; -> ')
+    const decodeHtmlEntities = (text: string): string => {
+        const entities: Record<string, string> = {
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&quot;': '"',
+            '&#039;': "'",
+            '&apos;': "'",
+            '&rsquo;': '\u2019', // '
+            '&lsquo;': '\u2018', // '
+            '&rdquo;': '\u201D', // "
+            '&ldquo;': '\u201C', // "
+            '&ndash;': '\u2013', // –
+            '&mdash;': '\u2014', // —
+            '&hellip;': '\u2026', // …
+            '&nbsp;': ' ',
+            '&copy;': '\u00A9', // ©
+            '&reg;': '\u00AE', // ®
+            '&trade;': '\u2122', // ™
+            '&euro;': '\u20AC', // €
+            '&pound;': '\u00A3', // £
+            '&yen;': '\u00A5', // ¥
+            '&cent;': '\u00A2', // ¢
+        };
+
+        // First decode named entities
+        let decoded = text;
+        for (const [entity, char] of Object.entries(entities)) {
+            decoded = decoded.replace(new RegExp(entity, 'g'), char);
+        }
+
+        // Decode numeric entities (&#123; or &#x7B;)
+        decoded = decoded.replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)));
+        decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+        // Strip HTML tags (remote posts may contain <p>, <br>, <a> etc.)
+        decoded = decoded.replace(/<br\s*\/?>/gi, '\n');
+        decoded = decoded.replace(/<\/p>\s*<p>/gi, '\n\n');
+        decoded = decoded.replace(/<[^>]+>/g, '');
+
+        return decoded.trim();
+    };
+
+    const renderContent = (content: string, hidePreviewUrl?: string) => {
+        const decoded = decodeHtmlEntities(content);
+        const parts = decoded.split(/(https?:\/\/[^\s]+)/g);
         return parts.map((part, index) => {
             if (part.match(/^https?:\/\/[^\s]+$/)) {
-                const display = part.replace(/^https?:\/\//, '');
-                const truncated = display.length > 48 ? `${display.slice(0, 32)}…${display.slice(-8)}` : display;
-                return (
-                    <a
-                        key={`url-${index}`}
-                        href={part}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {truncated}
-                    </a>
-                );
+                // If this URL matches the link preview URL, hide it entirely
+                if (hidePreviewUrl && part.includes(hidePreviewUrl.replace(/^https?:\/\/(www\.)?/, '').split('/')[0])) {
+                    return null;
+                }
+                // Extract just the domain (TLD)
+                try {
+                    const url = new URL(part);
+                    const domain = url.hostname.replace(/^www\./, '');
+                    return (
+                        <a
+                            key={`url-${index}`}
+                            href={part}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title={part}
+                        >
+                            {domain}
+                        </a>
+                    );
+                } catch {
+                    // Fallback if URL parsing fails
+                    return (
+                        <a
+                            key={`url-${index}`}
+                            href={part}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {part}
+                        </a>
+                    );
+                }
+            }
+            // Handle newlines
+            if (part.includes('\n')) {
+                return part.split('\n').map((line, lineIndex, arr) => (
+                    <span key={`text-${index}-${lineIndex}`}>
+                        {line}
+                        {lineIndex < arr.length - 1 && <br />}
+                    </span>
+                ));
             }
             return <span key={`text-${index}`}>{part}</span>;
         });
@@ -157,9 +250,30 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                     </div>
                 </Link>
                 <div className="post-author">
-                    <Link href={`/${post.author.handle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
-                        {post.author.displayName || post.author.handle}
-                    </Link>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Link href={`/${post.author.handle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                            {post.author.displayName || post.author.handle}
+                        </Link>
+                        {post.bot && (
+                            <span 
+                                style={{ 
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    fontSize: '10px', 
+                                    padding: '2px 6px', 
+                                    borderRadius: '4px', 
+                                    background: 'var(--accent-muted)', 
+                                    color: 'var(--accent)',
+                                    fontWeight: 500,
+                                }}
+                                title={`AI Account: ${post.bot.name}`}
+                            >
+                                <Bot size={12} />
+                                AI Account
+                            </span>
+                        )}
+                    </div>
                     <span className="post-time">{formatFullHandle(post.author.handle)} · {formatTime(post.createdAt)}</span>
                 </div>
             </div>
@@ -170,7 +284,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                 </div>
             )}
 
-            <div className="post-content">{renderContent(post.content)}</div>
+            <div className="post-content">{renderContent(post.content, post.linkPreviewUrl ?? undefined)}</div>
 
             {post.media && post.media.length > 0 && (
                 <div className="post-media-grid">
@@ -195,14 +309,12 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                     onClick={(e) => e.stopPropagation()}
                 >
                     {post.linkPreviewImage && (
-                        <div className="link-preview-image">
-                            <img src={post.linkPreviewImage} alt={post.linkPreviewTitle || ''} />
-                        </div>
+                        <LinkPreviewImage src={post.linkPreviewImage} alt={post.linkPreviewTitle || ''} />
                     )}
                     <div className="link-preview-info">
-                        <div className="link-preview-title">{post.linkPreviewTitle}</div>
+                        <div className="link-preview-title">{post.linkPreviewTitle ? decodeHtmlEntities(post.linkPreviewTitle) : ''}</div>
                         {post.linkPreviewDescription && (
-                            <div className="link-preview-description">{post.linkPreviewDescription}</div>
+                            <div className="link-preview-description">{decodeHtmlEntities(post.linkPreviewDescription)}</div>
                         )}
                         <div className="link-preview-url">
                             {new URL(post.linkPreviewUrl.startsWith('http') ? post.linkPreviewUrl : `https://${post.linkPreviewUrl}`).hostname}
@@ -228,7 +340,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                     <FlagIcon />
                     <span>{reporting ? '...' : ''}</span>
                 </button>
-                {currentUser?.id === post.author.id && (
+                {(currentUser?.id === post.author.id || (post.bot && currentUser?.id === post.bot.ownerId)) && (
                     <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
                         <TrashIcon />
                         <span>{deleting ? '...' : ''}</span>
