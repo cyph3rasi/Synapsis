@@ -108,7 +108,7 @@ export function RightSidebar() {
             <div className="card" style={{ marginTop: '16px' }}>
                 <h3 style={{ fontWeight: 600, marginBottom: '12px' }}>Network Info</h3>
                 <p style={{ color: 'var(--foreground-secondary)', fontSize: '13px' }}>
-                    Running Synapsis v0.1.0
+                    Running <a href="https://synapsis.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Synapsis v0.1.0</a>
                 </p>
 
                 {nodeInfo.admins.length > 0 && (
