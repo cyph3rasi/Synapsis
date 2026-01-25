@@ -109,6 +109,11 @@ export const MAX_SOURCE_CONTENT_LENGTH = 4000;
 export const MAX_CONVERSATION_CONTEXT_LENGTH = 2000;
 
 /**
+ * Maximum character length for previous posts context.
+ */
+export const MAX_PREVIOUS_POSTS_CONTEXT_LENGTH = 8000;
+
+/**
  * Truncation suffix added to truncated content.
  */
 export const TRUNCATION_SUFFIX = '... [content truncated]';
@@ -212,18 +217,21 @@ export function isContentTruncated(content: string): boolean {
  * Includes personality context and instructions.
  * 
  * @param personality - Bot's personality configuration
+ * @param hasSourceContent - Whether the post has source content with a URL
  * @returns System prompt string
  * 
  * Validates: Requirements 3.2, 11.1
  */
-export function buildPostSystemPrompt(personality: PersonalityConfig): string {
+export function buildPostSystemPrompt(personality: PersonalityConfig, hasSourceContent: boolean = true): string {
   let prompt = personality.systemPrompt;
   
   if (personality.responseStyle) {
     prompt += `\n\nResponse Style: ${personality.responseStyle}`;
   }
   
-  prompt += `\n\nIMPORTANT: Your posts MUST be under 450 characters (not including the URL). This leaves room for the source link. This is a strict limit.
+  if (hasSourceContent) {
+    // Instructions for posts with source content (include URL)
+    prompt += `\n\nIMPORTANT: Your posts MUST be under 450 characters (not including the URL). This leaves room for the source link. This is a strict limit.
 
 Instructions for creating posts:
 - Create engaging, original content based on the source material
@@ -233,7 +241,22 @@ Instructions for creating posts:
 - Do not simply copy or summarize - add value with your unique voice
 - Do NOT use hashtags
 - Write like a human, not a marketing bot
+- AVOID repeating themes, phrases, or sentence structures from your previous posts
 - Format: [Your commentary] [URL]`;
+  } else {
+    // Instructions for original posts without source content (no URL needed)
+    prompt += `\n\nIMPORTANT: Your posts MUST be under 500 characters. This is a strict limit.
+
+Instructions for creating posts:
+- Create engaging, original content that fits your personality
+- Keep the text concise - aim for 100-400 characters
+- Do NOT include any URLs or links
+- Do NOT use hashtags
+- Write like a human, not a marketing bot
+- Be creative and stay in character
+- AVOID repeating themes, phrases, or sentence structures from your previous posts
+- Each post should feel fresh and different while maintaining your voice`;
+  }
   
   return prompt;
 }
@@ -294,22 +317,48 @@ Respond with a JSON object containing:
  * 
  * @param sourceContent - Source content to post about
  * @param context - Optional additional context
+ * @param previousPosts - Optional array of previous post contents for context
  * @returns User message string
  */
 export function buildPostUserMessage(
   sourceContent?: ContentItem,
-  context?: string
+  context?: string,
+  previousPosts?: string[]
 ): string {
+  let message = '';
+  
+  // Add previous posts context if available
+  if (previousPosts && previousPosts.length > 0) {
+    message += 'Your recent posts (for context - avoid repeating similar content):\n';
+    
+    // Truncate previous posts if too long
+    let contextLength = 0;
+    const relevantPosts: string[] = [];
+    
+    for (const post of previousPosts) {
+      if (contextLength + post.length > MAX_PREVIOUS_POSTS_CONTEXT_LENGTH) {
+        break;
+      }
+      relevantPosts.push(`- ${post}`);
+      contextLength += post.length;
+    }
+    
+    message += relevantPosts.join('\n');
+    message += '\n\n---\n\n';
+  }
+  
   if (!sourceContent) {
     if (context) {
-      return `Create a post about the following:\n\n${context}`;
+      message += `Create a post about the following:\n\n${context}`;
+    } else {
+      message += 'Create an engaging post for your followers.';
     }
-    return 'Create an engaging post for your followers.';
+    return message;
   }
   
   const truncatedContent = truncateContent(sourceContent.content || '');
   
-  let message = `Create a post about the following content:\n\n`;
+  message += `Create a post about the following content:\n\n`;
   message += `Title: ${sourceContent.title}\n`;
   message += `URL: ${sourceContent.url}\n`;
   
@@ -426,16 +475,19 @@ export class ContentGenerator {
    * 
    * @param sourceContent - Optional source content to post about
    * @param context - Optional additional context
+   * @param previousPosts - Optional array of previous post contents for context
    * @returns Generated content with token usage
    * 
    * Validates: Requirements 3.2, 11.1, 11.2, 11.3
    */
   async generatePost(
     sourceContent?: ContentItem,
-    context?: string
+    context?: string,
+    previousPosts?: string[]
   ): Promise<GeneratedContent> {
-    const systemPrompt = buildPostSystemPrompt(this.bot.personalityConfig);
-    const userMessage = buildPostUserMessage(sourceContent, context);
+    const hasSourceContent = !!sourceContent;
+    const systemPrompt = buildPostSystemPrompt(this.bot.personalityConfig, hasSourceContent);
+    const userMessage = buildPostUserMessage(sourceContent, context, previousPosts);
     
     const messages: LLMMessage[] = [
       { role: 'system', content: systemPrompt },

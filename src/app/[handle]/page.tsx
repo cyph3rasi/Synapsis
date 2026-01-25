@@ -81,13 +81,15 @@ export default function ProfilePage() {
 
     const [user, setUser] = useState<User | null>(null);
     const [posts, setPosts] = useState<Post[]>([]);
+    const [likedPosts, setLikedPosts] = useState<Post[]>([]);
     const [currentUser, setCurrentUser] = useState<{ id: string; handle: string } | null>(null);
     const [isFollowing, setIsFollowing] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'posts' | 'followers' | 'following'>('posts');
+    const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'followers' | 'following'>('posts');
     const [followers, setFollowers] = useState<UserSummary[]>([]);
     const [following, setFollowing] = useState<UserSummary[]>([]);
     const [postsLoading, setPostsLoading] = useState(true);
+    const [likesLoading, setLikesLoading] = useState(false);
     const [followersLoading, setFollowersLoading] = useState(false);
     const [followingLoading, setFollowingLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -106,6 +108,7 @@ export default function ProfilePage() {
         setSaveError(null);
         setFollowers([]);
         setFollowing([]);
+        setLikedPosts([]);
         // Get current user
         fetch('/api/auth/me')
             .then(res => res.json())
@@ -196,6 +199,15 @@ export default function ProfilePage() {
                 .then(data => setFollowing(data.following || []))
                 .catch(() => setFollowing([]))
                 .finally(() => setFollowingLoading(false));
+        }
+
+        if (activeTab === 'likes') {
+            setLikesLoading(true);
+            fetch(`/api/users/${handle}/likes`)
+                .then(res => res.json())
+                .then(data => setLikedPosts(data.posts || []))
+                .catch(() => setLikedPosts([]))
+                .finally(() => setLikesLoading(false));
         }
     }, [activeTab, handle]);
 
@@ -617,7 +629,10 @@ export default function ProfilePage() {
 
                 {/* Tabs */}
                 <div style={{ display: 'flex', borderTop: '1px solid var(--border)' }}>
-                    {(['posts', 'followers', 'following'] as const).map(tab => (
+                    {(user?.isBot 
+                        ? ['posts', 'followers', 'following'] as const
+                        : ['posts', 'likes', 'followers', 'following'] as const
+                    ).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -651,6 +666,29 @@ export default function ProfilePage() {
                     </div>
                 ) : (
                     posts.map((post, index) => (
+                        <PostCard
+                            key={`${post.id}-${index}`}
+                            post={post}
+                            onLike={handleLike}
+                            onRepost={handleRepost}
+                            onComment={handleComment}
+                            onDelete={handleDelete}
+                        />
+                    ))
+                )
+            )}
+
+            {activeTab === 'likes' && (
+                likesLoading ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>Loading...</p>
+                    </div>
+                ) : likedPosts.length === 0 ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>No liked posts yet</p>
+                    </div>
+                ) : (
+                    likedPosts.map((post, index) => (
                         <PostCard
                             key={`${post.id}-${index}`}
                             post={post}

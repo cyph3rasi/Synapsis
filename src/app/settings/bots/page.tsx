@@ -19,6 +19,7 @@ interface BotData {
   name: string;
   handle: string;
   bio: string;
+  avatarUrl: string | null;
   isActive: boolean;
   isSuspended: boolean;
   autonomousMode: boolean;
@@ -108,42 +109,65 @@ export default function BotsPage() {
               onClick={() => router.push(`/settings/bots/${bot.id}`)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h2 style={{ fontSize: '16px', fontWeight: 600 }}>{bot.name}</h2>
-                    {bot.autonomousMode && (
-                      <span style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '4px',
-                        fontSize: '11px',
-                        padding: '3px 8px',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--accent-muted)',
-                        color: 'var(--accent)',
+                <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: 0 }}>
+                  <Link 
+                    href={`/${bot.handle}`} 
+                    onClick={(e) => e.stopPropagation()}
+                    className="avatar"
+                    style={{ 
+                      width: '48px', 
+                      height: '48px', 
+                      flexShrink: 0,
+                      fontSize: '18px',
+                    }}
+                  >
+                    {bot.avatarUrl ? (
+                      <img src={bot.avatarUrl} alt={bot.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ) : (
+                      bot.name.charAt(0).toUpperCase()
+                    )}
+                  </Link>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <h2 style={{ fontSize: '16px', fontWeight: 600 }}>{bot.name}</h2>
+                      {bot.autonomousMode && (
+                        <span style={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          gap: '4px',
+                          fontSize: '11px',
+                          padding: '3px 8px',
+                          borderRadius: 'var(--radius-full)',
+                          background: 'var(--accent-muted)',
+                          color: 'var(--accent)',
+                        }}>
+                          <Sparkles size={12} />
+                          Auto
+                        </span>
+                      )}
+                    </div>
+                    <Link 
+                      href={`/${bot.handle}`} 
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}
+                    >
+                      @{bot.handle}
+                    </Link>
+                    {bot.bio && (
+                      <p style={{ 
+                        fontSize: '13px', 
+                        color: 'var(--foreground-secondary)', 
+                        marginTop: '8px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
                       }}>
-                        <Sparkles size={12} />
-                        Auto
-                      </span>
+                        {bot.bio}
+                      </p>
                     )}
                   </div>
-                  <p style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}>
-                    @{bot.handle}
-                  </p>
-                  {bot.bio && (
-                    <p style={{ 
-                      fontSize: '13px', 
-                      color: 'var(--foreground-secondary)', 
-                      marginTop: '8px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}>
-                      {bot.bio}
-                    </p>
-                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                   {bot.isSuspended ? (

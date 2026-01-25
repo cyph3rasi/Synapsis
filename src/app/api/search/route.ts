@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, users, posts } from '@/db';
-import { ilike, or, desc, and, notInArray, eq } from 'drizzle-orm';
+import { db, users, posts, likes } from '@/db';
+import { ilike, or, desc, and, notInArray, eq, inArray } from 'drizzle-orm';
 import { resolveRemoteUser } from '@/lib/activitypub/fetch';
 
 type SearchUser = {
@@ -150,11 +150,49 @@ export async function GET(request: Request) {
                 with: {
                     author: true,
                     media: true,
+                    bot: true,
                 },
                 orderBy: [desc(posts.createdAt)],
                 limit,
             });
             searchPosts = postResults;
+
+            // Populate isLiked and isReposted for authenticated users
+            try {
+                const { getSession } = await import('@/lib/auth');
+                const session = await getSession();
+
+                if (session?.user && searchPosts.length > 0) {
+                    const viewer = session.user;
+                    const postIds = searchPosts.map(p => p.id).filter(Boolean);
+
+                    if (postIds.length > 0) {
+                        const viewerLikes = await db.query.likes.findMany({
+                            where: and(
+                                eq(likes.userId, viewer.id),
+                                inArray(likes.postId, postIds)
+                            ),
+                        });
+                        const likedPostIds = new Set(viewerLikes.map(l => l.postId));
+
+                        const viewerReposts = await db.query.posts.findMany({
+                            where: and(
+                                eq(posts.userId, viewer.id),
+                                inArray(posts.repostOfId, postIds)
+                            ),
+                        });
+                        const repostedPostIds = new Set(viewerReposts.map(r => r.repostOfId));
+
+                        searchPosts = searchPosts.map(p => ({
+                            ...p,
+                            isLiked: likedPostIds.has(p.id),
+                            isReposted: repostedPostIds.has(p.id),
+                        })) as any;
+                    }
+                }
+            } catch (error) {
+                console.error('Error populating interaction flags:', error);
+            }
         }
 
         return NextResponse.json({

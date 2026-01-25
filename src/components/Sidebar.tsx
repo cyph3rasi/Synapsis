@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SynapsisLogo, BookOpenIcon, SettingsIcon, BotIcon } from './Icons';
+import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
 
 export function Sidebar() {
@@ -16,8 +17,7 @@ export function Sidebar() {
     return (
         <aside className="sidebar">
             <Link href="/" className="logo">
-                <SynapsisLogo />
-                <span>Synapsis</span>
+                <Image src="/logotext.png" alt="Synapsis" width={185} height={42} priority />
             </Link>
             <nav>
                 <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`}>
@@ -38,10 +38,6 @@ export function Sidebar() {
                         <span>Bots</span>
                     </Link>
                 )}
-                <Link href="/guide" className={`nav-item ${pathname?.startsWith('/guide') ? 'active' : ''}`}>
-                    <BookOpenIcon />
-                    <span>Guide</span>
-                </Link>
                 {user ? (
                     <Link href={`/${user.handle}`} className={`nav-item ${pathname === '/' + user.handle ? 'active' : ''}`}>
                         <UserIcon />

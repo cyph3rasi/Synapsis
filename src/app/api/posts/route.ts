@@ -223,7 +223,22 @@ export async function GET(request: Request) {
             eq(posts.isRemoved, false)
         );
 
-        if (type === 'public') {
+        if (type === 'local') {
+            // Local node posts only - no fediverse content
+            feedPosts = await db.query.posts.findMany({
+                where: baseFilter,
+                with: {
+                    author: true,
+                    bot: true,
+                    media: true,
+                    replyTo: {
+                        with: { author: true },
+                    },
+                },
+                orderBy: [desc(posts.createdAt)],
+                limit,
+            });
+        } else if (type === 'public') {
             // Public timeline - all local posts + all cached remote posts
             const localPosts = await db.query.posts.findMany({
                 where: baseFilter,

@@ -6,7 +6,7 @@ import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
 import { formatFullHandle } from '@/lib/utils/handle';
-import { Bot } from 'lucide-react';
+import { Bot, Globe, Server } from 'lucide-react';
 
 interface User {
     id: string;
@@ -60,30 +60,50 @@ function UserCard({ user }: { user: User }) {
 
 export default function ExplorePage() {
     const [query, setQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'trending' | 'users' | 'search'>('trending');
-    const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
+    const [activeTab, setActiveTab] = useState<'node' | 'fediverse' | 'users' | 'search'>('node');
+    const [nodePosts, setNodePosts] = useState<Post[]>([]);
+    const [fediversePosts, setFediversePosts] = useState<Post[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [searchResults, setSearchResults] = useState<{ posts: Post[]; users: User[] }>({ posts: [], users: [] });
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
 
     useEffect(() => {
-        // Load trending posts
-        const loadTrending = async () => {
+        // Load node posts (local only)
+        const loadNodePosts = async () => {
             setLoading(true);
             try {
-                const res = await fetch('/api/posts?type=curated&limit=20');
+                const res = await fetch('/api/posts?type=local&limit=20');
                 const data = await res.json();
-                setTrendingPosts(data.posts || []);
+                setNodePosts(data.posts || []);
             } catch {
-                setTrendingPosts([]);
+                setNodePosts([]);
             } finally {
                 setLoading(false);
             }
         };
 
-        loadTrending();
+        loadNodePosts();
     }, []);
+
+    useEffect(() => {
+        // Load fediverse posts when tab changes
+        if (activeTab === 'fediverse' && fediversePosts.length === 0) {
+            const loadFediverse = async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/posts?type=curated&limit=20');
+                    const data = await res.json();
+                    setFediversePosts(data.posts || []);
+                } catch {
+                    setFediversePosts([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            loadFediverse();
+        }
+    }, [activeTab, fediversePosts.length]);
 
     useEffect(() => {
         // Load users when tab changes to users
@@ -136,7 +156,8 @@ export default function ExplorePage() {
     };
 
     const handleDelete = (postId: string) => {
-        setTrendingPosts(prev => prev.filter(p => p.id !== postId));
+        setNodePosts(prev => prev.filter(p => p.id !== postId));
+        setFediversePosts(prev => prev.filter(p => p.id !== postId));
         setSearchResults(prev => ({
             ...prev,
             posts: prev.posts.filter(p => p.id !== postId)
@@ -160,11 +181,18 @@ export default function ExplorePage() {
 
             <div className="explore-tabs">
                 <button
-                    className={`explore-tab ${activeTab === 'trending' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('trending')}
+                    className={`explore-tab ${activeTab === 'node' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('node')}
                 >
-                    <TrendingIcon />
-                    <span>Trending</span>
+                    <Server size={18} />
+                    <span>Node</span>
+                </button>
+                <button
+                    className={`explore-tab ${activeTab === 'fediverse' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('fediverse')}
+                >
+                    <Globe size={18} />
+                    <span>Fediverse</span>
                 </button>
                 <button
                     className={`explore-tab ${activeTab === 'users' ? 'active' : ''}`}
@@ -185,13 +213,38 @@ export default function ExplorePage() {
             </div>
 
             <div className="explore-content">
-                {activeTab === 'trending' && (
+                {activeTab === 'node' && (
                     loading ? (
-                        <div className="explore-loading">Loading trending posts...</div>
-                    ) : trendingPosts.length === 0 ? (
+                        <div className="explore-loading">Loading posts...</div>
+                    ) : nodePosts.length === 0 ? (
                         <div className="explore-empty">
-                            <TrendingIcon />
-                            <p>No trending posts yet</p>
+                            <Server size={24} />
+                            <p>No posts on this node yet</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="feed-meta card">
+                                <div className="feed-meta-title">Node feed</div>
+                                <div className="feed-meta-body">
+                                    A chronological feed of all posts from users on this node. See what the local community is sharing.
+                                </div>
+                            </div>
+                            <div className="explore-posts">
+                                {nodePosts.map((post) => (
+                                    <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
+                                ))}
+                            </div>
+                        </>
+                    )
+                )}
+
+                {activeTab === 'fediverse' && (
+                    loading ? (
+                        <div className="explore-loading">Loading fediverse posts...</div>
+                    ) : fediversePosts.length === 0 ? (
+                        <div className="explore-empty">
+                            <Globe size={24} />
+                            <p>No fediverse posts yet</p>
                         </div>
                     ) : (
                         <>
@@ -202,7 +255,7 @@ export default function ExplorePage() {
                                 </div>
                             </div>
                             <div className="explore-posts">
-                                {trendingPosts.map((post) => (
+                                {fediversePosts.map((post) => (
                                     <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
                                 ))}
                             </div>

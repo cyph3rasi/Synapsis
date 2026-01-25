@@ -262,6 +262,40 @@ async function getNextUnprocessedContentItem(botId: string): Promise<ContentItem
 }
 
 /**
+ * Get the bot's previous posts for context.
+ * Returns the content of the most recent posts to help avoid repetition.
+ * 
+ * @param botId - The bot ID
+ * @param limit - Maximum number of posts to fetch (default: 40)
+ * @returns Array of post content strings
+ */
+async function getBotPreviousPosts(botId: string, limit: number = 40): Promise<string[]> {
+  // Get bot to find its user ID
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.id, botId),
+  });
+
+  if (!bot) {
+    return [];
+  }
+
+  // Get the bot's recent posts
+  const recentPosts = await db.query.posts.findMany({
+    where: eq(posts.userId, bot.userId),
+    orderBy: (posts, { desc }) => [desc(posts.createdAt)],
+    limit,
+    columns: {
+      content: true,
+    },
+  });
+
+  // Return just the content strings
+  return recentPosts
+    .map(p => p.content)
+    .filter((content): content is string => !!content);
+}
+
+/**
  * Mark a content item as processed.
  * 
  * @param contentItemId - The content item ID
@@ -507,6 +541,7 @@ export async function selectContentForPosting(
  * @param bot - The bot (from database)
  * @param contentItem - Optional content item to post about
  * @param context - Optional additional context
+ * @param previousPosts - Optional array of previous post contents for context
  * @returns Generated post text
  * 
  * Validates: Requirements 11.6
@@ -514,7 +549,8 @@ export async function selectContentForPosting(
 export async function generatePostContent(
   bot: typeof bots.$inferSelect & { user: { handle: string } },
   contentItem?: ContentItem,
-  context?: string
+  context?: string,
+  previousPosts?: string[]
 ): Promise<string> {
   // Check if bot has API key
   try {
@@ -539,7 +575,7 @@ export async function generatePostContent(
 
   try {
     // Generate post (Requirement 11.6)
-    const generatedContent = await generator.generatePost(contentItem, context);
+    const generatedContent = await generator.generatePost(contentItem, context, previousPosts);
 
     // Log the generation
     await logActivity(
@@ -550,6 +586,7 @@ export async function generatePostContent(
         contentItemId: contentItem?.id,
         tokensUsed: generatedContent.tokensUsed,
         model: generatedContent.model,
+        previousPostsCount: previousPosts?.length || 0,
       },
       true
     );
@@ -995,15 +1032,21 @@ export async function triggerPost(
       });
     }
 
-    // Select content (Requirement 5.4)
-    const contentItem = await selectContentForPosting(botId, sourceContentId);
-
-    if (!contentItem) {
-      return {
-        success: false,
-        error: 'No content available for posting',
-        errorCode: 'NO_CONTENT',
-      };
+    // Select content (Requirement 5.4) - optional, bots can post without sources
+    let contentItem: ContentItem | null = null;
+    
+    if (sourceContentId) {
+      contentItem = await selectContentForPosting(botId, sourceContentId);
+      if (!contentItem) {
+        return {
+          success: false,
+          error: 'Specified content not found',
+          errorCode: 'CONTENT_NOT_FOUND',
+        };
+      }
+    } else {
+      // Try to get content, but don't fail if none available
+      contentItem = await selectContentForPosting(botId);
     }
 
     // Get bot from database for generation
@@ -1020,8 +1063,12 @@ export async function triggerPost(
       };
     }
 
+    // Fetch previous posts for context (helps avoid repetition)
+    const previousPosts = await getBotPreviousPosts(botId, 40);
+
     // Generate post content (Requirement 11.6)
-    let postContent = await generatePostContent(dbBot, contentItem, context);
+    // Content item is optional - bot can generate posts based on personality alone
+    let postContent = await generatePostContent(dbBot, contentItem || undefined, context, previousPosts);
 
     // Sanitize content
     postContent = sanitizePostContent(postContent);
@@ -1036,7 +1083,7 @@ export async function triggerPost(
           'error',
           {
             type: 'validation',
-            contentItemId: contentItem.id,
+            contentItemId: contentItem?.id || null,
             errors: validation.errors,
             content: postContent,
           },
@@ -1048,21 +1095,23 @@ export async function triggerPost(
           success: false,
           error: `Post validation failed: ${validation.errors.join(', ')}`,
           errorCode: 'VALIDATION_FAILED',
-          contentItem,
+          contentItem: contentItem || undefined,
         };
       }
     }
 
-    // Create post in database with source URL for link preview
-    const post = await createPostInDatabase(botId, postContent, contentItem.url);
+    // Create post in database with source URL for link preview (if content item exists)
+    const post = await createPostInDatabase(botId, postContent, contentItem?.url);
 
     // Record post for rate limiting
     if (!skipRateLimitCheck) {
       await recordPost(botId);
     }
 
-    // Mark content item as processed
-    await markContentItemProcessed(contentItem.id, post.id);
+    // Mark content item as processed (only if we used one)
+    if (contentItem) {
+      await markContentItemProcessed(contentItem.id, post.id);
+    }
 
     // Log successful post creation
     await logActivity(
@@ -1070,7 +1119,7 @@ export async function triggerPost(
       'post_created',
       {
         postId: post.id,
-        contentItemId: contentItem.id,
+        contentItemId: contentItem?.id || null,
         contentLength: postContent.length,
       },
       true
@@ -1082,7 +1131,7 @@ export async function triggerPost(
     return {
       success: true,
       post,
-      contentItem,
+      contentItem: contentItem || undefined,
     };
   } catch (error) {
     // Log error

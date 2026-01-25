@@ -48,15 +48,27 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
         setReposted(post.isReposted || false);
     }, [post.isLiked, post.isReposted, post.id]);
 
-    const formatTime = (dateStr: string) => {
+    const formatTime = (dateStr: string | Date) => {
         const date = new Date(dateStr);
+        
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+        
         const now = new Date();
         const diff = now.getTime() - date.getTime();
-        const minutes = Math.floor(diff / 60000);
+        
+        // If post is in the future (minor clock skew), show "now"
+        if (diff < 0) {
+            return 'now';
+        }
+        
+        const seconds = Math.floor(diff / 1000);
+        const minutes = Math.floor(seconds / 60);
         const hours = Math.floor(minutes / 60);
         const days = Math.floor(hours / 24);
 
-        if (minutes < 1) return 'now';
+        if (seconds < 60) return 'now';
         if (minutes < 60) return `${minutes}m`;
         if (hours < 24) return `${hours}h`;
         if (days < 7) return `${days}d`;
