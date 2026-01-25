@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -10,6 +11,18 @@ import { formatFullHandle } from '@/lib/utils/handle';
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
     const pathname = usePathname();
+    const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch('/api/node')
+            .then(res => res.json())
+            .then(data => {
+                if (data.logoUrl) {
+                    setCustomLogoUrl(data.logoUrl);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     // Home is exact match
     const isHome = pathname === '/';
@@ -17,7 +30,11 @@ export function Sidebar() {
     return (
         <aside className="sidebar">
             <Link href="/" className="logo">
-                <Image src="/logotext.png" alt="Synapsis" width={185} height={42} priority />
+                {customLogoUrl ? (
+                    <img src={customLogoUrl} alt="Logo" style={{ maxWidth: '200px', maxHeight: '50px', objectFit: 'contain' }} />
+                ) : (
+                    <Image src="/logotext.png" alt="Synapsis" width={185} height={42} priority />
+                )}
             </Link>
             <nav>
                 <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`}>

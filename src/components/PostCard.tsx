@@ -6,6 +6,7 @@ import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/compo
 import { Bot } from 'lucide-react';
 import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { useToast } from '@/lib/contexts/ToastContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import { formatFullHandle } from '@/lib/utils/handle';
 
@@ -37,6 +38,7 @@ interface PostCardProps {
 
 export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail }: PostCardProps) {
     const { user: currentUser } = useAuth();
+    const { showToast } = useToast();
     const [liked, setLiked] = useState(post.isLiked || false);
     const [reposted, setReposted] = useState(post.isReposted || false);
     const [reporting, setReporting] = useState(false);
@@ -112,15 +114,15 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
             });
             if (!res.ok) {
                 if (res.status === 401) {
-                    alert('Please log in to report.');
+                    showToast('Please log in to report.', 'error');
                 } else {
-                    alert('Report failed. Please try again.');
+                    showToast('Report failed. Please try again.', 'error');
                 }
             } else {
-                alert('Report submitted. Thank you.');
+                showToast('Report submitted. Thank you.', 'success');
             }
         } catch {
-            alert('Report failed. Please try again.');
+            showToast('Report failed. Please try again.', 'error');
         } finally {
             setReporting(false);
         }
@@ -139,10 +141,10 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, isDetail
                 onDelete?.(post.id);
             } else {
                 const data = await res.json();
-                alert(data.error || 'Failed to delete post');
+                showToast(data.error || 'Failed to delete post', 'error');
             }
         } catch {
-            alert('Failed to delete post');
+            showToast('Failed to delete post', 'error');
         } finally {
             setDeleting(false);
         }

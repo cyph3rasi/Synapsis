@@ -13,10 +13,12 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
 import { Bot, Play, Pause, Rss, Activity, Settings, Sparkles, Clock, Trash2, Pencil } from 'lucide-react';
+import { useToast } from '@/lib/contexts/ToastContext';
 
 export default function BotDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { showToast } = useToast();
   const botId = params.id as string;
   const [bot, setBot] = useState<any>(null);
   const [sources, setSources] = useState<any[]>([]);
@@ -80,14 +82,14 @@ export default function BotDetailPage() {
         body: JSON.stringify({}),
       });
       if (response.ok) {
-        alert('Post triggered successfully!');
+        showToast('Post triggered successfully!', 'success');
         fetchBot();
       } else {
         const data = await response.json();
-        alert(`Failed to trigger post: ${data.error || 'Unknown error'}`);
+        showToast(`Failed to trigger post: ${data.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert('Failed to trigger post');
+      showToast('Failed to trigger post', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -123,7 +125,7 @@ export default function BotDetailPage() {
       // Build URL and config based on type
       if (newSource.type === 'brave_news') {
         if (!newSource.braveQuery || !newSource.apiKey) {
-          alert('Search query and API key are required for Brave News');
+          showToast('Search query and API key are required for Brave News', 'error');
           setActionLoading(false);
           return;
         }
@@ -139,7 +141,7 @@ export default function BotDetailPage() {
         };
       } else if (newSource.type === 'news_api') {
         if (!newSource.newsQuery || !newSource.apiKey) {
-          alert('Search query and API key are required for News API');
+          showToast('Search query and API key are required for News API', 'error');
           setActionLoading(false);
           return;
         }
@@ -203,10 +205,10 @@ export default function BotDetailPage() {
         fetchSources();
       } else {
         const data = await response.json();
-        alert(`Failed to add source: ${data.error || 'Unknown error'}`);
+        showToast(`Failed to add source: ${data.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert('Failed to add source');
+      showToast('Failed to add source', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -222,14 +224,14 @@ export default function BotDetailPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        alert(`Fetched ${data.itemsFetched || 0} items successfully!`);
+        showToast(`Fetched ${data.itemsFetched || 0} items successfully!`, 'success');
         fetchSources();
       } else {
         const data = await response.json();
-        alert(`Failed to fetch content: ${data.error || 'Unknown error'}`);
+        showToast(`Failed to fetch content: ${data.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert('Failed to fetch content');
+      showToast('Failed to fetch content', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -715,7 +717,7 @@ export default function BotDetailPage() {
             if (confirm(`Are you sure you want to delete ${bot.name}? This cannot be undone.`)) {
               fetch(`/api/bots/${botId}`, { method: 'DELETE' })
                 .then(() => router.push('/settings/bots'))
-                .catch(() => alert('Failed to delete bot'));
+                .catch(() => showToast('Failed to delete bot', 'error'));
             }
           }}
           className="btn"

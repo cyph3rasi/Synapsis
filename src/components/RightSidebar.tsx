@@ -1,6 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+interface Admin {
+    handle: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+}
 
 export function RightSidebar() {
     const fallbackDescription = process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.';
@@ -10,6 +17,7 @@ export function RightSidebar() {
         longDescription: '',
         rules: '',
         bannerUrl: '',
+        admins: [] as Admin[],
     });
 
     const [loading, setLoading] = useState(true);
@@ -26,6 +34,7 @@ export function RightSidebar() {
                     longDescription: data?.longDescription ?? prev.longDescription,
                     rules: data?.rules ?? prev.rules,
                     bannerUrl: data?.bannerUrl ?? prev.bannerUrl,
+                    admins: data?.admins ?? [],
                 }));
             })
             .catch(() => { })
@@ -101,6 +110,39 @@ export function RightSidebar() {
                 <p style={{ color: 'var(--foreground-secondary)', fontSize: '13px' }}>
                     Running Synapsis v0.1.0
                 </p>
+
+                {nodeInfo.admins.length > 0 && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-hover)' }}>
+                        <h4 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--foreground-tertiary)', marginBottom: '12px', letterSpacing: '0.05em' }}>
+                            Admins
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {nodeInfo.admins.map((admin) => (
+                                <Link
+                                    key={admin.handle}
+                                    href={`/${admin.handle}`}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit' }}
+                                >
+                                    <img
+                                        src={admin.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${admin.handle}`}
+                                        alt={admin.displayName || admin.handle}
+                                        width={32}
+                                        height={32}
+                                        style={{ borderRadius: '50%', objectFit: 'cover' }}
+                                    />
+                                    <div>
+                                        <div style={{ fontWeight: 500, fontSize: '14px' }}>
+                                            {admin.displayName || admin.handle}
+                                        </div>
+                                        <div style={{ color: 'var(--foreground-tertiary)', fontSize: '12px' }}>
+                                            @{admin.handle}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </aside>
     );

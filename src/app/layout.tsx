@@ -31,6 +31,8 @@ export const dynamic = 'force-dynamic';
 // This is appropriate for a social network where all content is user-generated
 
 import { AuthProvider } from '@/lib/contexts/AuthContext';
+import { ToastProvider } from '@/lib/contexts/ToastContext';
+import { AccentColorProvider } from '@/lib/contexts/AccentColorContext';
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 
 export default function RootLayout({
@@ -42,9 +44,13 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${sairaCondensed.variable}`}>
       <body>
         <AuthProvider>
-          <LayoutWrapper>
-            {children}
-          </LayoutWrapper>
+          <AccentColorProvider>
+            <ToastProvider>
+              <LayoutWrapper>
+                {children}
+              </LayoutWrapper>
+            </ToastProvider>
+          </AccentColorProvider>
         </AuthProvider>
       </body>
     </html>

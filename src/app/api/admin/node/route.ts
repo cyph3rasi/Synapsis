@@ -23,6 +23,7 @@ export async function PATCH(req: NextRequest) {
                 longDescription: data.longDescription,
                 rules: data.rules,
                 bannerUrl: data.bannerUrl,
+                logoUrl: data.logoUrl,
                 accentColor: data.accentColor,
             }).returning();
         } else {
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest) {
                     longDescription: data.longDescription,
                     rules: data.rules,
                     bannerUrl: data.bannerUrl,
+                    logoUrl: data.logoUrl,
                     accentColor: data.accentColor,
                     updatedAt: new Date(),
                 })

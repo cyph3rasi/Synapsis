@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Bot } from 'lucide-react';
+import { useToast } from '@/lib/contexts/ToastContext';
+import { useAccentColor } from '@/lib/contexts/AccentColorContext';
 
 type AdminUser = {
     id: string;
@@ -51,6 +53,8 @@ const formatDate = (value: string) => {
 };
 
 export default function AdminPage() {
+    const { showToast } = useToast();
+    const { refreshAccentColor } = useAccentColor();
     const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
     const [tab, setTab] = useState<'reports' | 'posts' | 'users' | 'settings'>('reports');
     const [reports, setReports] = useState<Report[]>([]);
@@ -64,11 +68,14 @@ export default function AdminPage() {
         longDescription: '',
         rules: '',
         bannerUrl: '',
+        logoUrl: '',
         accentColor: '#00D4AA',
     });
     const [savingSettings, setSavingSettings] = useState(false);
     const [isUploadingBanner, setIsUploadingBanner] = useState(false);
     const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
     useEffect(() => {
         fetch('/api/admin/me')
@@ -127,6 +134,7 @@ export default function AdminPage() {
                 longDescription: data.longDescription || '',
                 rules: data.rules || '',
                 bannerUrl: data.bannerUrl || '',
+                logoUrl: data.logoUrl || '',
                 accentColor: data.accentColor || '#00D4AA',
             });
         } catch {
@@ -178,12 +186,13 @@ export default function AdminPage() {
                 body: JSON.stringify(payload),
             });
             if (res.ok) {
-                alert('Settings saved!');
+                showToast('Settings saved!', 'success');
+                refreshAccentColor();
             } else {
-                alert('Failed to save settings.');
+                showToast('Failed to save settings.', 'error');
             }
         } catch {
-            alert('Failed to save settings.');
+            showToast('Failed to save settings.', 'error');
         } finally {
             setSavingSettings(false);
         }
@@ -221,6 +230,41 @@ export default function AdminPage() {
             setBannerUploadError('Upload failed. Please try again.');
         } finally {
             setIsUploadingBanner(false);
+        }
+    };
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setLogoUploadError(null);
+        setIsUploadingLogo(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            const nextSettings = {
+                ...nodeSettings,
+                logoUrl: data.media?.url || data.url,
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
+        } catch (error) {
+            console.error('Logo upload failed', error);
+            setLogoUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingLogo(false);
         }
     };
 
@@ -511,6 +555,49 @@ export default function AdminPage() {
                                     onChange={e => setNodeSettings({ ...nodeSettings, name: e.target.value })}
                                     placeholder="My Synapsis Node"
                                 />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Logo</label>
+                                <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginBottom: '8px' }}>
+                                    Replaces the default logo in the sidebar. Max width: 200px.
+                                </p>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingLogo ? 'Uploading...' : 'Upload logo'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleLogoUpload}
+                                            disabled={isUploadingLogo}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {nodeSettings.logoUrl && (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={async () => {
+                                                const nextSettings = { ...nodeSettings, logoUrl: '' };
+                                                setNodeSettings(nextSettings);
+                                                await handleSaveSettings(nextSettings);
+                                            }}
+                                        >
+                                            Remove logo
+                                        </button>
+                                    )}
+                                    {logoUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{logoUploadError}</span>
+                                    )}
+                                </div>
+                                {nodeSettings.logoUrl && (
+                                    <div style={{ marginTop: '8px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background-secondary)' }}>
+                                        <img
+                                            src={nodeSettings.logoUrl}
+                                            alt="Custom logo"
+                                            style={{ maxWidth: '200px', maxHeight: '60px', objectFit: 'contain' }}
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div>

@@ -13,6 +13,7 @@ export const nodes = pgTable('nodes', {
   longDescription: text('long_description'),
   rules: text('rules'),
   bannerUrl: text('banner_url'),
+  logoUrl: text('logo_url'),
   accentColor: text('accent_color').default('#FFFFFF'),
   publicKey: text('public_key'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

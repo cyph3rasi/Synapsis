@@ -15,6 +15,13 @@
       "when": 1769153858324,
       "tag": "0004_add_source_config",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769367465905,
+      "tag": "0002_add_logo_url",
+      "breakpoints": true
     }
   ]
 }
