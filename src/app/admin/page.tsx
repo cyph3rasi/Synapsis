@@ -1,0 +1,823 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import AutoTextarea from '@/components/AutoTextarea';
+import { Bot } from 'lucide-react';
+import { useToast } from '@/lib/contexts/ToastContext';
+import { useAccentColor } from '@/lib/contexts/AccentColorContext';
+
+type AdminUser = {
+    id: string;
+    handle: string;
+    displayName?: string | null;
+    email?: string | null;
+    isSuspended: boolean;
+    isSilenced: boolean;
+    suspensionReason?: string | null;
+    silenceReason?: string | null;
+    createdAt: string;
+    isBot?: boolean;
+};
+
+type AdminPost = {
+    id: string;
+    content: string;
+    createdAt: string;
+    isRemoved: boolean;
+    removedReason?: string | null;
+    author: {
+        id: string;
+        handle: string;
+        displayName?: string | null;
+    };
+};
+
+type Report = {
+    id: string;
+    targetType: 'post' | 'user';
+    targetId: string;
+    reason: string;
+    status: 'open' | 'resolved';
+    createdAt: string;
+    reporter?: {
+        id: string;
+        handle: string;
+    } | null;
+    target?: AdminPost | AdminUser | null;
+};
+
+const formatDate = (value: string) => {
+    const date = new Date(value);
+    return date.toLocaleString();
+};
+
+export default function AdminPage() {
+    const { showToast } = useToast();
+    const { refreshAccentColor } = useAccentColor();
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+    const [tab, setTab] = useState<'reports' | 'posts' | 'users' | 'settings'>('reports');
+    const [reports, setReports] = useState<Report[]>([]);
+    const [posts, setPosts] = useState<AdminPost[]>([]);
+    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [reportStatus, setReportStatus] = useState<'open' | 'resolved' | 'all'>('open');
+    const [nodeSettings, setNodeSettings] = useState({
+        name: '',
+        description: '',
+        longDescription: '',
+        rules: '',
+        bannerUrl: '',
+        logoUrl: '',
+        faviconUrl: '',
+        accentColor: '#FFFFFF',
+        isNsfw: false,
+    });
+    const [savingSettings, setSavingSettings] = useState(false);
+    const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+    const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+    const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
+    const [faviconUploadError, setFaviconUploadError] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch('/api/admin/me')
+            .then((res) => res.json())
+            .then((data) => setIsAdmin(!!data.isAdmin))
+            .catch(() => setIsAdmin(false));
+    }, []);
+
+    const loadReports = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/admin/reports?status=${reportStatus}`);
+            const data = await res.json();
+            setReports(data.reports || []);
+        } catch {
+            setReports([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadPosts = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/posts?status=all');
+            const data = await res.json();
+            setPosts(data.posts || []);
+        } catch {
+            setPosts([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/admin/users');
+            const data = await res.json();
+            setUsers(data.users || []);
+        } catch {
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadNodeSettings = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/node');
+            const data = await res.json();
+            setNodeSettings({
+                name: data.name || '',
+                description: data.description || '',
+                longDescription: data.longDescription || '',
+                rules: data.rules || '',
+                bannerUrl: data.bannerUrl || '',
+                logoUrl: data.logoUrl || '',
+                faviconUrl: data.faviconUrl || '',
+                accentColor: data.accentColor || '#FFFFFF',
+                isNsfw: data.isNsfw || false,
+            });
+        } catch {
+            // error
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        if (tab === 'reports') loadReports();
+        if (tab === 'posts') loadPosts();
+        if (tab === 'users') loadUsers();
+        if (tab === 'settings') loadNodeSettings();
+    }, [tab, isAdmin, reportStatus]);
+
+    const handleReportResolve = async (id: string, status: 'open' | 'resolved') => {
+        const note = status === 'resolved' ? window.prompt('Resolution note (optional):') || '' : '';
+        await fetch(`/api/admin/reports/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, note }),
+        });
+        loadReports();
+    };
+
+    const handlePostAction = async (id: string, action: 'remove' | 'restore') => {
+        const reason = action === 'remove' ? window.prompt('Reason (optional):') || '' : '';
+        await fetch(`/api/admin/posts/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, reason }),
+        });
+        if (tab === 'reports') {
+            loadReports();
+        } else {
+            loadPosts();
+        }
+    };
+
+    const handleSaveSettings = async (override?: typeof nodeSettings) => {
+        const payload = override ?? nodeSettings;
+        setSavingSettings(true);
+        try {
+            const res = await fetch('/api/admin/node', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                showToast('Settings saved!', 'success');
+                refreshAccentColor();
+            } else {
+                showToast('Failed to save settings.', 'error');
+            }
+        } catch {
+            showToast('Failed to save settings.', 'error');
+        } finally {
+            setSavingSettings(false);
+        }
+    };
+
+    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setBannerUploadError(null);
+        setIsUploadingBanner(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            const nextSettings = {
+                ...nodeSettings,
+                bannerUrl: data.media?.url || data.url,
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
+        } catch (error) {
+            console.error('Banner upload failed', error);
+            setBannerUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingBanner(false);
+        }
+    };
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setLogoUploadError(null);
+        setIsUploadingLogo(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            const nextSettings = {
+                ...nodeSettings,
+                logoUrl: data.media?.url || data.url,
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
+        } catch (error) {
+            console.error('Logo upload failed', error);
+            setLogoUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingLogo(false);
+        }
+    };
+
+    const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setFaviconUploadError(null);
+        setIsUploadingFavicon(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            const nextSettings = {
+                ...nodeSettings,
+                faviconUrl: data.media?.url || data.url,
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
+        } catch (error) {
+            console.error('Favicon upload failed', error);
+            setFaviconUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingFavicon(false);
+        }
+    };
+
+    const handleUserAction = async (id: string, action: 'suspend' | 'unsuspend' | 'silence' | 'unsilence') => {
+        const needsReason = action === 'suspend' || action === 'silence';
+        const reason = needsReason ? window.prompt('Reason (optional):') || '' : '';
+        await fetch(`/api/admin/users/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, reason }),
+        });
+        loadUsers();
+    };
+
+    const reportCounts = useMemo(() => {
+        return {
+            open: reports.filter((r) => r.status === 'open').length,
+            resolved: reports.filter((r) => r.status === 'resolved').length,
+        };
+    }, [reports]);
+
+    if (isAdmin === null) {
+        return (
+            <div className="admin-shell">
+                <div className="admin-card">Checking permissions...</div>
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="admin-shell">
+                <div className="admin-card">
+                    <h1>Moderation</h1>
+                    <p>You do not have access to this page.</p>
+                    <Link href="/" className="btn btn-primary" style={{ marginTop: '12px' }}>
+                        Back to home
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="admin-shell">
+            <div className="admin-header">
+                <div>
+                    <h1>Moderation Dashboard</h1>
+                    <p>Manage reports, posts, and user actions.</p>
+                </div>
+                <Link href="/" className="btn btn-ghost">
+                    Return to feed
+                </Link>
+            </div>
+
+            <div className="admin-tabs">
+                <button className={`admin-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
+                    Reports
+                </button>
+                <button className={`admin-tab ${tab === 'posts' ? 'active' : ''}`} onClick={() => setTab('posts')}>
+                    Posts
+                </button>
+                <button className={`admin-tab ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
+                    Users
+                </button>
+                <button className={`admin-tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
+                    Settings
+                </button>
+            </div>
+
+            {tab === 'reports' && (
+                <div className="admin-card">
+                    <div className="admin-toolbar">
+                        <div className="admin-filters">
+                            {(['open', 'resolved', 'all'] as const).map((status) => (
+                                <button
+                                    key={status}
+                                    className={`pill ${reportStatus === status ? 'active' : ''}`}
+                                    onClick={() => setReportStatus(status)}
+                                >
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="admin-stats">
+                            <span>Open: {reportCounts.open}</span>
+                            <span>Resolved: {reportCounts.resolved}</span>
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="admin-empty">Loading reports...</div>
+                    ) : reports.length === 0 ? (
+                        <div className="admin-empty">No reports found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {reports.map((report) => (
+                                <div key={report.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${report.status}`}>
+                                                {report.status}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                {report.targetType.toUpperCase()} report
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body">
+                                            {report.reason}
+                                        </div>
+                                        <div className="admin-row-sub">
+                                            Reported by {report.reporter?.handle || 'anonymous'} • {formatDate(report.createdAt)}
+                                        </div>
+                                        {report.targetType === 'post' && report.target && 'content' in report.target && (
+                                            <div className="admin-row-target">
+                                                <strong>@{report.target.author.handle}:</strong> {report.target.content || '[repost]'}
+                                            </div>
+                                        )}
+                                        {report.targetType === 'user' && report.target && 'handle' in report.target && (
+                                            <div className="admin-row-target">
+                                                User: @{report.target.handle}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        {report.targetType === 'post' && report.target && 'content' in report.target && (
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={() => {
+                                                    const target = report.target as AdminPost;
+                                                    handlePostAction(target.id, target.isRemoved ? 'restore' : 'remove');
+                                                }}
+                                            >
+                                                {(report.target as AdminPost).isRemoved ? 'Restore post' : 'Remove post'}
+                                            </button>
+                                        )}
+                                        {report.status === 'open' ? (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleReportResolve(report.id, 'resolved')}>
+                                                Resolve
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleReportResolve(report.id, 'open')}>
+                                                Reopen
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {tab === 'posts' && (
+                <div className="admin-card">
+                    {loading ? (
+                        <div className="admin-empty">Loading posts...</div>
+                    ) : posts.length === 0 ? (
+                        <div className="admin-empty">No posts found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {posts.map((post) => (
+                                <div key={post.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${post.isRemoved ? 'removed' : 'active'}`}>
+                                                {post.isRemoved ? 'removed' : 'active'}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                @{post.author.handle} • {formatDate(post.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body">{post.content || '[repost]'}</div>
+                                        {post.removedReason && (
+                                            <div className="admin-row-sub">Reason: {post.removedReason}</div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        {post.isRemoved ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handlePostAction(post.id, 'restore')}>
+                                                Restore
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handlePostAction(post.id, 'remove')}>
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {tab === 'users' && (
+                <div className="admin-card">
+                    {loading ? (
+                        <div className="admin-empty">Loading users...</div>
+                    ) : users.length === 0 ? (
+                        <div className="admin-empty">No users found.</div>
+                    ) : (
+                        <div className="admin-list">
+                            {users.map((user) => (
+                                <div key={user.id} className="admin-row">
+                                    <div className="admin-row-main">
+                                        <div className="admin-row-title">
+                                            <span className={`status-pill ${user.isSuspended ? 'suspended' : 'active'}`}>
+                                                {user.isSuspended ? 'suspended' : 'active'}
+                                            </span>
+                                            <span className={`status-pill ${user.isSilenced ? 'silenced' : 'visible'}`}>
+                                                {user.isSilenced ? 'silenced' : 'visible'}
+                                            </span>
+                                            <span className="admin-row-meta">
+                                                @{user.handle} • {formatDate(user.createdAt)}
+                                            </span>
+                                        </div>
+                                        <div className="admin-row-body" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            {user.displayName || user.handle}
+                                            {user.isBot && (
+                                                <span 
+                                                    style={{ 
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px',
+                                                        fontSize: '10px', 
+                                                        padding: '2px 6px', 
+                                                        borderRadius: '4px', 
+                                                        background: 'var(--accent-muted)', 
+                                                        color: 'var(--accent)',
+                                                        fontWeight: 500,
+                                                    }}
+                                                >
+                                                    <Bot size={12} />
+                                                    AI Account
+                                                </span>
+                                            )}
+                                        </div>
+                                        {user.suspensionReason && (
+                                            <div className="admin-row-sub">Suspension: {user.suspensionReason}</div>
+                                        )}
+                                        {user.silenceReason && (
+                                            <div className="admin-row-sub">Silence: {user.silenceReason}</div>
+                                        )}
+                                    </div>
+                                    <div className="admin-row-actions">
+                                        <Link href={`/@${user.handle}`} className="btn btn-ghost btn-sm">
+                                            View
+                                        </Link>
+                                        {user.isSuspended ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'unsuspend')}>
+                                                Unsuspend
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-primary btn-sm" onClick={() => handleUserAction(user.id, 'suspend')}>
+                                                Suspend
+                                            </button>
+                                        )}
+                                        {user.isSilenced ? (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'unsilence')}>
+                                                Unsilence
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleUserAction(user.id, 'silence')}>
+                                                Silence
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+            {tab === 'settings' && (
+                <div className="admin-card">
+                    <div style={{ fontWeight: 600, marginBottom: '16px', fontSize: '16px' }}>Node Settings</div>
+
+                    {loading ? (
+                        <div className="admin-empty">Loading settings...</div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Node Name</label>
+                                <input
+                                    className="input"
+                                    value={nodeSettings.name}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, name: e.target.value })}
+                                    placeholder="My Synapsis Node"
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Logo</label>
+                                <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginBottom: '8px' }}>
+                                    Replaces the default logo in the sidebar. Max width: 200px.
+                                </p>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingLogo ? 'Uploading...' : 'Upload logo'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleLogoUpload}
+                                            disabled={isUploadingLogo}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {nodeSettings.logoUrl && (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={async () => {
+                                                const nextSettings = { ...nodeSettings, logoUrl: '' };
+                                                setNodeSettings(nextSettings);
+                                                await handleSaveSettings(nextSettings);
+                                            }}
+                                        >
+                                            Remove logo
+                                        </button>
+                                    )}
+                                    {logoUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{logoUploadError}</span>
+                                    )}
+                                </div>
+                                {nodeSettings.logoUrl && (
+                                    <div style={{ marginTop: '8px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background-secondary)' }}>
+                                        <img
+                                            src={nodeSettings.logoUrl}
+                                            alt="Custom logo"
+                                            style={{ maxWidth: '200px', maxHeight: '60px', objectFit: 'contain' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Favicon</label>
+                                <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginBottom: '8px' }}>
+                                    The icon shown in browser tabs. Recommended: 32x32 or 64x64 PNG.
+                                </p>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingFavicon ? 'Uploading...' : 'Upload favicon'}
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/x-icon,image/svg+xml"
+                                            onChange={handleFaviconUpload}
+                                            disabled={isUploadingFavicon}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {nodeSettings.faviconUrl && (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={async () => {
+                                                const nextSettings = { ...nodeSettings, faviconUrl: '' };
+                                                setNodeSettings(nextSettings);
+                                                await handleSaveSettings(nextSettings);
+                                            }}
+                                        >
+                                            Remove favicon
+                                        </button>
+                                    )}
+                                    {faviconUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{faviconUploadError}</span>
+                                    )}
+                                </div>
+                                {nodeSettings.faviconUrl && (
+                                    <div style={{ marginTop: '8px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background-secondary)', display: 'inline-block' }}>
+                                        <img
+                                            src={nodeSettings.faviconUrl}
+                                            alt="Custom favicon"
+                                            style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Short Description</label>
+                                <AutoTextarea
+                                    className="input"
+                                    value={nodeSettings.description}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, description: e.target.value })}
+                                    placeholder="A brief tagline for your node."
+                                    rows={2}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Accent Color</label>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <input
+                                        type="color"
+                                        value={nodeSettings.accentColor}
+                                        onChange={(e) => setNodeSettings({ ...nodeSettings, accentColor: e.target.value })}
+                                        style={{ width: '44px', height: '36px', padding: 0, border: '1px solid var(--border)', background: 'transparent', borderRadius: '8px' }}
+                                    />
+                                    <input
+                                        className="input"
+                                        value={nodeSettings.accentColor}
+                                        onChange={(e) => setNodeSettings({ ...nodeSettings, accentColor: e.target.value })}
+                                        placeholder="#FFFFFF"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Banner image</label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingBanner ? 'Uploading...' : 'Upload banner'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleBannerUpload}
+                                            disabled={isUploadingBanner}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {bannerUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{bannerUploadError}</span>
+                                    )}
+                                </div>
+                                {nodeSettings.bannerUrl && (
+                                    <div style={{ marginTop: '8px', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
+                                        <div style={{
+                                            position: 'absolute', inset: 0,
+                                            background: `url(${nodeSettings.bannerUrl}) center/cover no-repeat`
+                                        }} />
+                                        <div style={{
+                                            position: 'absolute', inset: 0,
+                                            background: 'linear-gradient(to bottom, transparent, var(--background-secondary))'
+                                        }} />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Long Description (About)</label>
+                                <AutoTextarea
+                                    className="input"
+                                    value={nodeSettings.longDescription}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, longDescription: e.target.value })}
+                                    placeholder="Detailed information about your node/community."
+                                    rows={5}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Rules</label>
+                                <AutoTextarea
+                                    className="input"
+                                    value={nodeSettings.rules}
+                                    onChange={e => setNodeSettings({ ...nodeSettings, rules: e.target.value })}
+                                    placeholder="Community rules and guidelines."
+                                    rows={5}
+                                />
+                            </div>
+
+                            <div style={{ 
+                                padding: '16px', 
+                                background: nodeSettings.isNsfw ? 'rgba(239, 68, 68, 0.1)' : 'var(--background-secondary)', 
+                                borderRadius: '8px',
+                                border: nodeSettings.isNsfw ? '1px solid var(--error)' : '1px solid var(--border)',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>
+                                            NSFW Node
+                                        </label>
+                                        <p style={{ fontSize: '12px', color: 'var(--foreground-secondary)', margin: 0 }}>
+                                            {nodeSettings.isNsfw 
+                                                ? 'This node is marked as NSFW. All content will be hidden from users who haven\'t enabled NSFW viewing.'
+                                                : 'Enable this if your node primarily hosts adult or sensitive content. All posts from this node will be treated as NSFW across the swarm.'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        className={`btn btn-sm ${nodeSettings.isNsfw ? 'btn-primary' : 'btn-ghost'}`}
+                                        style={{ 
+                                            background: nodeSettings.isNsfw ? 'var(--error)' : undefined,
+                                            flexShrink: 0,
+                                        }}
+                                        onClick={() => {
+                                            if (!nodeSettings.isNsfw) {
+                                                const confirmed = window.confirm(
+                                                    'Are you sure you want to mark this node as NSFW?\n\n' +
+                                                    'All content from this node will be hidden from users who haven\'t enabled NSFW viewing. ' +
+                                                    'This affects the entire swarm.'
+                                                );
+                                                if (confirmed) {
+                                                    setNodeSettings({ ...nodeSettings, isNsfw: true });
+                                                }
+                                            } else {
+                                                setNodeSettings({ ...nodeSettings, isNsfw: false });
+                                            }
+                                        }}
+                                    >
+                                        {nodeSettings.isNsfw ? 'Remove NSFW' : 'Mark as NSFW'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ paddingTop: '8px' }}>
+                                <button className="btn btn-primary" onClick={() => handleSaveSettings()} disabled={savingSettings}>
+                                    {savingSettings ? 'Saving...' : 'Save Settings'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}

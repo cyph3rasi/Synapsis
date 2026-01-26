@@ -1,0 +1,618 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { TriangleAlert } from 'lucide-react';
+
+export default function LoginPage() {
+    const [mode, setMode] = useState<'login' | 'register' | 'import'>('login');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [handle, setHandle] = useState('');
+    const [displayName, setDisplayName] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
+    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string; isNsfw?: boolean }>({ name: '', description: '' });
+    const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+    const [ageVerified, setAgeVerified] = useState(false);
+
+    // Import specific state
+    const [importFile, setImportFile] = useState<File | null>(null);
+    const [importPassword, setImportPassword] = useState('');
+    const [importHandle, setImportHandle] = useState('');
+    const [acceptedCompliance, setAcceptedCompliance] = useState(false);
+    const [importAgeVerified, setImportAgeVerified] = useState(false);
+    const [importSuccess, setImportSuccess] = useState<string | null>(null);
+
+    // Fetch node info
+    useEffect(() => {
+        fetch('/api/node')
+            .then(res => res.json())
+            .then(data => {
+                setNodeInfo({
+                    name: data.name || '',
+                    description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.',
+                    logoUrl: data.logoUrl || undefined,
+                    isNsfw: data.isNsfw || false
+                });
+                // Update page title
+                if (data.name && data.name !== 'Synapsis') {
+                    document.title = data.name;
+                }
+                setNodeInfoLoaded(true);
+            })
+            .catch(() => {
+                setNodeInfoLoaded(true);
+            });
+    }, []);
+
+    // Handle availability check
+    useEffect(() => {
+        const checkHandle = mode === 'register' ? handle : (mode === 'import' ? importHandle : '');
+        if (!checkHandle || checkHandle.length < 3) {
+            setHandleStatus('idle');
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setHandleStatus('checking');
+            try {
+                const res = await fetch(`/api/auth/check-handle?handle=${checkHandle}`);
+                const data = await res.json();
+                if (data.available) {
+                    setHandleStatus('available');
+                } else {
+                    setHandleStatus('taken');
+                }
+            } catch {
+                setHandleStatus('idle');
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [handle, importHandle, mode]);
+
+    const handleImport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!importFile || !importPassword || !importHandle || !acceptedCompliance) {
+            setError('Please fill in all fields and accept the compliance agreement');
+            return;
+        }
+
+        if (nodeInfo.isNsfw && !importAgeVerified) {
+            setError('You must verify your age to import an account on this node');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setImportSuccess(null);
+
+        try {
+            const fileContent = await importFile.text();
+            const exportData = JSON.parse(fileContent);
+
+            const res = await fetch('/api/account/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    exportData,
+                    password: importPassword,
+                    newHandle: importHandle,
+                    acceptedCompliance,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Import failed');
+            }
+
+            setImportSuccess(data.message);
+            // Hard redirect to ensure cookie is picked up
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Import failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+
+        if (mode === 'register' && password !== confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
+
+        if (mode === 'register' && nodeInfo.isNsfw && !ageVerified) {
+            setError('You must verify your age to register on this node');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            const body = mode === 'login'
+                ? { email, password }
+                : { email, password, handle, displayName };
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Authentication failed');
+            }
+
+            // Hard redirect to ensure cookie is picked up
+            window.location.href = '/';
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An error occurred');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+        }}>
+            <div style={{ width: '100%', maxWidth: '400px' }}>
+                {/* Logo */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px', minHeight: '120px' }}>
+                    {nodeInfoLoaded && (
+                        <>
+                            {nodeInfo.logoUrl ? (
+                                <Image
+                                    src={nodeInfo.logoUrl}
+                                    alt={nodeInfo.name || 'Node logo'}
+                                    width={200}
+                                    height={60}
+                                    style={{ marginBottom: '16px', objectFit: 'contain', maxHeight: '60px', width: 'auto' }}
+                                    unoptimized
+                                />
+                            ) : (
+                                <Image
+                                    src="/logotext.svg"
+                                    alt="Synapsis"
+                                    width={200}
+                                    height={48}
+                                    style={{ marginBottom: '16px', objectFit: 'contain' }}
+                                    priority
+                                />
+                            )}
+                            {nodeInfo.name && nodeInfo.name !== 'Synapsis' && !nodeInfo.logoUrl && (
+                                <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--foreground)', marginBottom: '8px' }}>
+                                    {nodeInfo.name}
+                                </div>
+                            )}
+                            <p style={{ color: 'var(--foreground-secondary)', marginTop: '0', textAlign: 'center' }}>
+                                {nodeInfo.description}
+                            </p>
+                        </>
+                    )}
+                </div>
+
+                {/* Mode Switcher */}
+                <div style={{
+                    display: 'flex',
+                    marginBottom: '24px',
+                    background: 'var(--background-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '4px',
+                    gap: '4px'
+                }}>
+                    <button
+                        onClick={() => setMode('login')}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: mode === 'login' ? 'var(--background-tertiary)' : 'transparent',
+                            color: mode === 'login' ? 'var(--foreground)' : 'var(--foreground-secondary)',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        Login
+                    </button>
+                    <button
+                        onClick={() => setMode('register')}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: mode === 'register' ? 'var(--background-tertiary)' : 'transparent',
+                            color: mode === 'register' ? 'var(--foreground)' : 'var(--foreground-secondary)',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        Register
+                    </button>
+                    <button
+                        onClick={() => setMode('import')}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            background: mode === 'import' ? 'var(--background-tertiary)' : 'transparent',
+                            color: mode === 'import' ? 'var(--foreground)' : 'var(--foreground-secondary)',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                        }}
+                    >
+                        Import
+                    </button>
+                </div>
+
+                {/* Form */}
+                {mode !== 'import' ? (
+                    <form onSubmit={handleSubmit} className="card" style={{ padding: '24px' }}>
+                        {error && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid var(--error)',
+                                borderRadius: 'var(--radius-md)',
+                                color: 'var(--error)',
+                                fontSize: '14px',
+                            }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {mode === 'register' && (
+                            <>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Handle
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <span style={{
+                                            position: 'absolute',
+                                            left: '12px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            color: 'var(--foreground-tertiary)',
+                                        }}>@</span>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={handle}
+                                            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                            style={{ paddingLeft: '28px' }}
+                                            placeholder="yourhandle"
+                                            required
+                                            minLength={3}
+                                            maxLength={20}
+                                        />
+                                    </div>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        marginTop: '4px',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}>
+                                        <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                            3-20 characters, alphanumeric and underscores
+                                        </span>
+                                        {handleStatus === 'checking' && (
+                                            <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                        )}
+                                        {handleStatus === 'available' && (
+                                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                                        )}
+                                        {handleStatus === 'taken' && (
+                                            <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Display Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                        placeholder="Your Name"
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Email
+                            </label>
+                            <input
+                                type="email"
+                                className="input"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@example.com"
+                                required
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Password
+                            </label>
+                            <input
+                                type="password"
+                                className="input"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                required
+                                minLength={8}
+                            />
+                        </div>
+
+                        {mode === 'register' && (
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                    Confirm Password
+                                </label>
+                                <input
+                                    type="password"
+                                    className="input"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    required
+                                    minLength={8}
+                                />
+                            </div>
+                        )}
+
+                        {mode === 'register' && nodeInfo.isNsfw && (
+                            <div style={{
+                                marginBottom: '20px',
+                                padding: '12px',
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: 'var(--radius-md)',
+                            }}>
+                                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={ageVerified}
+                                        onChange={(e) => setAgeVerified(e.target.checked)}
+                                        style={{ marginTop: '3px' }}
+                                    />
+                                    <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                        <strong style={{ color: 'var(--error)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <TriangleAlert size={12} /> Age Verification:
+                                        </strong> This node contains adult or sensitive content. I confirm that I am at least 18 years of age.
+                                    </span>
+                                </label>
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-lg"
+                            style={{ width: '100%' }}
+                            disabled={loading}
+                        >
+                            {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
+                        </button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleImport} className="card" style={{ padding: '24px' }}>
+                        {error && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid var(--error)',
+                                borderRadius: 'var(--radius-md)',
+                                color: 'var(--error)',
+                                fontSize: '14px',
+                            }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {importSuccess && (
+                            <div style={{
+                                padding: '12px',
+                                marginBottom: '16px',
+                                background: 'var(--success)',
+                                border: '1px solid var(--success)',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#000',
+                                fontSize: '14px',
+                            }}>
+                                {importSuccess} Redirecting...
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Export file
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    type="file"
+                                    id="import-file-input"
+                                    accept=".json"
+                                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                                    style={{ display: 'none' }}
+                                />
+                                <label
+                                    htmlFor="import-file-input"
+                                    className="input"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        color: importFile ? 'var(--foreground)' : 'var(--foreground-tertiary)',
+                                        fontSize: '14px'
+                                    }}
+                                >
+                                    <span>{importFile ? importFile.name : 'Select export file...'}</span>
+                                    <span className="btn btn-ghost btn-sm" style={{ pointerEvents: 'none', padding: '4px 8px', height: 'auto', minHeight: 'unset' }}>
+                                        Browse
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Password (from your old account)
+                            </label>
+                            <input
+                                type="password"
+                                className="input"
+                                value={importPassword}
+                                onChange={(e) => setImportPassword(e.target.value)}
+                                placeholder="Enter the password for this account"
+                                required
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                Handle on this node
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <span style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--foreground-tertiary)',
+                                }}>@</span>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={importHandle}
+                                    onChange={(e) => setImportHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                    style={{ paddingLeft: '28px' }}
+                                    placeholder="yourhandle"
+                                    required
+                                    minLength={3}
+                                    maxLength={20}
+                                />
+                            </div>
+                            <div style={{
+                                fontSize: '12px',
+                                marginTop: '4px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                    3-20 chars
+                                </span>
+                                {handleStatus === 'checking' && (
+                                    <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                )}
+                                {handleStatus === 'available' && (
+                                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
+                                )}
+                                {handleStatus === 'taken' && (
+                                    <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div style={{
+                            marginBottom: '20px',
+                            padding: '12px',
+                            background: 'rgba(245, 158, 11, 0.05)',
+                            border: '1px solid rgba(245, 158, 11, 0.2)',
+                            borderRadius: 'var(--radius-md)',
+                        }}>
+                            <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={acceptedCompliance}
+                                    onChange={(e) => setAcceptedCompliance(e.target.checked)}
+                                    style={{ marginTop: '3px' }}
+                                />
+                                <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                    <strong style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <TriangleAlert size={12} /> Compliance:
+                                    </strong> I agree to comply with this node's rules and take responsibility for my migrated content.
+                                </span>
+                            </label>
+                        </div>
+
+                        {nodeInfo.isNsfw && (
+                            <div style={{
+                                marginBottom: '20px',
+                                padding: '12px',
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: 'var(--radius-md)',
+                            }}>
+                                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={importAgeVerified}
+                                        onChange={(e) => setImportAgeVerified(e.target.checked)}
+                                        style={{ marginTop: '3px' }}
+                                    />
+                                    <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                        <strong style={{ color: 'var(--error)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <TriangleAlert size={12} /> Age Verification:
+                                        </strong> This node contains adult or sensitive content. I confirm that I am at least 18 years of age.
+                                    </span>
+                                </label>
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            className="btn btn-primary btn-lg"
+                            style={{ width: '100%' }}
+                            disabled={loading || !importFile || !importPassword || !importHandle || !acceptedCompliance || (nodeInfo.isNsfw && !importAgeVerified)}
+                        >
+                            {loading ? 'Importing...' : 'Import Account'}
+                        </button>
+                    </form>
+                )}
+
+                <p style={{ textAlign: 'center', marginTop: '24px', color: 'var(--foreground-tertiary)', fontSize: '14px' }}>
+                    <Link href="/">← Back to home</Link>
+                </p>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,36 @@
+{
+    "name": "Synapsis",
+    "short_name": "Synapsis",
+    "description": "Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0a0a0a",
+    "theme_color": "#ffffff",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "social",
+        "communication"
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Compose",
+            "url": "/?compose=true",
+            "description": "Write a new post"
+        }
+    ]
+}
