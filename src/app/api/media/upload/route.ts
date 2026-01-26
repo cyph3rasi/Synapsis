@@ -4,8 +4,10 @@ import { requireAuth } from '@/lib/auth';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB for images
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB for videos
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 export async function POST(req: NextRequest) {
     try {
@@ -20,16 +22,20 @@ export async function POST(req: NextRequest) {
         }
 
         // Validate file type
-        if (!ALLOWED_TYPES.includes(file.type)) {
+        const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+        const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
+        
+        if (!isImage && !isVideo) {
             return NextResponse.json({
-                error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP'
+                error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP, MP4, WebM, MOV'
             }, { status: 400 });
         }
 
-        // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
+        // Validate file size based on type
+        const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+        if (file.size > maxSize) {
             return NextResponse.json({
-                error: 'File too large. Maximum size: 10MB'
+                error: `File too large. Maximum size: ${isVideo ? '100MB' : '10MB'}`
             }, { status: 400 });
         }
 
@@ -62,8 +68,10 @@ export async function POST(req: NextRequest) {
         let url = '';
         if (process.env.STORAGE_PUBLIC_BASE_URL) {
             url = `${process.env.STORAGE_PUBLIC_BASE_URL}/${filename}`;
-        } else {
+        } else if (process.env.STORAGE_ENDPOINT) {
             url = `${process.env.STORAGE_ENDPOINT}/${bucket}/${filename}`;
+        } else {
+            return NextResponse.json({ error: 'Storage not configured - missing STORAGE_PUBLIC_BASE_URL or STORAGE_ENDPOINT' }, { status: 500 });
         }
 
         // Store media record

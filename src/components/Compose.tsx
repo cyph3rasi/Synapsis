@@ -3,9 +3,13 @@
 import { useState, useEffect } from 'react';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
-import { ImageIcon, AlertTriangle } from 'lucide-react';
+import { ImageIcon, AlertTriangle, Film } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import { formatFullHandle } from '@/lib/utils/handle';
+
+interface MediaAttachment extends Attachment {
+    mimeType?: string;
+}
 
 interface ComposeProps {
     onPost: (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => void;
@@ -18,7 +22,7 @@ interface ComposeProps {
 export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What's happening?", isReply }: ComposeProps) {
     const [content, setContent] = useState('');
     const [isPosting, setIsPosting] = useState(false);
-    const [attachments, setAttachments] = useState<Attachment[]>([]);
+    const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [linkPreview, setLinkPreview] = useState<any>(null);
@@ -97,7 +101,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
         setUploadError(null);
         setIsUploading(true);
 
-        const uploaded: Attachment[] = [];
+        const uploaded: MediaAttachment[] = [];
 
         for (const file of selectedFiles) {
             try {
@@ -117,6 +121,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     id: data.media.id,
                     url: data.media.url || data.url,
                     altText: data.media.altText ?? null,
+                    mimeType: data.media.mimeType ?? file.type,
                 });
             } catch (error) {
                 console.error('Upload failed', error);
@@ -153,18 +158,25 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
             />
             {attachments.length > 0 && (
                 <div className="compose-media-grid">
-                    {attachments.map((item) => (
-                        <div className="compose-media-item" key={item.id}>
-                            <img src={item.url} alt={item.altText || 'Upload preview'} />
-                            <button
-                                type="button"
-                                className="compose-media-remove"
-                                onClick={() => handleRemoveAttachment(item.id)}
-                            >
-                                x
-                            </button>
-                        </div>
-                    ))}
+                    {attachments.map((item) => {
+                        const isVideo = item.mimeType?.startsWith('video/');
+                        return (
+                            <div className="compose-media-item" key={item.id}>
+                                {isVideo ? (
+                                    <video src={item.url} muted playsInline preload="metadata" />
+                                ) : (
+                                    <img src={item.url} alt={item.altText || 'Upload preview'} />
+                                )}
+                                <button
+                                    type="button"
+                                    className="compose-media-remove"
+                                    onClick={() => handleRemoveAttachment(item.id)}
+                                >
+                                    x
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
@@ -219,7 +231,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                         {isUploading ? '...' : <ImageIcon size={20} />}
                         <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,video/mp4,video/webm,video/quicktime"
                             multiple
                             onChange={handleMediaSelect}
                             disabled={isUploading || attachments.length >= 4}

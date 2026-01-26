@@ -511,11 +511,31 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
 
             {post.media && post.media.length > 0 && (
                 <div className="post-media-grid">
-                    {post.media.map((item) => (
-                        <div className="post-media-item" key={item.id}>
-                            <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
-                        </div>
-                    ))}
+                    {post.media.map((item) => {
+                        const isVideo = item.mimeType?.startsWith('video/');
+                        return (
+                            <div className="post-media-item" key={item.id}>
+                                {isVideo ? (
+                                    <video
+                                        src={item.url}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                        preload="metadata"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const video = e.currentTarget;
+                                            video.muted = !video.muted;
+                                        }}
+                                        title="Click to toggle sound"
+                                    />
+                                ) : (
+                                    <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

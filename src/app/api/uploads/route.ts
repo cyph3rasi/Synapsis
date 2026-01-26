@@ -39,10 +39,10 @@ export async function POST(req: NextRequest) {
         let url = '';
         if (process.env.STORAGE_PUBLIC_BASE_URL) {
             url = `${process.env.STORAGE_PUBLIC_BASE_URL}/${filename}`;
-        } else {
-            // Fallback if no public URL configured (e.g. valid for some providers)
-            // This might need adjustment based on provider
+        } else if (process.env.STORAGE_ENDPOINT) {
             url = `${process.env.STORAGE_ENDPOINT}/${bucket}/${filename}`;
+        } else {
+            return NextResponse.json({ error: 'Storage not configured - missing STORAGE_PUBLIC_BASE_URL or STORAGE_ENDPOINT' }, { status: 500 });
         }
 
         return NextResponse.json({ url });

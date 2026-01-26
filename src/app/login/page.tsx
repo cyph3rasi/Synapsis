@@ -24,6 +24,7 @@ export default function LoginPage() {
     const [importPassword, setImportPassword] = useState('');
     const [importHandle, setImportHandle] = useState('');
     const [acceptedCompliance, setAcceptedCompliance] = useState(false);
+    const [importAgeVerified, setImportAgeVerified] = useState(false);
     const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
     // Fetch node info
@@ -37,6 +38,10 @@ export default function LoginPage() {
                     logoUrl: data.logoUrl || undefined,
                     isNsfw: data.isNsfw || false
                 });
+                // Update page title
+                if (data.name && data.name !== 'Synapsis') {
+                    document.title = data.name;
+                }
                 setNodeInfoLoaded(true);
             })
             .catch(() => {
@@ -74,6 +79,11 @@ export default function LoginPage() {
         e.preventDefault();
         if (!importFile || !importPassword || !importHandle || !acceptedCompliance) {
             setError('Please fill in all fields and accept the compliance agreement');
+            return;
+        }
+
+        if (nodeInfo.isNsfw && !importAgeVerified) {
+            setError('You must verify your age to import an account on this node');
             return;
         }
 
@@ -564,11 +574,35 @@ export default function LoginPage() {
                             </label>
                         </div>
 
+                        {nodeInfo.isNsfw && (
+                            <div style={{
+                                marginBottom: '20px',
+                                padding: '12px',
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: 'var(--radius-md)',
+                            }}>
+                                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={importAgeVerified}
+                                        onChange={(e) => setImportAgeVerified(e.target.checked)}
+                                        style={{ marginTop: '3px' }}
+                                    />
+                                    <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                        <strong style={{ color: 'var(--error)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <TriangleAlert size={12} /> Age Verification:
+                                        </strong> This node contains adult or sensitive content. I confirm that I am at least 18 years of age.
+                                    </span>
+                                </label>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             className="btn btn-primary btn-lg"
                             style={{ width: '100%' }}
-                            disabled={loading || !importFile || !importPassword || !importHandle || !acceptedCompliance}
+                            disabled={loading || !importFile || !importPassword || !importHandle || !acceptedCompliance || (nodeInfo.isNsfw && !importAgeVerified)}
                         >
                             {loading ? 'Importing...' : 'Import Account'}
                         </button>

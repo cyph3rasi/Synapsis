@@ -43,6 +43,10 @@ export function AccentColorProvider({ children }: { children: ReactNode }) {
                     setAccentColor(data.accentColor);
                     applyAccentColor(data.accentColor);
                 }
+                // Update page title if node has a custom name
+                if (data?.name && data.name !== 'Synapsis') {
+                    document.title = data.name;
+                }
             })
             .catch(() => {});
     }, []);

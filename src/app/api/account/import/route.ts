@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users, posts, media, follows } from '@/db';
+import { db, users, posts, media, follows, nodes } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { v4 as uuid } from 'uuid';
@@ -190,6 +190,20 @@ export async function POST(req: NextRequest) {
             migratedAt: new Date(),
             postsCount: importPosts.length,
         }).returning();
+
+        // Check if this is an NSFW node and auto-enable NSFW settings
+        const node = await db.query.nodes.findFirst({
+            where: eq(nodes.domain, nodeDomain),
+        });
+
+        if (node?.isNsfw) {
+            await db.update(users)
+                .set({ 
+                    nsfwEnabled: true,
+                    isNsfw: true 
+                })
+                .where(eq(users.id, newUser.id));
+        }
 
         // Import posts
         let importedPosts = 0;

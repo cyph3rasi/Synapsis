@@ -7,8 +7,8 @@ import { z } from 'zod';
 const updateProfileSchema = z.object({
     displayName: z.string().min(1).max(50).optional(),
     bio: z.string().max(160).optional().nullable(),
-    avatarUrl: z.string().url().optional().nullable(),
-    headerUrl: z.string().url().optional().nullable(),
+    avatarUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
+    headerUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
     website: z.string().url().or(z.string().length(0)).optional().nullable(),
 });
 

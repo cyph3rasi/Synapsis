@@ -26,6 +26,7 @@ export interface MediaItem {
     id: string;
     url: string;
     altText?: string | null;
+    mimeType?: string | null;
 }
 
 export interface Attachment {
