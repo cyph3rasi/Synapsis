@@ -34,7 +34,8 @@ function extractSwarmPostId(apId: string): string | null {
 export async function POST(request: Request, context: RouteContext) {
     try {
         const user = await requireAuth();
-        const { id: postId } = await context.params;
+        const { id: rawId } = await context.params;
+        const postId = decodeURIComponent(rawId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (user.isSuspended || user.isSilenced) {
@@ -229,7 +230,8 @@ export async function POST(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
     try {
         const user = await requireAuth();
-        const { id: postId } = await context.params;
+        const { id: rawId } = await context.params;
+        const postId = decodeURIComponent(rawId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (user.isSuspended || user.isSilenced) {

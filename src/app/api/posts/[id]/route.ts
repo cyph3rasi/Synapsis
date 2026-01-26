@@ -8,7 +8,9 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
+        const { id: rawId } = await params;
+        // Decode URL-encoded characters (e.g., %3A -> :)
+        const id = decodeURIComponent(rawId);
 
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
