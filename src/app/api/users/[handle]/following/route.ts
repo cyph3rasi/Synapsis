@@ -4,12 +4,53 @@ import { eq } from 'drizzle-orm';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
+/**
+ * Fetch following list from a remote swarm node
+ */
+const fetchSwarmFollowing = async (handle: string, domain: string, limit: number) => {
+    try {
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const url = `${protocol}://${domain}/api/swarm/users/${handle}/following?limit=${limit}`;
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+};
+
 export async function GET(request: Request, context: RouteContext) {
     try {
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const { searchParams } = new URL(request.url);
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
+
+        // Check if this is a remote user
+        const [remoteHandle, remoteDomain] = cleanHandle.split('@');
+        
+        if (remoteDomain) {
+            // Fetch from remote swarm node
+            const swarmData = await fetchSwarmFollowing(remoteHandle, remoteDomain, limit);
+            if (swarmData?.following) {
+                // Transform to include full handles for local users on that node
+                const following = swarmData.following.map((f: any) => ({
+                    id: f.isRemote ? f.handle : `${f.handle}@${remoteDomain}`,
+                    handle: f.isRemote ? f.handle : `${f.handle}@${remoteDomain}`,
+                    displayName: f.displayName,
+                    avatarUrl: f.avatarUrl,
+                    bio: f.bio,
+                    isRemote: true,
+                    isBot: f.isBot,
+                }));
+                return NextResponse.json({ following, nextCursor: null });
+            }
+            // If swarm fetch fails, return empty (could add ActivityPub fallback later)
+            return NextResponse.json({ following: [], nextCursor: null });
+        }
 
         // Return empty if no database
         if (!db) {
