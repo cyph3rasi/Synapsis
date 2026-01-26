@@ -94,6 +94,26 @@ const parseRemoteHandle = (handle: string) => {
     return null;
 };
 
+/**
+ * Fetch remote user posts via Swarm API (preferred for Synapsis nodes)
+ */
+const fetchSwarmUserPosts = async (handle: string, domain: string, limit: number) => {
+    try {
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const url = `${protocol}://${domain}/api/swarm/users/${handle}?limit=${limit}`;
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.profile || !data.posts) return null;
+        return data;
+    } catch {
+        return null;
+    }
+};
+
 const fetchOutboxItems = async (outboxUrl: string, limit: number) => {
     const res = await fetch(outboxUrl, {
         headers: {
@@ -133,6 +153,41 @@ export async function GET(request: Request, context: RouteContext) {
             if (!remote) {
                 return NextResponse.json({ posts: [], nextCursor: null });
             }
+
+            // Try Swarm API first (for Synapsis nodes)
+            const swarmData = await fetchSwarmUserPosts(remote.handle, remote.domain, limit);
+            if (swarmData?.posts) {
+                const profile = swarmData.profile;
+                const authorHandle = `${profile.handle}@${remote.domain}`;
+                const author = {
+                    id: `swarm:${remote.domain}:${profile.handle}`,
+                    handle: authorHandle,
+                    displayName: profile.displayName || profile.handle,
+                    avatarUrl: profile.avatarUrl,
+                };
+                
+                const posts = swarmData.posts.map((post: any) => ({
+                    id: post.id,
+                    content: post.content,
+                    createdAt: post.createdAt,
+                    likesCount: post.likesCount || 0,
+                    repostsCount: post.repostsCount || 0,
+                    repliesCount: post.repliesCount || 0,
+                    author,
+                    media: post.media || [],
+                    linkPreviewUrl: post.linkPreviewUrl || null,
+                    linkPreviewTitle: post.linkPreviewTitle || null,
+                    linkPreviewDescription: post.linkPreviewDescription || null,
+                    linkPreviewImage: post.linkPreviewImage || null,
+                    isSwarm: true,
+                    nodeDomain: remote.domain,
+                    originalPostId: post.id,
+                }));
+
+                return NextResponse.json({ posts, nextCursor: null });
+            }
+
+            // Fall back to ActivityPub for non-Synapsis nodes
             const remoteProfile = await resolveRemoteUser(remote.handle, remote.domain);
             if (!remoteProfile?.outbox) {
                 return NextResponse.json({ posts: [] });
@@ -209,6 +264,41 @@ export async function GET(request: Request, context: RouteContext) {
             if (!remote) {
                 return NextResponse.json({ error: 'User not found' }, { status: 404 });
             }
+
+            // Try Swarm API first (for Synapsis nodes)
+            const swarmData = await fetchSwarmUserPosts(remote.handle, remote.domain, limit);
+            if (swarmData?.posts) {
+                const profile = swarmData.profile;
+                const authorHandle = `${profile.handle}@${remote.domain}`;
+                const author = {
+                    id: `swarm:${remote.domain}:${profile.handle}`,
+                    handle: authorHandle,
+                    displayName: profile.displayName || profile.handle,
+                    avatarUrl: profile.avatarUrl,
+                };
+                
+                const posts = swarmData.posts.map((post: any) => ({
+                    id: post.id,
+                    content: post.content,
+                    createdAt: post.createdAt,
+                    likesCount: post.likesCount || 0,
+                    repostsCount: post.repostsCount || 0,
+                    repliesCount: post.repliesCount || 0,
+                    author,
+                    media: post.media || [],
+                    linkPreviewUrl: post.linkPreviewUrl || null,
+                    linkPreviewTitle: post.linkPreviewTitle || null,
+                    linkPreviewDescription: post.linkPreviewDescription || null,
+                    linkPreviewImage: post.linkPreviewImage || null,
+                    isSwarm: true,
+                    nodeDomain: remote.domain,
+                    originalPostId: post.id,
+                }));
+
+                return NextResponse.json({ posts, nextCursor: null });
+            }
+
+            // Fall back to ActivityPub for non-Synapsis nodes
             const remoteProfile = await resolveRemoteUser(remote.handle, remote.domain);
             if (!remoteProfile?.outbox) {
                 return NextResponse.json({ posts: [] });

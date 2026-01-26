@@ -331,9 +331,20 @@ export default function ProfilePage() {
                 background: 'var(--background)',
                 zIndex: 10,
             }}>
-                <Link href="/" style={{ color: 'var(--foreground)' }}>
+                <button 
+                    onClick={() => router.back()} 
+                    style={{ 
+                        color: 'var(--foreground)', 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                    }}
+                >
                     <ArrowLeftIcon />
-                </Link>
+                </button>
                 <div>
                     <h1 style={{ fontSize: '18px', fontWeight: 600 }}>{user.displayName || user.handle}</h1>
                     <p style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}>{user.postsCount} posts</p>

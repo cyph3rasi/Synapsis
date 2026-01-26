@@ -40,6 +40,26 @@ const fetchCollectionCount = async (url?: string | null) => {
     return 0;
 };
 
+/**
+ * Fetch remote user profile via Swarm API (preferred for Synapsis nodes)
+ */
+const fetchSwarmProfile = async (handle: string, domain: string) => {
+    try {
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const url = `${protocol}://${domain}/api/swarm/users/${handle}`;
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.profile) return null;
+        return data;
+    } catch {
+        return null;
+    }
+};
+
 export async function GET(request: Request, context: RouteContext) {
     try {
         const { handle } = await context.params;
@@ -70,6 +90,32 @@ export async function GET(request: Request, context: RouteContext) {
 
         if (!user) {
             if (remoteHandle && remoteDomain) {
+                // Try Swarm API first (for Synapsis nodes)
+                const swarmData = await fetchSwarmProfile(remoteHandle, remoteDomain);
+                if (swarmData?.profile) {
+                    const profile = swarmData.profile;
+                    return NextResponse.json({
+                        user: {
+                            id: `swarm:${remoteDomain}:${profile.handle}`,
+                            handle: `${profile.handle}@${remoteDomain}`,
+                            displayName: profile.displayName,
+                            bio: profile.bio || null,
+                            avatarUrl: profile.avatarUrl || null,
+                            headerUrl: profile.headerUrl || null,
+                            followersCount: profile.followersCount,
+                            followingCount: profile.followingCount,
+                            postsCount: profile.postsCount,
+                            website: profile.website || null,
+                            createdAt: profile.createdAt,
+                            isRemote: true,
+                            isSwarm: true,
+                            nodeDomain: remoteDomain,
+                            isBot: profile.isBot || false,
+                        }
+                    });
+                }
+
+                // Fall back to ActivityPub for non-Synapsis nodes
                 const remoteProfile = await resolveRemoteUser(remoteHandle, remoteDomain);
                 if (remoteProfile) {
                     const displayName = sanitizeText(remoteProfile.name) || sanitizeText(remoteProfile.preferredUsername) || remoteHandle;
