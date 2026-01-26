@@ -11,17 +11,17 @@ import { formatFullHandle } from '@/lib/utils/handle';
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
     const pathname = usePathname();
-    const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+    const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
 
     useEffect(() => {
         fetch('/api/node')
             .then(res => res.json())
             .then(data => {
-                if (data.logoUrl) {
-                    setCustomLogoUrl(data.logoUrl);
-                }
+                setCustomLogoUrl(data.logoUrl || null);
             })
-            .catch(() => {});
+            .catch(() => {
+                setCustomLogoUrl(null);
+            });
     }, []);
 
     // Home is exact match
@@ -29,8 +29,8 @@ export function Sidebar() {
 
     return (
         <aside className="sidebar">
-            <Link href="/" className="logo">
-                {customLogoUrl ? (
+            <Link href="/" className="logo" style={{ minHeight: '42px' }}>
+                {customLogoUrl === undefined ? null : customLogoUrl ? (
                     <img src={customLogoUrl} alt="Logo" style={{ maxWidth: '200px', maxHeight: '50px', objectFit: 'contain' }} />
                 ) : (
                     <Image src="/logotext.png" alt="Synapsis" width={185} height={42} priority />
@@ -45,10 +45,12 @@ export function Sidebar() {
                     <SearchIcon />
                     <span>Explore</span>
                 </Link>
-                <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`}>
-                    <BellIcon />
-                    <span>Notifications</span>
-                </Link>
+                {user && (
+                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`}>
+                        <BellIcon />
+                        <span>Notifications</span>
+                    </Link>
+                )}
                 {user && (
                     <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>
                         <BotIcon />

@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { PostCard } from '@/components/PostCard';
 import { Compose } from '@/components/Compose';
 import { Post } from '@/lib/types';
+import { EyeOff } from 'lucide-react';
 
 interface FeedMeta {
   score: number;
@@ -23,6 +24,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [replyingTo, setReplyingTo] = useState<Post | null>(null);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
+  const [isNsfwNode, setIsNsfwNode] = useState(false);
   const [feedMeta, setFeedMeta] = useState<{
     algorithm: string;
     windowHours: number;
@@ -34,6 +36,16 @@ export default function Home() {
       selfBoost: number;
     };
   } | null>(null);
+
+  // Fetch node info to check if NSFW
+  useEffect(() => {
+    fetch('/api/node')
+      .then(res => res.json())
+      .then(data => {
+        setIsNsfwNode(data.isNsfw || false);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadFeed = async (type: 'latest' | 'curated') => {
     setLoading(true);
@@ -145,7 +157,21 @@ export default function Home() {
         </div>
       )}
 
-      {loading ? (
+      {/* NSFW node gate for unauthenticated users */}
+      {!user && isNsfwNode ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+          <EyeOff size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+          <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--foreground-secondary)', marginBottom: '8px' }}>
+            Adult Content
+          </p>
+          <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto 20px' }}>
+            This node contains adult or sensitive content. You must be 18 or older and signed in to view posts.
+          </p>
+          <Link href="/login" className="btn btn-primary">
+            Sign In to Continue
+          </Link>
+        </div>
+      ) : loading ? (
         <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
           Loading...
         </div>

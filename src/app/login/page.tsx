@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { SynapsisLogo } from '@/components/Icons';
+import Image from 'next/image';
 import { TriangleAlert } from 'lucide-react';
 
 export default function LoginPage() {
@@ -14,7 +14,8 @@ export default function LoginPage() {
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [nodeInfo, setNodeInfo] = useState({ name: '', description: '' });
+    const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
+    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string }>({ name: '', description: '' });
     const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
 
     // Import specific state
@@ -31,10 +32,14 @@ export default function LoginPage() {
             .then(data => {
                 setNodeInfo({
                     name: data.name || '',
-                    description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.'
+                    description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.',
+                    logoUrl: data.logoUrl || undefined
                 });
+                setNodeInfoLoaded(true);
             })
-            .catch(() => { });
+            .catch(() => {
+                setNodeInfoLoaded(true);
+            });
     }, []);
 
     // Handle availability check
@@ -156,19 +161,38 @@ export default function LoginPage() {
         }}>
             <div style={{ width: '100%', maxWidth: '400px' }}>
                 {/* Logo */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
-                    <div className="logo" style={{ marginBottom: '4px', fontSize: '32px' }}>
-                        <SynapsisLogo />
-                        <span>Synapsis</span>
-                    </div>
-                    {nodeInfo.name && nodeInfo.name !== 'Synapsis' && (
-                        <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--foreground)', marginBottom: '8px' }}>
-                            {nodeInfo.name}
-                        </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px', minHeight: '120px' }}>
+                    {nodeInfoLoaded && (
+                        <>
+                            {nodeInfo.logoUrl ? (
+                                <Image
+                                    src={nodeInfo.logoUrl}
+                                    alt={nodeInfo.name || 'Node logo'}
+                                    width={200}
+                                    height={60}
+                                    style={{ marginBottom: '16px', objectFit: 'contain', maxHeight: '60px', width: 'auto' }}
+                                    unoptimized
+                                />
+                            ) : (
+                                <Image
+                                    src="/logotext.png"
+                                    alt="Synapsis"
+                                    width={200}
+                                    height={48}
+                                    style={{ marginBottom: '16px', objectFit: 'contain' }}
+                                    priority
+                                />
+                            )}
+                            {nodeInfo.name && nodeInfo.name !== 'Synapsis' && !nodeInfo.logoUrl && (
+                                <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--foreground)', marginBottom: '8px' }}>
+                                    {nodeInfo.name}
+                                </div>
+                            )}
+                            <p style={{ color: 'var(--foreground-secondary)', marginTop: '0', textAlign: 'center' }}>
+                                {nodeInfo.description}
+                            </p>
+                        </>
                     )}
-                    <p style={{ color: 'var(--foreground-secondary)', marginTop: '0', textAlign: 'center' }}>
-                        {nodeInfo.description}
-                    </p>
                 </div>
 
                 {/* Mode Switcher */}
