@@ -19,7 +19,7 @@ const announcementSchema = z.object({
   softwareVersion: z.string().optional(),
   userCount: z.number().optional(),
   postCount: z.number().optional(),
-  capabilities: z.array(z.enum(['handles', 'gossip', 'relay', 'search'])).optional(),
+  capabilities: z.array(z.enum(['handles', 'gossip', 'relay', 'search', 'interactions'])).optional(),
   timestamp: z.string().optional(),
   signature: z.string().optional(),
 });

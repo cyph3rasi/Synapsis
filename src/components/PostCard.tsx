@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import BlurredVideo from '@/components/BlurredVideo';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { formatFullHandle, NODE_DOMAIN } from '@/lib/utils/handle';
 
 // Component for link preview image that hides on error
 function LinkPreviewImage({ src, alt }: { src: string; alt: string }) {
@@ -250,8 +250,8 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         if (post.author.handle.includes('@')) {
             return post.author.handle;
         }
-        // If this is a swarm post, append the node domain
-        if (post.nodeDomain) {
+        // If this is a swarm post from a DIFFERENT node, append the node domain
+        if (post.nodeDomain && post.nodeDomain !== NODE_DOMAIN) {
             return `${post.author.handle}@${post.nodeDomain}`;
         }
         // Local user
