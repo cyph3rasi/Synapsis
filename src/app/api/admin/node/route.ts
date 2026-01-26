@@ -27,6 +27,8 @@ export async function PATCH(req: NextRequest) {
                 faviconUrl: data.faviconUrl,
                 accentColor: data.accentColor,
                 isNsfw: data.isNsfw ?? false,
+                turnstileSiteKey: data.turnstileSiteKey,
+                turnstileSecretKey: data.turnstileSecretKey,
             }).returning();
         } else {
             [node] = await db.update(nodes)
@@ -40,6 +42,8 @@ export async function PATCH(req: NextRequest) {
                     faviconUrl: data.faviconUrl,
                     accentColor: data.accentColor,
                     isNsfw: data.isNsfw ?? node.isNsfw,
+                    turnstileSiteKey: data.turnstileSiteKey !== undefined ? data.turnstileSiteKey : node.turnstileSiteKey,
+                    turnstileSecretKey: data.turnstileSecretKey !== undefined ? data.turnstileSecretKey : node.turnstileSecretKey,
                     updatedAt: new Date(),
                 })
                 .where(eq(nodes.id, node.id))

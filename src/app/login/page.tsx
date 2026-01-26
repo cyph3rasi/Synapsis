@@ -1,9 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { TriangleAlert } from 'lucide-react';
+
+declare global {
+    interface Window {
+        turnstile?: {
+            render: (element: string | HTMLElement, options: {
+                sitekey: string;
+                callback?: (token: string) => void;
+                'error-callback'?: () => void;
+                'expired-callback'?: () => void;
+            }) => string;
+            reset: (widgetId: string) => void;
+            remove: (widgetId: string) => void;
+        };
+    }
+}
 
 export default function LoginPage() {
     const [mode, setMode] = useState<'login' | 'register' | 'import'>('login');
@@ -15,9 +30,13 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
-    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string; isNsfw?: boolean }>({ name: '', description: '' });
+    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string; isNsfw?: boolean; turnstileSiteKey?: string | null }>({ name: '', description: '' });
     const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
     const [ageVerified, setAgeVerified] = useState(false);
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+    const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+    const turnstileRef = useRef<HTMLDivElement>(null);
+    const turnstileWidgetId = useRef<string | null>(null);
 
     // Import specific state
     const [importFile, setImportFile] = useState<File | null>(null);
@@ -36,7 +55,8 @@ export default function LoginPage() {
                     name: data.name || '',
                     description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.',
                     logoUrl: data.logoUrl || undefined,
-                    isNsfw: data.isNsfw || false
+                    isNsfw: data.isNsfw || false,
+                    turnstileSiteKey: data.turnstileSiteKey || null,
                 });
                 // Update page title
                 if (data.name && data.name !== 'Synapsis') {
@@ -48,6 +68,62 @@ export default function LoginPage() {
                 setNodeInfoLoaded(true);
             });
     }, []);
+
+    // Load Turnstile script if site key is available
+    useEffect(() => {
+        if (!nodeInfo.turnstileSiteKey) return;
+
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => setTurnstileLoaded(true);
+        document.head.appendChild(script);
+
+        return () => {
+            document.head.removeChild(script);
+        };
+    }, [nodeInfo.turnstileSiteKey]);
+
+    // Render Turnstile widget when ready
+    useEffect(() => {
+        if (!turnstileLoaded || !nodeInfo.turnstileSiteKey || !turnstileRef.current || mode === 'import') return;
+
+        // Clean up previous widget
+        if (turnstileWidgetId.current && window.turnstile) {
+            try {
+                window.turnstile.remove(turnstileWidgetId.current);
+            } catch (e) {
+                // Ignore errors
+            }
+        }
+
+        // Render new widget
+        if (window.turnstile) {
+            turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+                sitekey: nodeInfo.turnstileSiteKey,
+                callback: (token: string) => {
+                    setTurnstileToken(token);
+                },
+                'error-callback': () => {
+                    setTurnstileToken(null);
+                },
+                'expired-callback': () => {
+                    setTurnstileToken(null);
+                },
+            });
+        }
+
+        return () => {
+            if (turnstileWidgetId.current && window.turnstile) {
+                try {
+                    window.turnstile.remove(turnstileWidgetId.current);
+                } catch (e) {
+                    // Ignore errors
+                }
+            }
+        };
+    }, [turnstileLoaded, nodeInfo.turnstileSiteKey, mode]);
 
     // Handle availability check
     useEffect(() => {
@@ -139,13 +215,19 @@ export default function LoginPage() {
             return;
         }
 
+        // Check if Turnstile is required but not completed
+        if (nodeInfo.turnstileSiteKey && !turnstileToken) {
+            setError('Please complete the verification challenge');
+            return;
+        }
+
         setLoading(true);
 
         try {
             const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
             const body = mode === 'login'
-                ? { email, password }
-                : { email, password, handle, displayName };
+                ? { email, password, turnstileToken }
+                : { email, password, handle, displayName, turnstileToken };
 
             const res = await fetch(endpoint, {
                 method: 'POST',
@@ -163,6 +245,11 @@ export default function LoginPage() {
             window.location.href = '/';
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
+            // Reset Turnstile on error
+            if (turnstileWidgetId.current && window.turnstile) {
+                window.turnstile.reset(turnstileWidgetId.current);
+                setTurnstileToken(null);
+            }
         } finally {
             setLoading(false);
         }
@@ -421,11 +508,17 @@ export default function LoginPage() {
                             </div>
                         )}
 
+                        {nodeInfo.turnstileSiteKey && (
+                            <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+                                <div ref={turnstileRef}></div>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             className="btn btn-primary btn-lg"
                             style={{ width: '100%' }}
-                            disabled={loading}
+                            disabled={loading || (nodeInfo.turnstileSiteKey && !turnstileToken)}
                         >
                             {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
                         </button>

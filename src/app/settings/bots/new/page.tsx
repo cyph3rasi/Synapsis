@@ -41,7 +41,7 @@ export default function NewBotPage() {
   const [step, setStep] = useState<'identity' | 'personality' | 'sources' | 'schedule'>('identity');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     handle: '',
@@ -53,8 +53,8 @@ export default function NewBotPage() {
     llmModel: 'gpt-4',
     llmApiKey: '',
     autonomousMode: false,
-    postingFrequency: 'hourly',
-    customIntervalMinutes: 60,
+    postingFrequency: 'every_4_hours',
+    customIntervalMinutes: 240,
   });
 
   const [sources, setSources] = useState<ContentSource[]>([]);
@@ -77,11 +77,11 @@ export default function NewBotPage() {
           if (data.bots && data.bots.length > 0) {
             // Get the most recently created bot
             const sortedBots = [...data.bots].sort(
-              (a: { createdAt: string }, b: { createdAt: string }) => 
+              (a: { createdAt: string }, b: { createdAt: string }) =>
                 new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
             const lastBot = sortedBots[0];
-            
+
             // Pre-fill LLM settings (but not API key for security)
             setFormData(prev => ({
               ...prev,
@@ -95,7 +95,7 @@ export default function NewBotPage() {
         console.error('Failed to fetch previous bot settings:', err);
       }
     };
-    
+
     fetchPreviousBotSettings();
   }, []);
 
@@ -139,9 +139,9 @@ export default function NewBotPage() {
       if (!newSource.url) return;
       setSources([...sources, { ...newSource }]);
     }
-    setNewSource({ 
-      type: 'rss', 
-      url: '', 
+    setNewSource({
+      type: 'rss',
+      url: '',
       braveQuery: '',
       braveFreshness: 'pw',
       newsProvider: 'newsapi',
@@ -160,13 +160,11 @@ export default function NewBotPage() {
 
     try {
       // Calculate interval minutes based on frequency
-      let intervalMinutes = 60;
-      if (formData.postingFrequency === 'hourly') intervalMinutes = 60;
-      else if (formData.postingFrequency === 'every_2_hours') intervalMinutes = 120;
+      let intervalMinutes = 240;
+      if (formData.postingFrequency === 'every_2_hours') intervalMinutes = 120;
       else if (formData.postingFrequency === 'every_4_hours') intervalMinutes = 240;
       else if (formData.postingFrequency === 'every_6_hours') intervalMinutes = 360;
       else if (formData.postingFrequency === 'daily') intervalMinutes = 1440;
-      else if (formData.postingFrequency === 'custom') intervalMinutes = formData.customIntervalMinutes;
 
       const response = await fetch('/api/bots', {
         method: 'POST',
@@ -195,7 +193,7 @@ export default function NewBotPage() {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // If sources were added, create them after bot creation
         if (sources.length > 0) {
           for (const source of sources) {
@@ -205,7 +203,7 @@ export default function NewBotPage() {
               subreddit: source.subreddit,
               apiKey: source.apiKey,
             };
-            
+
             // Add config for brave_news
             if (source.type === 'brave_news' && source.braveQuery) {
               sourcePayload.braveNewsConfig = {
@@ -214,7 +212,7 @@ export default function NewBotPage() {
                 country: source.braveCountry,
               };
             }
-            
+
             // Add config for news_api
             if (source.type === 'news_api' && source.newsQuery) {
               sourcePayload.newsApiConfig = {
@@ -225,14 +223,14 @@ export default function NewBotPage() {
                 language: source.newsLanguage,
               };
             }
-            
+
             await fetch(`/api/bots/${data.bot.id}/sources`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(sourcePayload),
             });
           }
-          
+
           // Trigger the first post to establish a reference point for the schedule
           // This runs in the background - we don't wait for it
           fetch(`/api/bots/${data.bot.id}/post`, {
@@ -243,7 +241,7 @@ export default function NewBotPage() {
             // Silently fail - the bot will post on the next scheduled run
           });
         }
-        
+
         router.push(`/settings/bots/${data.bot.id}`);
       } else {
         const data = await response.json();
@@ -763,13 +761,13 @@ export default function NewBotPage() {
                     <div key={index} className="card" style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 500 }}>
-                          {source.type === 'brave_news' ? 'BRAVE NEWS' : 
-                           source.type === 'youtube' ? 'YOUTUBE' :
-                           source.type.toUpperCase()} - {
+                          {source.type === 'brave_news' ? 'BRAVE NEWS' :
+                            source.type === 'youtube' ? 'YOUTUBE' :
+                              source.type.toUpperCase()} - {
                             source.type === 'brave_news' ? source.braveQuery :
-                            source.type === 'news_api' ? source.newsQuery :
-                            source.type === 'youtube' ? (source.youtubeChannelId || source.youtubePlaylistId) :
-                            source.subreddit || new URL(source.url).hostname
+                              source.type === 'news_api' ? source.newsQuery :
+                                source.type === 'youtube' ? (source.youtubeChannelId || source.youtubePlaylistId) :
+                                  source.subreddit || new URL(source.url).hostname
                           }
                         </div>
                       </div>
@@ -819,36 +817,19 @@ export default function NewBotPage() {
                 className="input"
                 disabled={!formData.autonomousMode}
               >
-                <option value="hourly">Every Hour</option>
                 <option value="every_2_hours">Every 2 Hours</option>
                 <option value="every_4_hours">Every 4 Hours</option>
                 <option value="every_6_hours">Every 6 Hours</option>
                 <option value="daily">Once Daily</option>
-                <option value="custom">Custom Interval</option>
               </select>
             </div>
 
-            {formData.postingFrequency === 'custom' && (
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
-                  Custom Interval (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={formData.customIntervalMinutes}
-                  onChange={(e) => setFormData({ ...formData, customIntervalMinutes: parseInt(e.target.value) })}
-                  className="input"
-                  min="15"
-                  placeholder="60"
-                  disabled={!formData.autonomousMode}
-                />
-              </div>
-            )}
+
 
             <div className="card" style={{ padding: '16px', background: 'var(--background-tertiary)' }}>
               <p style={{ fontSize: '13px', color: 'var(--foreground-secondary)' }}>
-                {formData.autonomousMode 
-                  ? `Your bot will automatically post ${formData.postingFrequency === 'custom' ? `every ${formData.customIntervalMinutes} minutes` : formData.postingFrequency.replace('_', ' ')}.`
+                {formData.autonomousMode
+                  ? `Your bot will automatically post ${formData.postingFrequency.replace('_', ' ')}.`
                   : 'Autonomous mode is disabled. You can manually trigger posts from the bot dashboard.'}
               </p>
             </div>

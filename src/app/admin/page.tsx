@@ -72,6 +72,8 @@ export default function AdminPage() {
         faviconUrl: '',
         accentColor: '#FFFFFF',
         isNsfw: false,
+        turnstileSiteKey: '',
+        turnstileSecretKey: '',
     });
     const [savingSettings, setSavingSettings] = useState(false);
     const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -142,6 +144,8 @@ export default function AdminPage() {
                 faviconUrl: data.faviconUrl || '',
                 accentColor: data.accentColor || '#FFFFFF',
                 isNsfw: data.isNsfw || false,
+                turnstileSiteKey: data.turnstileSiteKey || '',
+                turnstileSecretKey: data.turnstileSecretKey || '',
             });
         } catch {
             // error
@@ -806,6 +810,71 @@ export default function AdminPage() {
                                     >
                                         {nodeSettings.isNsfw ? 'Remove NSFW' : 'Mark as NSFW'}
                                     </button>
+                                </div>
+                            </div>
+
+                            <div style={{ 
+                                padding: '16px', 
+                                background: 'var(--background-secondary)', 
+                                borderRadius: '8px',
+                                border: '1px solid var(--border)',
+                            }}>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px', display: 'block' }}>
+                                        Cloudflare Turnstile (Bot Protection)
+                                    </label>
+                                    <p style={{ fontSize: '12px', color: 'var(--foreground-secondary)', marginBottom: '12px' }}>
+                                        Add Cloudflare Turnstile to protect registration and login from bots. Get your keys from the{' '}
+                                        <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                                            Cloudflare Dashboard
+                                        </a>.
+                                    </p>
+                                </div>
+                                <div style={{ display: 'grid', gap: '12px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
+                                            Site Key
+                                        </label>
+                                        <input
+                                            className="input"
+                                            type="text"
+                                            value={nodeSettings.turnstileSiteKey}
+                                            onChange={e => setNodeSettings({ ...nodeSettings, turnstileSiteKey: e.target.value })}
+                                            placeholder="0x4AAAAAAA..."
+                                            style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                            Public key shown to users
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>
+                                            Secret Key
+                                        </label>
+                                        <input
+                                            className="input"
+                                            type="password"
+                                            value={nodeSettings.turnstileSecretKey}
+                                            onChange={e => setNodeSettings({ ...nodeSettings, turnstileSecretKey: e.target.value })}
+                                            placeholder="0x4AAAAAAA..."
+                                            style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                                        />
+                                        <p style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                            Secret key for server-side verification
+                                        </p>
+                                    </div>
+                                    {nodeSettings.turnstileSiteKey && nodeSettings.turnstileSecretKey && (
+                                        <div style={{ 
+                                            padding: '8px 12px', 
+                                            background: 'rgba(34, 197, 94, 0.1)', 
+                                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            color: 'rgb(34, 197, 94)',
+                                        }}>
+                                            ✓ Turnstile is enabled and will be shown on login/registration
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

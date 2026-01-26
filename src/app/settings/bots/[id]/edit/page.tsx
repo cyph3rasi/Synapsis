@@ -41,14 +41,14 @@ export default function EditBotPage() {
   const router = useRouter();
   const params = useParams();
   const botId = params.id as string;
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState<'identity' | 'personality' | 'sources' | 'schedule'>('identity');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: '',
     handle: '',
@@ -60,8 +60,9 @@ export default function EditBotPage() {
     llmModel: 'gpt-4',
     llmApiKey: '',
     autonomousMode: false,
-    postingFrequency: 'hourly',
-    customIntervalMinutes: 60,
+
+    postingFrequency: 'every_4_hours',
+    customIntervalMinutes: 240,
   });
 
   const [sources, setSources] = useState<ContentSource[]>([]);
@@ -95,28 +96,28 @@ export default function EditBotPage() {
 
       const botData = await botRes.json();
       const bot = botData.bot;
-      
+
       const personalityConfig = typeof bot.personalityConfig === 'string'
         ? JSON.parse(bot.personalityConfig)
         : bot.personalityConfig || {};
-      
+
       const scheduleConfig = typeof bot.scheduleConfig === 'string'
         ? JSON.parse(bot.scheduleConfig)
         : bot.scheduleConfig || {};
 
       // Determine posting frequency from interval
-      let postingFrequency = 'hourly';
-      let customIntervalMinutes = 60;
+      let postingFrequency = 'every_4_hours';
+      let customIntervalMinutes = 240;
       if (scheduleConfig?.intervalMinutes) {
         const interval = scheduleConfig.intervalMinutes;
-        if (interval === 60) postingFrequency = 'hourly';
-        else if (interval === 120) postingFrequency = 'every_2_hours';
+        if (interval === 120) postingFrequency = 'every_2_hours';
         else if (interval === 240) postingFrequency = 'every_4_hours';
         else if (interval === 360) postingFrequency = 'every_6_hours';
         else if (interval === 1440) postingFrequency = 'daily';
         else {
-          postingFrequency = 'custom';
-          customIntervalMinutes = interval;
+          // If it was hourly (60) or custom, default to every_4_hours (240)
+          postingFrequency = 'every_4_hours';
+          customIntervalMinutes = 240;
         }
       }
 
@@ -187,9 +188,9 @@ export default function EditBotPage() {
       if (!newSource.url) return;
       setSources([...sources, { ...newSource }]);
     }
-    setNewSource({ 
-      type: 'rss', 
-      url: '', 
+    setNewSource({
+      type: 'rss',
+      url: '',
       fetchIntervalMinutes: 30,
       braveQuery: '',
       braveFreshness: 'pw',
@@ -213,13 +214,11 @@ export default function EditBotPage() {
 
     try {
       // Calculate interval minutes
-      let intervalMinutes = 60;
-      if (formData.postingFrequency === 'hourly') intervalMinutes = 60;
-      else if (formData.postingFrequency === 'every_2_hours') intervalMinutes = 120;
+      let intervalMinutes = 240;
+      if (formData.postingFrequency === 'every_2_hours') intervalMinutes = 120;
       else if (formData.postingFrequency === 'every_4_hours') intervalMinutes = 240;
       else if (formData.postingFrequency === 'every_6_hours') intervalMinutes = 360;
       else if (formData.postingFrequency === 'daily') intervalMinutes = 1440;
-      else if (formData.postingFrequency === 'custom') intervalMinutes = formData.customIntervalMinutes;
 
       // Update bot
       const updatePayload: Record<string, unknown> = {
@@ -271,7 +270,7 @@ export default function EditBotPage() {
             subreddit: source.subreddit,
             apiKey: source.apiKey,
           };
-          
+
           // Add config for brave_news
           if (source.type === 'brave_news' && source.braveQuery) {
             sourcePayload.braveNewsConfig = {
@@ -280,7 +279,7 @@ export default function EditBotPage() {
               country: source.braveCountry,
             };
           }
-          
+
           // Add config for news_api
           if (source.type === 'news_api' && source.newsQuery) {
             sourcePayload.newsApiConfig = {
@@ -291,7 +290,7 @@ export default function EditBotPage() {
               language: source.newsLanguage,
             };
           }
-          
+
           await fetch(`/api/bots/${botId}/sources`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -826,14 +825,14 @@ export default function EditBotPage() {
                     } catch {
                       displayName = source.url || 'Unknown';
                     }
-                    
+
                     return (
                       <div key={source.id || index} className="card" style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontSize: '13px', fontWeight: 500 }}>
-                            {source.type === 'brave_news' ? 'BRAVE NEWS' : 
-                             source.type === 'youtube' ? 'YOUTUBE' :
-                             source.type.toUpperCase()} - {displayName}
+                            {source.type === 'brave_news' ? 'BRAVE NEWS' :
+                              source.type === 'youtube' ? 'YOUTUBE' :
+                                source.type.toUpperCase()} - {displayName}
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
                             {source.id ? 'Existing source' : 'New source (will be added)'}
@@ -886,36 +885,19 @@ export default function EditBotPage() {
                 className="input"
                 disabled={!formData.autonomousMode}
               >
-                <option value="hourly">Every Hour</option>
                 <option value="every_2_hours">Every 2 Hours</option>
                 <option value="every_4_hours">Every 4 Hours</option>
                 <option value="every_6_hours">Every 6 Hours</option>
                 <option value="daily">Once Daily</option>
-                <option value="custom">Custom Interval</option>
               </select>
             </div>
 
-            {formData.postingFrequency === 'custom' && (
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>
-                  Custom Interval (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={formData.customIntervalMinutes}
-                  onChange={(e) => setFormData({ ...formData, customIntervalMinutes: parseInt(e.target.value) })}
-                  className="input"
-                  min="15"
-                  placeholder="60"
-                  disabled={!formData.autonomousMode}
-                />
-              </div>
-            )}
+
 
             <div className="card" style={{ padding: '16px', background: 'var(--background-tertiary)' }}>
               <p style={{ fontSize: '13px', color: 'var(--foreground-secondary)' }}>
-                {formData.autonomousMode 
-                  ? `Your bot will automatically post ${formData.postingFrequency === 'custom' ? `every ${formData.customIntervalMinutes} minutes` : formData.postingFrequency.replace('_', ' ')}.`
+                {formData.autonomousMode
+                  ? `Your bot will automatically post ${formData.postingFrequency.replace('_', ' ')}.`
                   : 'Autonomous mode is disabled. You can manually trigger posts from the bot dashboard.'}
               </p>
             </div>

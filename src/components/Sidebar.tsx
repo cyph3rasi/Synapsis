@@ -3,16 +3,19 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
+import { LogOut } from 'lucide-react';
 
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
     const pathname = usePathname();
+    const router = useRouter();
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [loggingOut, setLoggingOut] = useState(false);
 
     useEffect(() => {
         fetch('/api/node')
@@ -47,9 +50,22 @@ export function Sidebar() {
     // Home is exact match
     const isHome = pathname === '/';
 
+    const handleLogout = async () => {
+        if (loggingOut) return;
+        
+        setLoggingOut(true);
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/explore';
+        } catch (error) {
+            console.error('Logout failed:', error);
+            setLoggingOut(false);
+        }
+    };
+
     return (
         <aside className="sidebar">
-            <Link href="/" className="logo" style={{ minHeight: '42px' }}>
+            <Link href={user ? "/" : "/explore"} className="logo" style={{ minHeight: '42px' }}>
                 {customLogoUrl === undefined ? null : customLogoUrl ? (
                     <img src={customLogoUrl} alt="Logo" style={{ maxWidth: '200px', maxHeight: '50px', objectFit: 'contain' }} />
                 ) : (
@@ -57,10 +73,12 @@ export function Sidebar() {
                 )}
             </Link>
             <nav>
-                <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`}>
-                    <HomeIcon />
-                    <span>Home</span>
-                </Link>
+                {user && (
+                    <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`}>
+                        <HomeIcon />
+                        <span>Home</span>
+                    </Link>
+                )}
                 <Link href="/explore" className={`nav-item ${pathname?.startsWith('/explore') ? 'active' : ''}`}>
                     <SearchIcon />
                     <span>Explore</span>
@@ -114,7 +132,7 @@ export function Sidebar() {
             </nav>
             {user && (
                 <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, marginBottom: '12px' }}>
                         <div className="avatar avatar-sm" style={{ flexShrink: 0 }}>
                             {user.avatarUrl ? (
                                 <img src={user.avatarUrl} alt={user.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -122,11 +140,26 @@ export function Sidebar() {
                                 (user.displayName?.charAt(0) || user.handle.charAt(0)).toUpperCase()
                             )}
                         </div>
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName}</div>
                             <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatFullHandle(user.handle)}</div>
                         </div>
                     </div>
+                    <button
+                        onClick={handleLogout}
+                        disabled={loggingOut}
+                        className="btn btn-ghost"
+                        style={{ 
+                            width: '100%', 
+                            justifyContent: 'flex-start',
+                            gap: '12px',
+                            padding: '10px 12px',
+                            fontSize: '14px',
+                        }}
+                    >
+                        <LogOut size={20} />
+                        <span>{loggingOut ? 'Signing out...' : 'Sign out'}</span>
+                    </button>
                 </div>
             )}
         </aside>

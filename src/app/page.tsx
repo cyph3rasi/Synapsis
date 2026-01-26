@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { PostCard } from '@/components/PostCard';
 import { Compose } from '@/components/Compose';
@@ -19,6 +20,7 @@ interface FeedMeta {
 }
 
 export default function Home() {
+  const router = useRouter();
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,8 +28,6 @@ export default function Home() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Post | null>(null);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
-  const [isNsfwNode, setIsNsfwNode] = useState(false);
-  const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
   const [feedMeta, setFeedMeta] = useState<{
     algorithm: string;
     windowHours: number;
@@ -42,18 +42,12 @@ export default function Home() {
   
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Fetch node info to check if NSFW
+  // Redirect unauthenticated users to explore page
   useEffect(() => {
-    fetch('/api/node')
-      .then(res => res.json())
-      .then(data => {
-        setIsNsfwNode(data.isNsfw || false);
-        setNodeInfoLoaded(true);
-      })
-      .catch(() => {
-        setNodeInfoLoaded(true);
-      });
-  }, []);
+    if (user === null) {
+      router.push('/explore');
+    }
+  }, [user, router]);
 
   const loadFeed = async (type: 'latest' | 'curated', cursor?: string | null) => {
     if (cursor) {
@@ -157,6 +151,15 @@ export default function Home() {
     setPosts(prev => prev.filter(p => p.id !== postId));
   };
 
+  // Show loading while checking auth
+  if (user === null) {
+    return (
+      <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <>
       <header style={{
@@ -187,24 +190,11 @@ export default function Home() {
         </div>
       </header>
 
-      {user && (
-        <Compose
-          onPost={handlePost}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-        />
-      )}
-
-      {!user && (
-        <div style={{ padding: '24px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
-          <p style={{ color: 'var(--foreground-secondary)', marginBottom: '16px' }}>
-            Join Synapsis to post and interact
-          </p>
-          <Link href="/login" className="btn btn-primary">
-            Login or Register
-          </Link>
-        </div>
-      )}
+      <Compose
+        onPost={handlePost}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
+      />
 
       {feedType === 'curated' && feedMeta && (
         <div className="feed-meta card">
@@ -215,22 +205,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* NSFW node gate for unauthenticated users */}
-      {!user && !nodeInfoLoaded ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
-          Loading...
-        </div>
-      ) : !user && isNsfwNode ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <EyeOff size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
-          <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--foreground-secondary)', marginBottom: '8px' }}>
-            Adult Content
-          </p>
-          <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto' }}>
-            This node contains adult or sensitive content. You must be 18 or older and signed in to view posts.
-          </p>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
           Loading...
         </div>

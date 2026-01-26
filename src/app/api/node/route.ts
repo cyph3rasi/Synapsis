@@ -38,10 +38,16 @@ export async function GET() {
                 accentColor: process.env.NEXT_PUBLIC_ACCENT_COLOR || '#FFFFFF',
                 domain,
                 admins,
+                turnstileSiteKey: null,
             });
         }
 
-        return NextResponse.json({ ...node, admins });
+        return NextResponse.json({ 
+            ...node, 
+            admins,
+            // Don't expose the secret key
+            turnstileSecretKey: undefined,
+        });
     } catch (error) {
         console.error('Node info error:', error);
         return NextResponse.json({

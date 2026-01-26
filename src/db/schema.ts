@@ -19,6 +19,9 @@ export const nodes = pgTable('nodes', {
   publicKey: text('public_key'),
   // NSFW settings
   isNsfw: boolean('is_nsfw').default(false).notNull(), // Entire node is NSFW
+  // Cloudflare Turnstile settings
+  turnstileSiteKey: text('turnstile_site_key'),
+  turnstileSecretKey: text('turnstile_secret_key'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

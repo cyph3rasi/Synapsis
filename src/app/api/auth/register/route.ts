@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { registerUser, createSession } from '@/lib/auth';
 import { db, nodes, users } from '@/db';
 import { eq } from 'drizzle-orm';
+import { verifyTurnstileToken } from '@/lib/turnstile';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -9,12 +10,25 @@ const registerSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     displayName: z.string().optional(),
+    turnstileToken: z.string().optional(),
 });
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
         const data = registerSchema.parse(body);
+
+        // Verify Turnstile token if provided
+        if (data.turnstileToken) {
+            const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
+            const isValid = await verifyTurnstileToken(data.turnstileToken, ip);
+            if (!isValid) {
+                return NextResponse.json(
+                    { error: 'Bot verification failed. Please try again.' },
+                    { status: 400 }
+                );
+            }
+        }
 
         const user = await registerUser(
             data.handle,
