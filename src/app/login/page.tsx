@@ -518,7 +518,7 @@ export default function LoginPage() {
                             type="submit"
                             className="btn btn-primary btn-lg"
                             style={{ width: '100%' }}
-                            disabled={loading || (nodeInfo.turnstileSiteKey && !turnstileToken)}
+                            disabled={loading || (!!nodeInfo.turnstileSiteKey && !turnstileToken)}
                         >
                             {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
                         </button>
