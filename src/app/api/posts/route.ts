@@ -161,6 +161,27 @@ export async function POST(request: Request) {
         // Federate the post to remote followers (non-blocking)
         (async () => {
             try {
+                // SWARM-FIRST: Deliver to swarm followers directly
+                const { deliverPostToSwarmFollowers } = await import('@/lib/swarm/interactions');
+                
+                const swarmResult = await deliverPostToSwarmFollowers(
+                    user.id,
+                    post,
+                    {
+                        handle: user.handle,
+                        displayName: user.displayName,
+                        avatarUrl: user.avatarUrl,
+                        isNsfw: user.isNsfw,
+                    },
+                    attachedMedia,
+                    nodeDomain
+                );
+                
+                if (swarmResult.delivered > 0) {
+                    console.log(`[Swarm] Post ${post.id} delivered to ${swarmResult.delivered} swarm nodes (${swarmResult.failed} failed)`);
+                }
+
+                // FALLBACK: Deliver to ActivityPub followers
                 const { createCreateActivity } = await import('@/lib/activitypub/activities');
                 const { getFollowerInboxes, deliverToFollowers } = await import('@/lib/activitypub/outbox');
 
