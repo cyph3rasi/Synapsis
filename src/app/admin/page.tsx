@@ -69,6 +69,7 @@ export default function AdminPage() {
         rules: '',
         bannerUrl: '',
         logoUrl: '',
+        faviconUrl: '',
         accentColor: '#FFFFFF',
         isNsfw: false,
     });
@@ -77,6 +78,8 @@ export default function AdminPage() {
     const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+    const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
+    const [faviconUploadError, setFaviconUploadError] = useState<string | null>(null);
 
     useEffect(() => {
         fetch('/api/admin/me')
@@ -136,6 +139,7 @@ export default function AdminPage() {
                 rules: data.rules || '',
                 bannerUrl: data.bannerUrl || '',
                 logoUrl: data.logoUrl || '',
+                faviconUrl: data.faviconUrl || '',
                 accentColor: data.accentColor || '#FFFFFF',
                 isNsfw: data.isNsfw || false,
             });
@@ -267,6 +271,41 @@ export default function AdminPage() {
             setLogoUploadError('Upload failed. Please try again.');
         } finally {
             setIsUploadingLogo(false);
+        }
+    };
+
+    const handleFaviconUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+
+        setFaviconUploadError(null);
+        setIsUploadingFavicon(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            const nextSettings = {
+                ...nodeSettings,
+                faviconUrl: data.media?.url || data.url,
+            };
+            setNodeSettings(nextSettings);
+            await handleSaveSettings(nextSettings);
+        } catch (error) {
+            console.error('Favicon upload failed', error);
+            setFaviconUploadError('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingFavicon(false);
         }
     };
 
@@ -597,6 +636,49 @@ export default function AdminPage() {
                                             src={nodeSettings.logoUrl}
                                             alt="Custom logo"
                                             style={{ maxWidth: '200px', maxHeight: '60px', objectFit: 'contain' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Favicon</label>
+                                <p style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginBottom: '8px' }}>
+                                    The icon shown in browser tabs. Recommended: 32x32 or 64x64 PNG.
+                                </p>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <label className="btn btn-ghost btn-sm">
+                                        {isUploadingFavicon ? 'Uploading...' : 'Upload favicon'}
+                                        <input
+                                            type="file"
+                                            accept="image/png,image/x-icon,image/svg+xml"
+                                            onChange={handleFaviconUpload}
+                                            disabled={isUploadingFavicon}
+                                            style={{ display: 'none' }}
+                                        />
+                                    </label>
+                                    {nodeSettings.faviconUrl && (
+                                        <button
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={async () => {
+                                                const nextSettings = { ...nodeSettings, faviconUrl: '' };
+                                                setNodeSettings(nextSettings);
+                                                await handleSaveSettings(nextSettings);
+                                            }}
+                                        >
+                                            Remove favicon
+                                        </button>
+                                    )}
+                                    {faviconUploadError && (
+                                        <span style={{ fontSize: '12px', color: 'var(--danger)' }}>{faviconUploadError}</span>
+                                    )}
+                                </div>
+                                {nodeSettings.faviconUrl && (
+                                    <div style={{ marginTop: '8px', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--background-secondary)', display: 'inline-block' }}>
+                                        <img
+                                            src={nodeSettings.faviconUrl}
+                                            alt="Custom favicon"
+                                            style={{ width: '32px', height: '32px', objectFit: 'contain' }}
                                         />
                                     </div>
                                 )}

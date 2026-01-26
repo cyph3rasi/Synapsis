@@ -24,6 +24,7 @@ export async function PATCH(req: NextRequest) {
                 rules: data.rules,
                 bannerUrl: data.bannerUrl,
                 logoUrl: data.logoUrl,
+                faviconUrl: data.faviconUrl,
                 accentColor: data.accentColor,
                 isNsfw: data.isNsfw ?? false,
             }).returning();
@@ -36,6 +37,7 @@ export async function PATCH(req: NextRequest) {
                     rules: data.rules,
                     bannerUrl: data.bannerUrl,
                     logoUrl: data.logoUrl,
+                    faviconUrl: data.faviconUrl,
                     accentColor: data.accentColor,
                     isNsfw: data.isNsfw ?? node.isNsfw,
                     updatedAt: new Date(),

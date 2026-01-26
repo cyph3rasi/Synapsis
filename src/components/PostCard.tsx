@@ -8,6 +8,7 @@ import { Post } from '@/lib/types';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
+import BlurredVideo from '@/components/BlurredVideo';
 import { formatFullHandle } from '@/lib/utils/handle';
 
 // Component for link preview image that hides on error
@@ -516,19 +517,13 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                         return (
                             <div className="post-media-item" key={item.id}>
                                 {isVideo ? (
-                                    <video
+                                    <BlurredVideo
                                         src={item.url}
-                                        autoPlay
-                                        muted
-                                        loop
-                                        playsInline
-                                        preload="metadata"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             const video = e.currentTarget;
                                             video.muted = !video.muted;
                                         }}
-                                        title="Click to toggle sound"
                                     />
                                 ) : (
                                     <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />

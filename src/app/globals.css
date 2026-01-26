@@ -356,6 +356,39 @@ a.btn-primary:visited {
   background: #000;
 }
 
+/* Blurred background video effect */
+.blurred-video-container {
+  position: relative;
+  width: 100%;
+  max-height: 360px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.blurred-video-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 110%;
+  height: 110%;
+  object-fit: cover;
+  filter: blur(20px) brightness(0.6);
+  pointer-events: none;
+}
+
+.blurred-video-main {
+  position: relative;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  cursor: pointer;
+  z-index: 1;
+}
+
 .video-embed-container {
   position: relative;
   padding-bottom: 56.25%;

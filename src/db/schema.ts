@@ -14,6 +14,7 @@ export const nodes = pgTable('nodes', {
   rules: text('rules'),
   bannerUrl: text('banner_url'),
   logoUrl: text('logo_url'),
+  faviconUrl: text('favicon_url'),
   accentColor: text('accent_color').default('#FFFFFF'),
   publicKey: text('public_key'),
   // NSFW settings
