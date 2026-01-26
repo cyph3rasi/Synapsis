@@ -1798,3 +1798,14 @@ a.btn-primary:visited {
   margin-left: 20px;
   border-left: 1px solid var(--border);
 }
+
+
+/* Big Emojis! */
+.post-content img.emoji,
+.compose-input img.emoji {
+  display: inline;
+  height: 2.5em;
+  width: 2.5em;
+  margin: 0 0.05em 0 0.1em;
+  vertical-align: -0.5em;
+}

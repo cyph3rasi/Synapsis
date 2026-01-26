@@ -19,7 +19,7 @@ export function RightSidebar() {
         bannerUrl: '',
         admins: [] as Admin[],
     });
-    const [version, setVersion] = useState<{ count: number | null; hash: string; fullHash: string | null } | null>(null);
+    const [version, setVersion] = useState<{ count: number | null; hash: string; fullHash: string | null; githubUrl: string | null } | null>(null);
 
     const [loading, setLoading] = useState(true);
 
@@ -45,7 +45,7 @@ export function RightSidebar() {
         fetch('/api/version')
             .then(res => res.json())
             .then(data => setVersion(data))
-            .catch(() => setVersion({ count: null, hash: 'unknown', fullHash: null }));
+            .catch(() => setVersion({ count: null, hash: 'unknown', fullHash: null, githubUrl: null }));
     }, []);
 
     if (loading) {
@@ -119,9 +119,21 @@ export function RightSidebar() {
                     {version && version.count !== null && (
                         <>
                             {' • '}
-                            <span title={`${version.hash} (${version.fullHash})`}>
-                                Commit {version.count}
-                            </span>
+                            {version.githubUrl ? (
+                                <a 
+                                    href={version.githubUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    title={`${version.hash} (${version.fullHash})`}
+                                    style={{ color: 'var(--accent)' }}
+                                >
+                                    Commit {version.count}
+                                </a>
+                            ) : (
+                                <span title={`${version.hash} (${version.fullHash})`}>
+                                    Commit {version.count}
+                                </span>
+                            )}
                         </>
                     )}
                 </p>

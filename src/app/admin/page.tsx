@@ -474,6 +474,19 @@ export default function AdminPage() {
                                             Cloudflare Dashboard
                                         </a>.
                                     </p>
+                                    {nodeSettings.turnstileSiteKey && nodeSettings.turnstileSecretKey && (
+                                        <div style={{ 
+                                            padding: '8px 12px', 
+                                            background: 'rgba(34, 197, 94, 0.1)', 
+                                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            color: 'rgb(34, 197, 94)',
+                                            marginBottom: '12px',
+                                        }}>
+                                            ✓ Turnstile is enabled and will be shown on login/registration
+                                        </div>
+                                    )}
                                 </div>
                                 <div style={{ display: 'grid', gap: '12px' }}>
                                     <div>
@@ -501,25 +514,13 @@ export default function AdminPage() {
                                             type="password"
                                             value={nodeSettings.turnstileSecretKey}
                                             onChange={e => setNodeSettings({ ...nodeSettings, turnstileSecretKey: e.target.value })}
-                                            placeholder="0x4AAAAAAA..."
+                                            placeholder={nodeSettings.turnstileSecretKey ? '••••••••••••••••' : '0x4AAAAAAA...'}
                                             style={{ fontFamily: 'monospace', fontSize: '13px' }}
                                         />
                                         <p style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                                            Secret key for server-side verification
+                                            {nodeSettings.turnstileSecretKey ? 'Secret key is configured (hidden for security)' : 'Secret key for server-side verification'}
                                         </p>
                                     </div>
-                                    {nodeSettings.turnstileSiteKey && nodeSettings.turnstileSecretKey && (
-                                        <div style={{ 
-                                            padding: '8px 12px', 
-                                            background: 'rgba(34, 197, 94, 0.1)', 
-                                            border: '1px solid rgba(34, 197, 94, 0.3)',
-                                            borderRadius: '6px',
-                                            fontSize: '12px',
-                                            color: 'rgb(34, 197, 94)',
-                                        }}>
-                                            ✓ Turnstile is enabled and will be shown on login/registration
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
