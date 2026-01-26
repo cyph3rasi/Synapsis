@@ -12,6 +12,7 @@ export function Sidebar() {
     const { user, isAdmin } = useAuth();
     const pathname = usePathname();
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
         fetch('/api/node')
@@ -23,6 +24,25 @@ export function Sidebar() {
                 setCustomLogoUrl(null);
             });
     }, []);
+
+    // Fetch unread notification count
+    useEffect(() => {
+        if (!user) return;
+        
+        const fetchUnread = () => {
+            fetch('/api/notifications?unread=true&limit=50')
+                .then(res => res.json())
+                .then(data => {
+                    setUnreadCount(data.notifications?.length || 0);
+                })
+                .catch(() => {});
+        };
+
+        fetchUnread();
+        // Poll every 30 seconds
+        const interval = setInterval(fetchUnread, 30000);
+        return () => clearInterval(interval);
+    }, [user]);
 
     // Home is exact match
     const isHome = pathname === '/';
@@ -46,9 +66,20 @@ export function Sidebar() {
                     <span>Explore</span>
                 </Link>
                 {user && (
-                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`}>
+                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`} style={{ position: 'relative' }}>
                         <BellIcon />
                         <span>Notifications</span>
+                        {unreadCount > 0 && (
+                            <span style={{
+                                position: 'absolute',
+                                top: '8px',
+                                left: '24px',
+                                width: '8px',
+                                height: '8px',
+                                background: 'var(--error)',
+                                borderRadius: '50%',
+                            }} />
+                        )}
                     </Link>
                 )}
                 {user && (

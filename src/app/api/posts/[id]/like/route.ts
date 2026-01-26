@@ -77,16 +77,36 @@ export async function POST(request: Request, context: RouteContext) {
             .where(eq(posts.id, postId));
 
         if (post.userId !== user.id) {
+            // Create notification with actor info stored directly
             await db.insert(notifications).values({
                 userId: post.userId,
                 actorId: user.id,
+                actorHandle: user.handle,
+                actorDisplayName: user.displayName,
+                actorAvatarUrl: user.avatarUrl,
+                actorNodeDomain: null, // Local user
                 postId,
+                postContent: post.content?.slice(0, 200) || null,
                 type: 'like',
             });
 
             // Also notify bot owner if this is a bot's post
-            const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-            await notifyBotOwnerForPost(post.userId, user.id, 'like', postId);
+            const postAuthor = await db.query.users.findFirst({
+                where: eq(users.id, post.userId),
+            });
+            if (postAuthor?.isBot && postAuthor.botOwnerId) {
+                await db.insert(notifications).values({
+                    userId: postAuthor.botOwnerId,
+                    actorId: user.id,
+                    actorHandle: user.handle,
+                    actorDisplayName: user.displayName,
+                    actorAvatarUrl: user.avatarUrl,
+                    actorNodeDomain: null,
+                    postId,
+                    postContent: post.content?.slice(0, 200) || null,
+                    type: 'like',
+                });
+            }
         }
 
         // SWARM-FIRST: Check if this is a swarm post and deliver directly

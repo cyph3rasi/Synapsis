@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users, notifications, posts } from '@/db';
+import { db, users, notifications } from '@/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -50,55 +50,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get or create placeholder user for the remote actor
-    const remoteHandle = `${data.mention.actorHandle}@${data.mention.actorNodeDomain}`;
-    let remoteUser = await db.query.users.findFirst({
-      where: eq(users.handle, remoteHandle),
-    });
-
-    if (!remoteUser) {
-      const [newUser] = await db.insert(users).values({
-        did: `did:swarm:${data.mention.actorNodeDomain}:${data.mention.actorHandle}`,
-        handle: remoteHandle,
-        displayName: data.mention.actorDisplayName,
-        avatarUrl: data.mention.actorAvatarUrl || null,
-        publicKey: 'swarm-remote-user',
-      }).returning();
-      remoteUser = newUser;
+    // Create notification with actor info stored directly
+    try {
+      await db.insert(notifications).values({
+        userId: mentionedUser.id,
+        actorHandle: data.mention.actorHandle,
+        actorDisplayName: data.mention.actorDisplayName,
+        actorAvatarUrl: data.mention.actorAvatarUrl || null,
+        actorNodeDomain: data.mention.actorNodeDomain,
+        postContent: data.mention.postContent.slice(0, 200),
+        type: 'mention',
+      });
+      console.log(`[Swarm] Created mention notification for @${data.mentionedHandle} from ${data.mention.actorHandle}@${data.mention.actorNodeDomain}`);
+    } catch (notifError) {
+      console.error(`[Swarm] Failed to create mention notification:`, notifError);
     }
-
-    // Check if we already have this post cached (from swarm timeline)
-    // If not, create a placeholder post for the notification
-    const swarmPostId = `swarm:${data.mention.actorNodeDomain}:${data.mention.postId}`;
-    let post = await db.query.posts.findFirst({
-      where: eq(posts.apId, swarmPostId),
-    });
-
-    if (!post) {
-      // Create a placeholder post for the mention
-      const [newPost] = await db.insert(posts).values({
-        userId: remoteUser.id,
-        content: data.mention.postContent,
-        apId: swarmPostId,
-        apUrl: `https://${data.mention.actorNodeDomain}/${data.mention.actorHandle}/posts/${data.mention.postId}`,
-        createdAt: new Date(data.mention.timestamp),
-      }).returning();
-      post = newPost;
-    }
-
-    // Create notification
-    await db.insert(notifications).values({
-      userId: mentionedUser.id,
-      actorId: remoteUser.id,
-      postId: post.id,
-      type: 'mention',
-    });
 
     // Also notify bot owner if this is a bot being mentioned
-    const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-    await notifyBotOwnerForPost(mentionedUser.id, remoteUser.id, 'mention', post.id);
+    if (mentionedUser.isBot && mentionedUser.botOwnerId) {
+      try {
+        await db.insert(notifications).values({
+          userId: mentionedUser.botOwnerId,
+          actorHandle: data.mention.actorHandle,
+          actorDisplayName: data.mention.actorDisplayName,
+          actorAvatarUrl: data.mention.actorAvatarUrl || null,
+          actorNodeDomain: data.mention.actorNodeDomain,
+          postContent: data.mention.postContent.slice(0, 200),
+          type: 'mention',
+        });
+      } catch (err) {
+        console.error('[Swarm] Failed to notify bot owner:', err);
+      }
+    }
 
-    console.log(`[Swarm] Received mention from ${remoteHandle} for @${data.mentionedHandle}`);
+    console.log(`[Swarm] Received mention from ${data.mention.actorHandle}@${data.mention.actorNodeDomain} for @${data.mentionedHandle}`);
 
     return NextResponse.json({
       success: true,

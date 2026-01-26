@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Construct the remote follower's actor URL (swarm-style)
-    const remoteHandle = `${data.follow.followerHandle}@${data.follow.followerNodeDomain}`;
     const actorUrl = `swarm://${data.follow.followerNodeDomain}/${data.follow.followerHandle}`;
     const inboxUrl = `https://${data.follow.followerNodeDomain}/api/swarm/interactions/inbox`;
 
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest) {
       userId: targetUser.id,
       actorUrl,
       inboxUrl,
-      handle: remoteHandle,
+      handle: `${data.follow.followerHandle}@${data.follow.followerNodeDomain}`,
       activityId: data.follow.interactionId,
     });
 
@@ -86,40 +85,38 @@ export async function POST(request: NextRequest) {
       .set({ followersCount: targetUser.followersCount + 1 })
       .where(eq(users.id, targetUser.id));
 
-    // Get or create placeholder user for the remote follower (for notifications)
-    let remoteUser = await db.query.users.findFirst({
-      where: eq(users.handle, remoteHandle),
-    });
-
-    if (!remoteUser) {
-      const [newUser] = await db.insert(users).values({
-        did: `did:swarm:${data.follow.followerNodeDomain}:${data.follow.followerHandle}`,
-        handle: remoteHandle,
-        displayName: data.follow.followerDisplayName,
-        avatarUrl: data.follow.followerAvatarUrl || null,
-        bio: data.follow.followerBio || null,
-        publicKey: 'swarm-remote-user',
-      }).returning();
-      remoteUser = newUser;
-    }
-
-    // Create notification
+    // Create notification with actor info stored directly
     try {
       await db.insert(notifications).values({
         userId: targetUser.id,
-        actorId: remoteUser.id,
+        actorHandle: data.follow.followerHandle,
+        actorDisplayName: data.follow.followerDisplayName,
+        actorAvatarUrl: data.follow.followerAvatarUrl || null,
+        actorNodeDomain: data.follow.followerNodeDomain,
         type: 'follow',
       });
-      console.log(`[Swarm] Created follow notification for @${data.targetHandle} from ${remoteHandle}`);
+      console.log(`[Swarm] Created follow notification for @${data.targetHandle} from ${data.follow.followerHandle}@${data.follow.followerNodeDomain}`);
     } catch (notifError) {
       console.error(`[Swarm] Failed to create notification:`, notifError);
     }
 
     // Also notify bot owner if this is a bot being followed
-    const { notifyBotOwnerForFollow } = await import('@/lib/notifications/botOwnerNotify');
-    await notifyBotOwnerForFollow(targetUser.id, remoteUser.id);
+    if (targetUser.isBot && targetUser.botOwnerId) {
+      try {
+        await db.insert(notifications).values({
+          userId: targetUser.botOwnerId,
+          actorHandle: data.follow.followerHandle,
+          actorDisplayName: data.follow.followerDisplayName,
+          actorAvatarUrl: data.follow.followerAvatarUrl || null,
+          actorNodeDomain: data.follow.followerNodeDomain,
+          type: 'follow',
+        });
+      } catch (err) {
+        console.error('[Swarm] Failed to notify bot owner:', err);
+      }
+    }
 
-    console.log(`[Swarm] Received follow from ${remoteHandle} for @${data.targetHandle}`);
+    console.log(`[Swarm] Received follow from ${data.follow.followerHandle}@${data.follow.followerNodeDomain} for @${data.targetHandle}`);
 
     return NextResponse.json({
       success: true,

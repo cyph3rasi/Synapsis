@@ -87,16 +87,36 @@ export async function POST(request: Request, context: RouteContext) {
             .where(eq(users.id, user.id));
 
         if (originalPost.userId !== user.id) {
+            // Create notification with actor info stored directly
             await db.insert(notifications).values({
                 userId: originalPost.userId,
                 actorId: user.id,
+                actorHandle: user.handle,
+                actorDisplayName: user.displayName,
+                actorAvatarUrl: user.avatarUrl,
+                actorNodeDomain: null, // Local user
                 postId,
+                postContent: originalPost.content?.slice(0, 200) || null,
                 type: 'repost',
             });
 
             // Also notify bot owner if this is a bot's post
-            const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-            await notifyBotOwnerForPost(originalPost.userId, user.id, 'repost', postId);
+            const postAuthor = await db.query.users.findFirst({
+                where: eq(users.id, originalPost.userId),
+            });
+            if (postAuthor?.isBot && postAuthor.botOwnerId) {
+                await db.insert(notifications).values({
+                    userId: postAuthor.botOwnerId,
+                    actorId: user.id,
+                    actorHandle: user.handle,
+                    actorDisplayName: user.displayName,
+                    actorAvatarUrl: user.avatarUrl,
+                    actorNodeDomain: null,
+                    postId,
+                    postContent: originalPost.content?.slice(0, 200) || null,
+                    type: 'repost',
+                });
+            }
         }
 
         // SWARM-FIRST: Deliver repost to swarm node

@@ -16,7 +16,7 @@ const swarmRepostSchema = z.object({
     actorDisplayName: z.string(),
     actorAvatarUrl: z.string().optional(),
     actorNodeDomain: z.string(),
-    repostId: z.string(), // The ID of the repost on the actor's node
+    repostId: z.string(),
     interactionId: z.string(),
     timestamp: z.string(),
   }),
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     // Find the target post
     const post = await db.query.posts.findFirst({
       where: eq(posts.id, data.postId),
+      with: { author: true },
     });
 
     if (!post) {
@@ -54,41 +55,43 @@ export async function POST(request: NextRequest) {
       .set({ repostsCount: post.repostsCount + 1 })
       .where(eq(posts.id, data.postId));
 
-    // Get or create placeholder user for the remote reposter
-    const remoteHandle = `${data.repost.actorHandle}@${data.repost.actorNodeDomain}`;
-    let remoteUser = await db.query.users.findFirst({
-      where: eq(users.handle, remoteHandle),
-    });
-
-    if (!remoteUser) {
-      const [newUser] = await db.insert(users).values({
-        did: `did:swarm:${data.repost.actorNodeDomain}:${data.repost.actorHandle}`,
-        handle: remoteHandle,
-        displayName: data.repost.actorDisplayName,
-        avatarUrl: data.repost.actorAvatarUrl || null,
-        publicKey: 'swarm-remote-user',
-      }).returning();
-      remoteUser = newUser;
-    }
-
-    // Create notification
+    // Create notification with actor info stored directly
     try {
       await db.insert(notifications).values({
         userId: post.userId,
-        actorId: remoteUser.id,
+        actorHandle: data.repost.actorHandle,
+        actorDisplayName: data.repost.actorDisplayName,
+        actorAvatarUrl: data.repost.actorAvatarUrl || null,
+        actorNodeDomain: data.repost.actorNodeDomain,
         postId: data.postId,
+        postContent: post.content?.slice(0, 200) || null,
         type: 'repost',
       });
-      console.log(`[Swarm] Created repost notification for post ${data.postId} from ${remoteHandle}`);
+      console.log(`[Swarm] Created repost notification for post ${data.postId} from ${data.repost.actorHandle}@${data.repost.actorNodeDomain}`);
     } catch (notifError) {
       console.error(`[Swarm] Failed to create repost notification:`, notifError);
     }
 
     // Also notify bot owner if this is a bot's post
-    const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-    await notifyBotOwnerForPost(post.userId, remoteUser.id, 'repost', data.postId);
+    const author = post.author as { isBot?: boolean; botOwnerId?: string } | null;
+    if (author?.isBot && author.botOwnerId) {
+      try {
+        await db.insert(notifications).values({
+          userId: author.botOwnerId,
+          actorHandle: data.repost.actorHandle,
+          actorDisplayName: data.repost.actorDisplayName,
+          actorAvatarUrl: data.repost.actorAvatarUrl || null,
+          actorNodeDomain: data.repost.actorNodeDomain,
+          postId: data.postId,
+          postContent: post.content?.slice(0, 200) || null,
+          type: 'repost',
+        });
+      } catch (err) {
+        console.error('[Swarm] Failed to notify bot owner:', err);
+      }
+    }
 
-    console.log(`[Swarm] Received repost from ${remoteHandle} on post ${data.postId}`);
+    console.log(`[Swarm] Received repost from ${data.repost.actorHandle}@${data.repost.actorNodeDomain} on post ${data.postId}`);
 
     return NextResponse.json({
       success: true,

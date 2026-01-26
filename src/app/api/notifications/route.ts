@@ -9,6 +9,30 @@ const markSchema = z.object({
     all: z.boolean().optional(),
 });
 
+/**
+ * Fetch fresh profile data for a remote actor
+ */
+async function fetchRemoteProfile(handle: string, nodeDomain: string): Promise<{
+    displayName: string | null;
+    avatarUrl: string | null;
+} | null> {
+    try {
+        const protocol = nodeDomain.includes('localhost') ? 'http' : 'https';
+        const res = await fetch(`${protocol}://${nodeDomain}/api/swarm/users/${handle}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return {
+            displayName: data.profile?.displayName || null,
+            avatarUrl: data.profile?.avatarUrl || null,
+        };
+    } catch {
+        return null;
+    }
+}
+
 export async function GET(request: Request) {
     try {
         const user = await requireAuth();
@@ -28,34 +52,56 @@ export async function GET(request: Request) {
 
         const rows = await db.query.notifications.findMany({
             where: and(...conditions),
-            with: {
-                actor: true,
-                post: true,
-            },
             orderBy: [desc(notifications.createdAt)],
             limit,
         });
 
-        type ActorInfo = { id: string; handle: string; displayName: string | null; avatarUrl: string | null };
-        type PostInfo = { id: string; content: string };
+        // For remote actors missing avatar, fetch fresh data
+        const remoteToFetch = new Map<string, { handle: string; nodeDomain: string }>();
+        for (const row of rows) {
+            if (row.actorNodeDomain && !row.actorAvatarUrl) {
+                const key = `${row.actorHandle}@${row.actorNodeDomain}`;
+                if (!remoteToFetch.has(key)) {
+                    remoteToFetch.set(key, { 
+                        handle: row.actorHandle.split('@')[0], // Get just the username part
+                        nodeDomain: row.actorNodeDomain 
+                    });
+                }
+            }
+        }
+
+        // Fetch fresh profile data in parallel
+        const freshProfiles = new Map<string, { displayName: string | null; avatarUrl: string | null }>();
+        if (remoteToFetch.size > 0) {
+            const fetchPromises = Array.from(remoteToFetch.entries()).map(async ([key, { handle, nodeDomain }]) => {
+                const profile = await fetchRemoteProfile(handle, nodeDomain);
+                if (profile) {
+                    freshProfiles.set(key, profile);
+                }
+            });
+            await Promise.all(fetchPromises);
+        }
 
         const payload = rows.map((row) => {
-            const actor = row.actor as ActorInfo | null;
-            const post = row.post as PostInfo | null;
+            const key = row.actorNodeDomain ? `${row.actorHandle}@${row.actorNodeDomain}` : null;
+            const freshProfile = key ? freshProfiles.get(key) : null;
+            
             return {
                 id: row.id,
                 type: row.type,
                 createdAt: row.createdAt,
                 readAt: row.readAt,
-                actor: actor ? {
-                    id: actor.id,
-                    handle: actor.handle,
-                    displayName: actor.displayName,
-                    avatarUrl: actor.avatarUrl,
-                } : null,
-                post: post ? {
-                    id: post.id,
-                    content: post.content,
+                actor: {
+                    handle: row.actorNodeDomain 
+                        ? `${row.actorHandle}@${row.actorNodeDomain}`
+                        : row.actorHandle,
+                    displayName: freshProfile?.displayName || row.actorDisplayName,
+                    avatarUrl: freshProfile?.avatarUrl || row.actorAvatarUrl,
+                    nodeDomain: row.actorNodeDomain,
+                },
+                post: row.postId ? {
+                    id: row.postId,
+                    content: row.postContent,
                 } : null,
             };
         });

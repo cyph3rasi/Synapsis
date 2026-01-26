@@ -263,15 +263,29 @@ export async function POST(request: Request, context: RouteContext) {
         });
 
         if (currentUser.id !== targetUser.id) {
+            // Create notification with actor info stored directly
             await db.insert(notifications).values({
                 userId: targetUser.id,
                 actorId: currentUser.id,
+                actorHandle: currentUser.handle,
+                actorDisplayName: currentUser.displayName,
+                actorAvatarUrl: currentUser.avatarUrl,
+                actorNodeDomain: null, // Local user
                 type: 'follow',
             });
 
             // Also notify bot owner if this is a bot being followed
-            const { notifyBotOwnerForFollow } = await import('@/lib/notifications/botOwnerNotify');
-            await notifyBotOwnerForFollow(targetUser.id, currentUser.id);
+            if (targetUser.isBot && targetUser.botOwnerId) {
+                await db.insert(notifications).values({
+                    userId: targetUser.botOwnerId,
+                    actorId: currentUser.id,
+                    actorHandle: currentUser.handle,
+                    actorDisplayName: currentUser.displayName,
+                    actorAvatarUrl: currentUser.avatarUrl,
+                    actorNodeDomain: null,
+                    type: 'follow',
+                });
+            }
         }
 
         // Update counts

@@ -2,9 +2,6 @@
  * Swarm Like Endpoint
  * 
  * POST: Receive a like from another swarm node
- * 
- * This is the swarm-first approach - direct node-to-node communication
- * for likes, bypassing ActivityPub for Synapsis nodes.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -57,43 +54,43 @@ export async function POST(request: NextRequest) {
       .set({ likesCount: post.likesCount + 1 })
       .where(eq(posts.id, data.postId));
 
-    // Create a notification for the post author
-    // First, get or create a placeholder user for the remote liker
-    const remoteHandle = `${data.like.actorHandle}@${data.like.actorNodeDomain}`;
-    let remoteUser = await db.query.users.findFirst({
-      where: eq(users.handle, remoteHandle),
-    });
-
-    if (!remoteUser) {
-      // Create a placeholder user for the remote actor
-      const [newUser] = await db.insert(users).values({
-        did: `did:swarm:${data.like.actorNodeDomain}:${data.like.actorHandle}`,
-        handle: remoteHandle,
-        displayName: data.like.actorDisplayName,
-        avatarUrl: data.like.actorAvatarUrl || null,
-        publicKey: 'swarm-remote-user',
-      }).returning();
-      remoteUser = newUser;
-    }
-
-    // Create notification
+    // Create notification with actor info stored directly
     try {
       await db.insert(notifications).values({
         userId: post.userId,
-        actorId: remoteUser.id,
+        actorHandle: data.like.actorHandle,
+        actorDisplayName: data.like.actorDisplayName,
+        actorAvatarUrl: data.like.actorAvatarUrl || null,
+        actorNodeDomain: data.like.actorNodeDomain,
         postId: data.postId,
+        postContent: post.content?.slice(0, 200) || null,
         type: 'like',
       });
-      console.log(`[Swarm] Created like notification for post ${data.postId} from ${remoteHandle}`);
+      console.log(`[Swarm] Created like notification for post ${data.postId} from ${data.like.actorHandle}@${data.like.actorNodeDomain}`);
     } catch (notifError) {
       console.error(`[Swarm] Failed to create like notification:`, notifError);
     }
 
     // Also notify bot owner if this is a bot's post
-    const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-    await notifyBotOwnerForPost(post.userId, remoteUser.id, 'like', data.postId);
+    const author = post.author as { isBot?: boolean; botOwnerId?: string } | null;
+    if (author?.isBot && author.botOwnerId) {
+      try {
+        await db.insert(notifications).values({
+          userId: author.botOwnerId,
+          actorHandle: data.like.actorHandle,
+          actorDisplayName: data.like.actorDisplayName,
+          actorAvatarUrl: data.like.actorAvatarUrl || null,
+          actorNodeDomain: data.like.actorNodeDomain,
+          postId: data.postId,
+          postContent: post.content?.slice(0, 200) || null,
+          type: 'like',
+        });
+      } catch (err) {
+        console.error('[Swarm] Failed to notify bot owner:', err);
+      }
+    }
 
-    console.log(`[Swarm] Received like from ${remoteHandle} on post ${data.postId}`);
+    console.log(`[Swarm] Received like from ${data.like.actorHandle}@${data.like.actorNodeDomain} on post ${data.postId}`);
 
     return NextResponse.json({
       success: true,

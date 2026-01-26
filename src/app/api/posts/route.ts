@@ -152,17 +152,33 @@ export async function POST(request: Request) {
                     });
                     
                     if (mentionedUser && mentionedUser.id !== user.id && !mentionedUser.isSuspended) {
-                        // Create notification for the mentioned user
+                        // Create notification for the mentioned user with actor info stored directly
                         await db.insert(notifications).values({
                             userId: mentionedUser.id,
                             actorId: user.id,
+                            actorHandle: user.handle,
+                            actorDisplayName: user.displayName,
+                            actorAvatarUrl: user.avatarUrl,
+                            actorNodeDomain: null, // Local user
                             postId: post.id,
+                            postContent: post.content?.slice(0, 200) || null,
                             type: 'mention',
                         });
                         
                         // Also notify bot owner if this is a bot being mentioned
-                        const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
-                        await notifyBotOwnerForPost(mentionedUser.id, user.id, 'mention', post.id);
+                        if (mentionedUser.isBot && mentionedUser.botOwnerId) {
+                            await db.insert(notifications).values({
+                                userId: mentionedUser.botOwnerId,
+                                actorId: user.id,
+                                actorHandle: user.handle,
+                                actorDisplayName: user.displayName,
+                                actorAvatarUrl: user.avatarUrl,
+                                actorNodeDomain: null,
+                                postId: post.id,
+                                postContent: post.content?.slice(0, 200) || null,
+                                type: 'mention',
+                            });
+                        }
                     }
                 }
             } catch (err) {

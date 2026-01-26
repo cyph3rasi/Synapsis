@@ -325,8 +325,15 @@ export const likesRelations = relations(likes, ({ one }) => ({
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  actorId: uuid('actor_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Actor info - stored directly instead of referencing placeholder users
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'cascade' }), // Optional - only for local actors
+  actorHandle: text('actor_handle').notNull(), // e.g., "user" or "user@remote.node"
+  actorDisplayName: text('actor_display_name'),
+  actorAvatarUrl: text('actor_avatar_url'),
+  actorNodeDomain: text('actor_node_domain'), // null for local actors
+  // Post reference
   postId: uuid('post_id').references(() => posts.id, { onDelete: 'cascade' }),
+  postContent: text('post_content'), // Cached content for display
   type: text('type').notNull(), // follow | like | repost | mention
   readAt: timestamp('read_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),

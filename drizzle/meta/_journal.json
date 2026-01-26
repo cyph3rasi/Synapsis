@@ -43,6 +43,13 @@
       "when": 1769422771465,
       "tag": "0005_yummy_millenium_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1769427398729,
+      "tag": "0006_loud_moonstone",
+      "breakpoints": true
     }
   ]
 }
