@@ -192,7 +192,7 @@ export default function LoginPage() {
                                 />
                             ) : (
                                 <Image
-                                    src="/logotext.png"
+                                    src="/logotext.svg"
                                     alt="Synapsis"
                                     width={200}
                                     height={48}

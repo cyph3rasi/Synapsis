@@ -134,6 +134,30 @@ export async function POST(request: Request) {
             })();
         }
 
+        // SWARM-FIRST: Deliver mentions to swarm nodes
+        (async () => {
+            try {
+                const { deliverSwarmMentions } = await import('@/lib/swarm/interactions');
+                
+                const result = await deliverSwarmMentions(
+                    data.content,
+                    post.id,
+                    {
+                        handle: user.handle,
+                        displayName: user.displayName || user.handle,
+                        avatarUrl: user.avatarUrl || undefined,
+                        nodeDomain,
+                    }
+                );
+                
+                if (result.delivered > 0) {
+                    console.log(`[Swarm] Delivered ${result.delivered} mentions (${result.failed} failed)`);
+                }
+            } catch (err) {
+                console.error('[Swarm] Error delivering mentions:', err);
+            }
+        })();
+
         // Federate the post to remote followers (non-blocking)
         (async () => {
             try {

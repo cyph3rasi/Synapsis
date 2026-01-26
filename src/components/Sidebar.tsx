@@ -33,7 +33,7 @@ export function Sidebar() {
                 {customLogoUrl === undefined ? null : customLogoUrl ? (
                     <img src={customLogoUrl} alt="Logo" style={{ maxWidth: '200px', maxHeight: '50px', objectFit: 'contain' }} />
                 ) : (
-                    <Image src="/logotext.png" alt="Synapsis" width={185} height={42} priority />
+                    <Image src="/logotext.svg" alt="Synapsis" width={185} height={42} priority />
                 )}
             </Link>
             <nav>

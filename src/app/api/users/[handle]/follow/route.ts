@@ -7,6 +7,7 @@ import { resolveRemoteUser } from '@/lib/activitypub/fetch';
 import { createFollowActivity, createUndoActivity } from '@/lib/activitypub/activities';
 import { deliverActivity } from '@/lib/activitypub/outbox';
 import { cacheRemoteUserPosts } from '@/lib/activitypub/cache';
+import { isSwarmNode, deliverSwarmFollow, deliverSwarmUnfollow } from '@/lib/swarm/interactions';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
@@ -94,23 +95,16 @@ export async function POST(request: Request, context: RouteContext) {
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const remote = parseRemoteHandle(handle);
+        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (currentUser.isSuspended || currentUser.isSilenced) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
         }
 
         if (remote) {
-            const remoteProfile = await resolveRemoteUser(remote.handle, remote.domain);
-            if (!remoteProfile) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-            const targetInbox = remoteProfile.endpoints?.sharedInbox || remoteProfile.inbox;
-            if (!targetInbox) {
-                return NextResponse.json({ error: 'Remote inbox not available' }, { status: 400 });
-            }
-            const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
             const targetHandle = `${remote.handle}@${remote.domain}`;
-
+            
+            // Check if already following
             const existingRemoteFollow = await db.query.remoteFollows.findFirst({
                 where: and(
                     eq(remoteFollows.followerId, currentUser.id),
@@ -119,6 +113,62 @@ export async function POST(request: Request, context: RouteContext) {
             });
             if (existingRemoteFollow) {
                 return NextResponse.json({ error: 'Already following' }, { status: 400 });
+            }
+
+            // SWARM-FIRST: Check if this is a Synapsis swarm node
+            const isSwarm = await isSwarmNode(remote.domain);
+            
+            if (isSwarm) {
+                // Use swarm protocol for Synapsis nodes
+                const activityId = crypto.randomUUID();
+                
+                const result = await deliverSwarmFollow(remote.domain, {
+                    targetHandle: remote.handle,
+                    follow: {
+                        followerHandle: currentUser.handle,
+                        followerDisplayName: currentUser.displayName || currentUser.handle,
+                        followerAvatarUrl: currentUser.avatarUrl || undefined,
+                        followerBio: currentUser.bio || undefined,
+                        followerNodeDomain: nodeDomain,
+                        interactionId: activityId,
+                        timestamp: new Date().toISOString(),
+                    },
+                });
+
+                if (!result.success) {
+                    console.warn(`[Swarm] Follow delivery failed, falling back to ActivityPub: ${result.error}`);
+                    // Fall through to ActivityPub below
+                } else {
+                    // Swarm follow succeeded - store the follow locally
+                    await db.insert(remoteFollows).values({
+                        followerId: currentUser.id,
+                        targetHandle,
+                        targetActorUrl: `swarm://${remote.domain}/${remote.handle}`,
+                        inboxUrl: `https://${remote.domain}/api/swarm/interactions/inbox`,
+                        activityId,
+                        displayName: null, // Will be fetched later
+                        bio: null,
+                        avatarUrl: null,
+                    });
+
+                    // Update the user's following count
+                    await db.update(users)
+                        .set({ followingCount: currentUser.followingCount + 1 })
+                        .where(eq(users.id, currentUser.id));
+
+                    console.log(`[Swarm] Follow delivered to ${remote.domain} for @${remote.handle}`);
+                    return NextResponse.json({ success: true, following: true, remote: true, swarm: true });
+                }
+            }
+
+            // FALLBACK: Use ActivityPub for non-swarm nodes or if swarm failed
+            const remoteProfile = await resolveRemoteUser(remote.handle, remote.domain);
+            if (!remoteProfile) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
+            const targetInbox = remoteProfile.endpoints?.sharedInbox || remoteProfile.inbox;
+            if (!targetInbox) {
+                return NextResponse.json({ error: 'Remote inbox not available' }, { status: 400 });
             }
 
             const activityId = crypto.randomUUID();
@@ -243,6 +293,7 @@ export async function DELETE(request: Request, context: RouteContext) {
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const remote = parseRemoteHandle(handle);
+        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (remote) {
             if (!db) {
@@ -258,7 +309,40 @@ export async function DELETE(request: Request, context: RouteContext) {
             if (!existingRemoteFollow) {
                 return NextResponse.json({ error: 'Not following' }, { status: 400 });
             }
-            const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+
+            // SWARM-FIRST: Check if this is a swarm follow (swarm:// actor URL)
+            const isSwarmFollow = existingRemoteFollow.targetActorUrl.startsWith('swarm://');
+            
+            if (isSwarmFollow) {
+                // Use swarm protocol for unfollow
+                const result = await deliverSwarmUnfollow(remote.domain, {
+                    targetHandle: remote.handle,
+                    unfollow: {
+                        followerHandle: currentUser.handle,
+                        followerNodeDomain: nodeDomain,
+                        interactionId: crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                    },
+                });
+
+                if (!result.success) {
+                    console.warn(`[Swarm] Unfollow delivery failed: ${result.error}`);
+                    // Continue anyway - remove local record
+                }
+
+                // Remove the follow record
+                await db.delete(remoteFollows).where(eq(remoteFollows.id, existingRemoteFollow.id));
+
+                // Update the user's following count
+                await db.update(users)
+                    .set({ followingCount: Math.max(0, currentUser.followingCount - 1) })
+                    .where(eq(users.id, currentUser.id));
+
+                console.log(`[Swarm] Unfollow delivered to ${remote.domain}`);
+                return NextResponse.json({ success: true, following: false, remote: true, swarm: true });
+            }
+
+            // FALLBACK: Use ActivityPub for non-swarm follows
             const originalFollow = createFollowActivity(
                 currentUser,
                 existingRemoteFollow.targetActorUrl,

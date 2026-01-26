@@ -45,7 +45,7 @@ export async function buildAnnouncement(): Promise<SwarmAnnouncement> {
     postCount = Number(postResult[0]?.count ?? 0);
   }
 
-  const capabilities: SwarmCapability[] = ['handles', 'gossip'];
+  const capabilities: SwarmCapability[] = ['handles', 'gossip', 'interactions'];
 
   return {
     domain,

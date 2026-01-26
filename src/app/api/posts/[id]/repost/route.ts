@@ -2,8 +2,33 @@ import { NextResponse } from 'next/server';
 import { db, posts, users, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
+import crypto from 'crypto';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+/**
+ * Extract domain from a swarm post ID (swarm:domain:postId)
+ */
+function extractSwarmDomain(apId: string | null): string | null {
+    if (!apId?.startsWith('swarm:')) return null;
+    const parts = apId.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+}
+
+/**
+ * Check if a post is from a swarm node
+ */
+function isSwarmPost(apId: string | null): boolean {
+    return apId?.startsWith('swarm:') ?? false;
+}
+
+/**
+ * Extract the original post ID from a swarm apId
+ */
+function extractSwarmPostId(apId: string): string | null {
+    const parts = apId.split(':');
+    return parts.length >= 3 ? parts[2] : null;
+}
 
 // Repost a post
 export async function POST(request: Request, context: RouteContext) {
@@ -42,12 +67,13 @@ export async function POST(request: Request, context: RouteContext) {
         }
 
         // Create repost
+        const repostId = crypto.randomUUID();
         const [repost] = await db.insert(posts).values({
             userId: user.id,
             content: '', // Reposts don't have their own content
             repostOfId: postId,
-            apId: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
-            apUrl: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
+            apId: `https://${nodeDomain}/posts/${repostId}`,
+            apUrl: `https://${nodeDomain}/posts/${repostId}`,
         }).returning();
 
         // Update original post's repost count
@@ -69,9 +95,41 @@ export async function POST(request: Request, context: RouteContext) {
             });
         }
 
-        // Federate the repost (Announce activity) if the original post has an ActivityPub ID
-        const postApId = originalPost.apId;
-        if (postApId) {
+        // SWARM-FIRST: Deliver repost to swarm node
+        if (isSwarmPost(originalPost.apId)) {
+            const targetDomain = extractSwarmDomain(originalPost.apId);
+            const originalPostIdOnRemote = extractSwarmPostId(originalPost.apId!);
+            
+            if (targetDomain && originalPostIdOnRemote) {
+                (async () => {
+                    try {
+                        const { deliverSwarmRepost } = await import('@/lib/swarm/interactions');
+                        
+                        const result = await deliverSwarmRepost(targetDomain, {
+                            postId: originalPostIdOnRemote,
+                            repost: {
+                                actorHandle: user.handle,
+                                actorDisplayName: user.displayName || user.handle,
+                                actorAvatarUrl: user.avatarUrl || undefined,
+                                actorNodeDomain: nodeDomain,
+                                repostId: repost.id,
+                                interactionId: crypto.randomUUID(),
+                                timestamp: new Date().toISOString(),
+                            },
+                        });
+                        
+                        if (result.success) {
+                            console.log(`[Swarm] Repost delivered to ${targetDomain}`);
+                        } else {
+                            console.warn(`[Swarm] Repost delivery failed: ${result.error}`);
+                        }
+                    } catch (err) {
+                        console.error('[Swarm] Error delivering repost:', err);
+                    }
+                })();
+            }
+        } else if (originalPost.apId) {
+            // FALLBACK: Use ActivityPub for non-swarm posts
             (async () => {
                 try {
                     const { createAnnounceActivity } = await import('@/lib/activitypub/activities');
@@ -82,7 +140,7 @@ export async function POST(request: Request, context: RouteContext) {
                     if (followerInboxes.length > 0) {
                         const announceActivity = createAnnounceActivity(
                             user,
-                            postApId,
+                            originalPost.apId!,
                             nodeDomain,
                             repost.id
                         );
@@ -91,7 +149,7 @@ export async function POST(request: Request, context: RouteContext) {
                         if (privateKey) {
                             const keyId = `https://${nodeDomain}/users/${user.handle}#main-key`;
                             const result = await deliverToFollowers(announceActivity, followerInboxes, privateKey, keyId);
-                            console.log(`[Federation] Announce for ${postApId} delivered to ${result.delivered}/${followerInboxes.length} inboxes`);
+                            console.log(`[Federation] Announce for ${originalPost.apId} delivered to ${result.delivered}/${followerInboxes.length} inboxes`);
                         }
                     }
                 } catch (err) {

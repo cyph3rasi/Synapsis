@@ -18,7 +18,7 @@ export interface SwarmNodeInfo {
   lastSeenAt?: string;
 }
 
-export type SwarmCapability = 'handles' | 'gossip' | 'relay' | 'search';
+export type SwarmCapability = 'handles' | 'gossip' | 'relay' | 'search' | 'interactions';
 
 export interface SwarmAnnouncement {
   domain: string;
