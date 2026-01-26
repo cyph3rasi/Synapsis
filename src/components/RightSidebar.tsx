@@ -19,6 +19,7 @@ export function RightSidebar() {
         bannerUrl: '',
         admins: [] as Admin[],
     });
+    const [version, setVersion] = useState<{ count: number | null; hash: string; fullHash: string | null } | null>(null);
 
     const [loading, setLoading] = useState(true);
 
@@ -39,6 +40,12 @@ export function RightSidebar() {
             })
             .catch(() => { })
             .finally(() => setLoading(false));
+
+        // Fetch version info
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(data => setVersion(data))
+            .catch(() => setVersion({ count: null, hash: 'unknown', fullHash: null }));
     }, []);
 
     if (loading) {
@@ -108,7 +115,15 @@ export function RightSidebar() {
             <div className="card" style={{ marginTop: '16px' }}>
                 <h3 style={{ fontWeight: 600, marginBottom: '12px' }}>Network Info</h3>
                 <p style={{ color: 'var(--foreground-secondary)', fontSize: '13px' }}>
-                    Running <a href="https://synapsis.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Synapsis v0.1.0</a>
+                    Running <a href="https://synapsis.social" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Synapsis</a>
+                    {version && version.count !== null && (
+                        <>
+                            {' • '}
+                            <span title={`${version.hash} (${version.fullHash})`}>
+                                Commit {version.count}
+                            </span>
+                        </>
+                    )}
                 </p>
 
                 {nodeInfo.admins.length > 0 && (

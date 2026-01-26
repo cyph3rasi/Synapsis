@@ -13,8 +13,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const isStandalone =
         pathname === '/login' ||
         pathname === '/register' ||
-        pathname?.startsWith('/install') ||
-        pathname?.startsWith('/admin');
+        pathname?.startsWith('/install');
 
     if (loading) {
         return (

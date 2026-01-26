@@ -233,12 +233,10 @@ export default function AdminPage() {
                 <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Admin Settings</h1>
             </header>
 
-            <div style={{ padding: '16px' }}>
-                <div className="card" style={{ padding: '24px' }}>
-                    {loading ? (
-                        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>Loading settings...</div>
-                    ) : (
-                        <div style={{ display: 'grid', gap: '16px', maxWidth: '600px' }}>
+            {loading ? (
+                <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>Loading settings...</div>
+            ) : (
+                <div style={{ display: 'grid', gap: '16px', maxWidth: '600px', padding: '16px' }}>
                             <div>
                                 <label style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', display: 'block' }}>Node Name</label>
                                 <input
@@ -532,8 +530,6 @@ export default function AdminPage() {
                             </div>
                         </div>
                     )}
-                </div>
-            </div>
         </>
     );
 }

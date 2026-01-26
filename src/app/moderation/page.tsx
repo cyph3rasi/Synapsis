@@ -189,45 +189,29 @@ export default function ModerationPage() {
                 <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Moderation</h1>
             </header>
 
-            <div style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)' }}>
-                    <button 
-                        className={`btn btn-ghost ${tab === 'reports' ? '' : ''}`}
-                        onClick={() => setTab('reports')}
-                        style={{
-                            borderRadius: 0,
-                            borderBottom: tab === 'reports' ? '2px solid var(--accent)' : '2px solid transparent',
-                            fontWeight: tab === 'reports' ? 600 : 400,
-                        }}
-                    >
-                        Reports
-                    </button>
-                    <button 
-                        className={`btn btn-ghost ${tab === 'posts' ? '' : ''}`}
-                        onClick={() => setTab('posts')}
-                        style={{
-                            borderRadius: 0,
-                            borderBottom: tab === 'posts' ? '2px solid var(--accent)' : '2px solid transparent',
-                            fontWeight: tab === 'posts' ? 600 : 400,
-                        }}
-                    >
-                        Posts
-                    </button>
-                    <button 
-                        className={`btn btn-ghost ${tab === 'users' ? '' : ''}`}
-                        onClick={() => setTab('users')}
-                        style={{
-                            borderRadius: 0,
-                            borderBottom: tab === 'users' ? '2px solid var(--accent)' : '2px solid transparent',
-                            fontWeight: tab === 'users' ? 600 : 400,
-                        }}
-                    >
-                        Users
-                    </button>
-                </div>
+            <div style={{ display: 'flex', gap: '8px', padding: '16px', borderBottom: '1px solid var(--border)' }}>
+                <button 
+                    className={`btn btn-sm ${tab === 'reports' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setTab('reports')}
+                >
+                    Reports
+                </button>
+                <button 
+                    className={`btn btn-sm ${tab === 'posts' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setTab('posts')}
+                >
+                    Posts
+                </button>
+                <button 
+                    className={`btn btn-sm ${tab === 'users' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setTab('users')}
+                >
+                    Users
+                </button>
+            </div>
 
-                {tab === 'reports' && (
-                    <div className="card" style={{ padding: '16px' }}>
+            {tab === 'reports' && (
+                <div style={{ padding: '16px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 {(['open', 'resolved', 'all'] as const).map((status) => (
@@ -256,7 +240,7 @@ export default function ModerationPage() {
                                 {reports.map((report) => (
                                     <div key={report.id} className="card" style={{ padding: '16px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-                                            <div style={{ flex: 1 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                                                     <span style={{
                                                         fontSize: '11px',
@@ -283,6 +267,8 @@ export default function ModerationPage() {
                                                         background: 'var(--background-secondary)', 
                                                         borderRadius: '8px',
                                                         fontSize: '14px',
+                                                        wordBreak: 'break-word',
+                                                        overflowWrap: 'break-word',
                                                     }}>
                                                         <strong>@{report.target.author.handle}:</strong> {report.target.content || '[repost]'}
                                                     </div>
@@ -329,7 +315,7 @@ export default function ModerationPage() {
                 )}
 
                 {tab === 'posts' && (
-                    <div className="card" style={{ padding: '16px' }}>
+                    <div style={{ padding: '16px' }}>
                         {loading ? (
                             <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>Loading posts...</div>
                         ) : posts.length === 0 ? (
@@ -339,7 +325,7 @@ export default function ModerationPage() {
                                 {posts.map((post) => (
                                     <div key={post.id} className="card" style={{ padding: '16px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-                                            <div style={{ flex: 1 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                                                     <span style={{
                                                         fontSize: '11px',
@@ -356,7 +342,7 @@ export default function ModerationPage() {
                                                         @{post.author.handle} • {formatDate(post.createdAt)}
                                                     </span>
                                                 </div>
-                                                <div style={{ marginBottom: '8px' }}>{post.content || '[repost]'}</div>
+                                                <div style={{ marginBottom: '8px', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{post.content || '[repost]'}</div>
                                                 {post.removedReason && (
                                                     <div style={{ fontSize: '13px', color: 'var(--foreground-secondary)' }}>
                                                         Reason: {post.removedReason}
@@ -383,7 +369,7 @@ export default function ModerationPage() {
                 )}
 
                 {tab === 'users' && (
-                    <div className="card" style={{ padding: '16px' }}>
+                    <div style={{ padding: '16px' }}>
                         {loading ? (
                             <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>Loading users...</div>
                         ) : users.length === 0 ? (
@@ -393,7 +379,7 @@ export default function ModerationPage() {
                                 {users.map((user) => (
                                     <div key={user.id} className="card" style={{ padding: '16px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
-                                            <div style={{ flex: 1 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                                                     <span style={{
                                                         fontSize: '11px',
@@ -483,7 +469,6 @@ export default function ModerationPage() {
                         )}
                     </div>
                 )}
-            </div>
         </>
     );
 }
