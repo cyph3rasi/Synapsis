@@ -146,6 +146,7 @@ export async function GET(request: Request, context: RouteContext) {
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const { searchParams } = new URL(request.url);
         const limit = Math.min(parseInt(searchParams.get('limit') || '25'), 50);
+        const cursor = searchParams.get('cursor');
 
         const remote = parseRemoteHandle(handle);
 
@@ -374,9 +375,27 @@ export async function GET(request: Request, context: RouteContext) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        // Get user's posts
+        // Get user's posts with cursor-based pagination
+        const { lt } = await import('drizzle-orm');
+        
+        let whereConditions = and(eq(posts.userId, user.id), eq(posts.isRemoved, false));
+        
+        // If cursor provided, get posts older than the cursor
+        if (cursor) {
+            const cursorPost = await db.query.posts.findFirst({
+                where: eq(posts.id, cursor),
+            });
+            if (cursorPost) {
+                whereConditions = and(
+                    eq(posts.userId, user.id),
+                    eq(posts.isRemoved, false),
+                    lt(posts.createdAt, cursorPost.createdAt)
+                );
+            }
+        }
+        
         let userPosts: any[] = await db.query.posts.findMany({
-            where: and(eq(posts.userId, user.id), eq(posts.isRemoved, false)),
+            where: whereConditions,
             with: {
                 author: true,
                 media: true,

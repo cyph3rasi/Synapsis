@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { PostCard } from '@/components/PostCard';
@@ -22,6 +22,8 @@ export default function Home() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Post | null>(null);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
   const [isNsfwNode, setIsNsfwNode] = useState(false);
@@ -37,6 +39,8 @@ export default function Home() {
       selfBoost: number;
     };
   } | null>(null);
+  
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Fetch node info to check if NSFW
   useEffect(() => {
@@ -51,25 +55,60 @@ export default function Home() {
       });
   }, []);
 
-  const loadFeed = async (type: 'latest' | 'curated') => {
-    setLoading(true);
+  const loadFeed = async (type: 'latest' | 'curated', cursor?: string | null) => {
+    if (cursor) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     try {
-      const endpoint = type === 'curated' ? '/api/posts?type=curated' : '/api/posts?type=home';
+      const endpoint = type === 'curated' 
+        ? `/api/posts?type=curated${cursor ? `&cursor=${cursor}` : ''}` 
+        : `/api/posts?type=home${cursor ? `&cursor=${cursor}` : ''}`;
       const res = await fetch(endpoint);
       const data = await res.json();
-      setPosts(data.posts || []);
+      
+      if (cursor) {
+        setPosts(prev => [...prev, ...(data.posts || [])]);
+      } else {
+        setPosts(data.posts || []);
+      }
       setFeedMeta(data.meta || null);
+      setNextCursor(data.nextCursor || null);
     } catch {
-      setPosts([]);
+      if (!cursor) {
+        setPosts([]);
+      }
       setFeedMeta(null);
+      setNextCursor(null);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
+    setPosts([]);
+    setNextCursor(null);
     loadFeed(feedType);
   }, [feedType]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!loadMoreRef.current || !nextCursor || loadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && nextCursor && !loadingMore) {
+          loadFeed(feedType, nextCursor);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [nextCursor, loadingMore, feedType]);
 
   const handlePost = async (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => {
     // Check if we're replying to a swarm post
@@ -94,6 +133,8 @@ export default function Home() {
     if (res.ok) {
       const data = await res.json();
       if (feedType === 'curated') {
+        setPosts([]);
+        setNextCursor(null);
         loadFeed('curated');
       } else {
         setPosts([{ ...data.post, author: user }, ...posts]);
@@ -199,19 +240,27 @@ export default function Home() {
           <p style={{ fontSize: '13px', marginTop: '8px' }}>Be the first to post something!</p>
         </div>
       ) : (
-        posts.map(post => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onLike={handleLike}
-            onRepost={handleRepost}
-            onDelete={handleDelete}
-            onComment={(p) => {
-              setReplyingTo(p);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          />
-        ))
+        <>
+          {posts.map(post => (
+            <PostCard
+              key={post.id}
+              post={post}
+              onLike={handleLike}
+              onRepost={handleRepost}
+              onDelete={handleDelete}
+              onComment={(p) => {
+                setReplyingTo(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          ))}
+          {/* Infinite scroll trigger */}
+          <div ref={loadMoreRef} style={{ padding: '24px', textAlign: 'center' }}>
+            {loadingMore && (
+              <span style={{ color: 'var(--foreground-tertiary)' }}>Loading more...</span>
+            )}
+          </div>
+        </>
       )}
     </>
   );

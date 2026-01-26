@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeftIcon, CalendarIcon } from '@/components/Icons';
@@ -94,6 +94,10 @@ export default function ProfilePage() {
     const [repliesLoading, setRepliesLoading] = useState(false);
     const [followersLoading, setFollowersLoading] = useState(false);
     const [followingLoading, setFollowingLoading] = useState(false);
+    const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+    const [repliesLoadingMore, setRepliesLoadingMore] = useState(false);
+    const [postsCursor, setPostsCursor] = useState<string | null>(null);
+    const [repliesCursor, setRepliesCursor] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [profileForm, setProfileForm] = useState({
         displayName: '',
@@ -130,12 +134,73 @@ export default function ProfilePage() {
             .catch(() => setLoading(false));
 
         setPostsLoading(true);
+        setPostsCursor(null);
+        setRepliesCursor(null);
         fetch(`/api/users/${handle}/posts`)
             .then(res => res.json())
-            .then(data => setPosts(data.posts || []))
+            .then(data => {
+                setPosts(data.posts || []);
+                setPostsCursor(data.nextCursor || null);
+            })
             .catch(() => { })
             .finally(() => setPostsLoading(false));
     }, [handle]);
+
+    // Infinite scroll ref
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    // Load more posts
+    const loadMorePosts = useCallback(async () => {
+        if (!postsCursor || postsLoadingMore) return;
+        setPostsLoadingMore(true);
+        try {
+            const res = await fetch(`/api/users/${handle}/posts?cursor=${postsCursor}`);
+            const data = await res.json();
+            setPosts(prev => [...prev, ...(data.posts || [])]);
+            setPostsCursor(data.nextCursor || null);
+        } catch {
+            // ignore
+        } finally {
+            setPostsLoadingMore(false);
+        }
+    }, [handle, postsCursor, postsLoadingMore]);
+
+    // Load more replies
+    const loadMoreReplies = useCallback(async () => {
+        if (!repliesCursor || repliesLoadingMore || !user) return;
+        setRepliesLoadingMore(true);
+        try {
+            const res = await fetch(`/api/posts?type=replies&userId=${user.id}&cursor=${repliesCursor}`);
+            const data = await res.json();
+            setRepliesPosts(prev => [...prev, ...(data.posts || [])]);
+            setRepliesCursor(data.nextCursor || null);
+        } catch {
+            // ignore
+        } finally {
+            setRepliesLoadingMore(false);
+        }
+    }, [user, repliesCursor, repliesLoadingMore]);
+
+    // Infinite scroll observer
+    useEffect(() => {
+        if (!loadMoreRef.current) return;
+        
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    if (activeTab === 'posts' && postsCursor && !postsLoadingMore) {
+                        loadMorePosts();
+                    } else if (activeTab === 'replies' && repliesCursor && !repliesLoadingMore) {
+                        loadMoreReplies();
+                    }
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        observer.observe(loadMoreRef.current);
+        return () => observer.disconnect();
+    }, [activeTab, postsCursor, repliesCursor, postsLoadingMore, repliesLoadingMore, loadMorePosts, loadMoreReplies]);
 
     const handleLike = async (postId: string, currentLiked: boolean) => {
         const method = currentLiked ? 'DELETE' : 'POST';
@@ -223,9 +288,13 @@ export default function ProfilePage() {
 
         if (activeTab === 'replies' && user) {
             setRepliesLoading(true);
+            setRepliesCursor(null);
             fetch(`/api/posts?type=replies&userId=${user.id}`)
                 .then(res => res.json())
-                .then(data => setRepliesPosts(data.posts || []))
+                .then(data => {
+                    setRepliesPosts(data.posts || []);
+                    setRepliesCursor(data.nextCursor || null);
+                })
                 .catch(() => setRepliesPosts([]))
                 .finally(() => setRepliesLoading(false));
         }
@@ -765,16 +834,23 @@ export default function ProfilePage() {
                         <p>No posts yet</p>
                     </div>
                 ) : (
-                    posts.map((post, index) => (
-                        <PostCard
-                            key={`${post.id}-${index}`}
-                            post={post}
-                            onLike={handleLike}
-                            onRepost={handleRepost}
-                            onComment={handleComment}
-                            onDelete={handleDelete}
-                        />
-                    ))
+                    <>
+                        {posts.map((post, index) => (
+                            <PostCard
+                                key={`${post.id}-${index}`}
+                                post={post}
+                                onLike={handleLike}
+                                onRepost={handleRepost}
+                                onComment={handleComment}
+                                onDelete={handleDelete}
+                            />
+                        ))}
+                        <div ref={loadMoreRef} style={{ padding: '24px', textAlign: 'center' }}>
+                            {postsLoadingMore && (
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Loading more...</span>
+                            )}
+                        </div>
+                    </>
                 )
             )}
 
@@ -788,16 +864,23 @@ export default function ProfilePage() {
                         <p>No replies yet</p>
                     </div>
                 ) : (
-                    repliesPosts.map((post, index) => (
-                        <PostCard
-                            key={`${post.id}-${index}`}
-                            post={post}
-                            onLike={handleLike}
-                            onRepost={handleRepost}
-                            onComment={handleComment}
-                            onDelete={handleDelete}
-                        />
-                    ))
+                    <>
+                        {repliesPosts.map((post, index) => (
+                            <PostCard
+                                key={`${post.id}-${index}`}
+                                post={post}
+                                onLike={handleLike}
+                                onRepost={handleRepost}
+                                onComment={handleComment}
+                                onDelete={handleDelete}
+                            />
+                        ))}
+                        <div ref={loadMoreRef} style={{ padding: '24px', textAlign: 'center' }}>
+                            {repliesLoadingMore && (
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Loading more...</span>
+                            )}
+                        </div>
+                    </>
                 )
             )}
 

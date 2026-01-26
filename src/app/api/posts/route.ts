@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { eq, desc, and, inArray, isNull, isNotNull, notInArray, or } from 'drizzle-orm';
+import { eq, desc, and, inArray, isNull, isNotNull, notInArray, or, lt } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -398,8 +398,20 @@ export async function GET(request: Request) {
 
         if (type === 'local') {
             // Local node posts only - no fediverse content
+            let whereCondition = baseFilter;
+            
+            // Apply cursor-based pagination
+            if (cursor) {
+                const cursorPost = await db.query.posts.findFirst({
+                    where: eq(posts.id, cursor),
+                });
+                if (cursorPost) {
+                    whereCondition = buildWhere(baseFilter, lt(posts.createdAt, cursorPost.createdAt));
+                }
+            }
+            
             feedPosts = await db.query.posts.findMany({
-                where: baseFilter,
+                where: whereCondition,
                 with: {
                     author: true,
                     bot: true,
@@ -441,8 +453,20 @@ export async function GET(request: Request) {
                 .slice(0, limit) as any;
         } else if (type === 'user' && userId) {
             // User's posts (excluding replies)
+            let whereCondition = buildWhere(baseFilter, eq(posts.userId, userId));
+            
+            // Apply cursor-based pagination
+            if (cursor) {
+                const cursorPost = await db.query.posts.findFirst({
+                    where: eq(posts.id, cursor),
+                });
+                if (cursorPost) {
+                    whereCondition = buildWhere(baseFilter, eq(posts.userId, userId), lt(posts.createdAt, cursorPost.createdAt));
+                }
+            }
+            
             feedPosts = await db.query.posts.findMany({
-                where: buildWhere(baseFilter, eq(posts.userId, userId)),
+                where: whereCondition,
                 with: {
                     author: true,
                     bot: true,
@@ -456,8 +480,20 @@ export async function GET(request: Request) {
             });
         } else if (type === 'replies' && userId) {
             // User's replies only
+            let whereCondition = buildWhere(repliesFilter, eq(posts.userId, userId));
+            
+            // Apply cursor-based pagination
+            if (cursor) {
+                const cursorPost = await db.query.posts.findFirst({
+                    where: eq(posts.id, cursor),
+                });
+                if (cursorPost) {
+                    whereCondition = buildWhere(repliesFilter, eq(posts.userId, userId), lt(posts.createdAt, cursorPost.createdAt));
+                }
+            }
+            
             feedPosts = await db.query.posts.findMany({
-                where: buildWhere(repliesFilter, eq(posts.userId, userId)),
+                where: whereCondition,
                 with: {
                     author: true,
                     bot: true,
@@ -598,9 +634,21 @@ export async function GET(request: Request) {
                 // Include own posts + posts from followed users
                 const allowedUserIds = [user.id, ...followingIds];
 
+                // Build where condition with cursor support
+                let whereCondition = buildWhere(baseFilter, inArray(posts.userId, allowedUserIds));
+                
+                if (cursor) {
+                    const cursorPost = await db.query.posts.findFirst({
+                        where: eq(posts.id, cursor),
+                    });
+                    if (cursorPost) {
+                        whereCondition = buildWhere(baseFilter, inArray(posts.userId, allowedUserIds), lt(posts.createdAt, cursorPost.createdAt));
+                    }
+                }
+
                 // Get local posts from people the user follows + their own posts
                 const localPosts = await db.query.posts.findMany({
-                    where: buildWhere(baseFilter, inArray(posts.userId, allowedUserIds)),
+                    where: whereCondition,
                     with: {
                         author: true,
                         bot: true,
@@ -610,7 +658,7 @@ export async function GET(request: Request) {
                         },
                     },
                     orderBy: [desc(posts.createdAt)],
-                    limit: limit * 2, // Get more to account for mixing with remote
+                    limit: cursor ? limit : limit * 2, // Get more on first load to account for mixing with remote
                 });
 
                 // Get handles of remote users we follow
