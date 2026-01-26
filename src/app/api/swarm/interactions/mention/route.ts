@@ -94,6 +94,10 @@ export async function POST(request: NextRequest) {
       type: 'mention',
     });
 
+    // Also notify bot owner if this is a bot being mentioned
+    const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
+    await notifyBotOwnerForPost(mentionedUser.id, remoteUser.id, 'mention', post.id);
+
     console.log(`[Swarm] Received mention from ${remoteHandle} for @${data.mentionedHandle}`);
 
     return NextResponse.json({

@@ -84,6 +84,10 @@ export async function POST(request: NextRequest) {
       type: 'like',
     });
 
+    // Also notify bot owner if this is a bot's post
+    const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
+    await notifyBotOwnerForPost(post.userId, remoteUser.id, 'like', data.postId);
+
     console.log(`[Swarm] Received like from ${remoteHandle} on post ${data.postId}`);
 
     return NextResponse.json({

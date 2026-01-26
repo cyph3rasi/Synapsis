@@ -83,6 +83,10 @@ export async function POST(request: Request, context: RouteContext) {
                 postId,
                 type: 'like',
             });
+
+            // Also notify bot owner if this is a bot's post
+            const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
+            await notifyBotOwnerForPost(post.userId, user.id, 'like', postId);
         }
 
         // SWARM-FIRST: Check if this is a swarm post and deliver directly

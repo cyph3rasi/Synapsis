@@ -93,6 +93,10 @@ export async function POST(request: Request, context: RouteContext) {
                 postId,
                 type: 'repost',
             });
+
+            // Also notify bot owner if this is a bot's post
+            const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
+            await notifyBotOwnerForPost(originalPost.userId, user.id, 'repost', postId);
         }
 
         // SWARM-FIRST: Deliver repost to swarm node

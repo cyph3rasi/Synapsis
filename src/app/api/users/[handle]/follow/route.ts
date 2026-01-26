@@ -268,6 +268,10 @@ export async function POST(request: Request, context: RouteContext) {
                 actorId: currentUser.id,
                 type: 'follow',
             });
+
+            // Also notify bot owner if this is a bot being followed
+            const { notifyBotOwnerForFollow } = await import('@/lib/notifications/botOwnerNotify');
+            await notifyBotOwnerForFollow(targetUser.id, currentUser.id);
         }
 
         // Update counts

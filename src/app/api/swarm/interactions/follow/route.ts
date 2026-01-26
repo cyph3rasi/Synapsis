@@ -110,6 +110,10 @@ export async function POST(request: NextRequest) {
       type: 'follow',
     });
 
+    // Also notify bot owner if this is a bot being followed
+    const { notifyBotOwnerForFollow } = await import('@/lib/notifications/botOwnerNotify');
+    await notifyBotOwnerForFollow(targetUser.id, remoteUser.id);
+
     console.log(`[Swarm] Received follow from ${remoteHandle} for @${data.targetHandle}`);
 
     return NextResponse.json({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts } from '@/db';
+import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
 import { eq, desc, and, inArray, isNull, notInArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -133,6 +133,42 @@ export async function POST(request: Request) {
                 }
             })();
         }
+
+        // Handle local mentions (create notifications for users on this node)
+        (async () => {
+            try {
+                const { extractMentions } = await import('@/lib/swarm/interactions');
+                const { notifications } = await import('@/db');
+                
+                const mentions = extractMentions(data.content);
+                
+                for (const mention of mentions) {
+                    // Only handle local mentions (no domain)
+                    if (mention.domain) continue;
+                    
+                    // Find the mentioned user
+                    const mentionedUser = await db.query.users.findFirst({
+                        where: eq(users.handle, mention.handle.toLowerCase()),
+                    });
+                    
+                    if (mentionedUser && mentionedUser.id !== user.id && !mentionedUser.isSuspended) {
+                        // Create notification for the mentioned user
+                        await db.insert(notifications).values({
+                            userId: mentionedUser.id,
+                            actorId: user.id,
+                            postId: post.id,
+                            type: 'mention',
+                        });
+                        
+                        // Also notify bot owner if this is a bot being mentioned
+                        const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
+                        await notifyBotOwnerForPost(mentionedUser.id, user.id, 'mention', post.id);
+                    }
+                }
+            } catch (err) {
+                console.error('[Local] Error creating mention notifications:', err);
+            }
+        })();
 
         // SWARM-FIRST: Deliver mentions to swarm nodes
         (async () => {
