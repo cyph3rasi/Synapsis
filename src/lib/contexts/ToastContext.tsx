@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { useAccentColor } from './AccentColorContext';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -17,6 +18,16 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
+
+// Check if a color is light (needs dark text)
+function isLightColor(hex: string): boolean {
+    const color = hex.replace('#', '');
+    const r = parseInt(color.slice(0, 2), 16);
+    const g = parseInt(color.slice(2, 4), 16);
+    const b = parseInt(color.slice(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6;
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -50,6 +61,9 @@ export function useToast() {
 }
 
 function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast: (id: string) => void }) {
+    const { accentColor } = useAccentColor();
+    const needsDarkText = isLightColor(accentColor);
+    
     if (toasts.length === 0) return null;
 
     return (
@@ -77,9 +91,11 @@ function ToastContainer({ toasts, removeToast }: { toasts: Toast[]; removeToast:
                             : toast.type === 'success' 
                                 ? 'var(--accent)' 
                                 : 'var(--background-secondary)',
-                        color: toast.type === 'error' || toast.type === 'success' 
-                            ? '#fff' 
-                            : 'var(--foreground)',
+                        color: toast.type === 'error'
+                            ? '#fff'
+                            : toast.type === 'success' 
+                                ? (needsDarkText ? '#000' : '#fff')
+                                : 'var(--foreground)',
                         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                         fontSize: '14px',
                         fontWeight: 500,

@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { SynapsisLogo } from '@/components/Icons';
-import { TriangleAlert, ShieldAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 
 export default function LoginPage() {
-    const router = useRouter();
     const [mode, setMode] = useState<'login' | 'register' | 'import'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -33,7 +31,7 @@ export default function LoginPage() {
             .then(data => {
                 setNodeInfo({
                     name: data.name || '',
-                    description: data.description || 'Federated social network infrastructure'
+                    description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.'
                 });
             })
             .catch(() => { });
@@ -98,11 +96,9 @@ export default function LoginPage() {
             }
 
             setImportSuccess(data.message);
-            // After successful import, the user is typically logged in (depends on API implementation)
-            // But let's redirect to login or home if the API returns success
+            // Hard redirect to ensure cookie is picked up
             setTimeout(() => {
-                router.push('/');
-                router.refresh();
+                window.location.href = '/';
             }, 2000);
 
         } catch (err) {
@@ -141,8 +137,8 @@ export default function LoginPage() {
                 throw new Error(data.error || 'Authentication failed');
             }
 
-            router.push('/');
-            router.refresh();
+            // Hard redirect to ensure cookie is picked up
+            window.location.href = '/';
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {

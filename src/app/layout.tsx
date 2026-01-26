@@ -15,7 +15,7 @@ const sairaCondensed = Saira_Condensed({
 
 export const metadata: Metadata = {
   title: "Synapsis",
-  description: "Federated social network infrastructure",
+  description: "Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental.",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.png",
