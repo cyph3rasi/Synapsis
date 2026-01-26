@@ -101,6 +101,14 @@ export function Sidebar() {
                     </Link>
                 )}
                 {user && (
+                    <Link href="/chat" className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>Chat</span>
+                    </Link>
+                )}
+                {user && (
                     <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>
                         <BotIcon />
                         <span>Bots</span>

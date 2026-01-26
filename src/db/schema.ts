@@ -864,3 +864,102 @@ export const swarmSyncLog = pgTable('swarm_sync_log', {
   index('swarm_sync_log_remote_idx').on(table.remoteDomain),
   index('swarm_sync_log_created_idx').on(table.createdAt),
 ]);
+
+// ============================================
+// SWARM CHAT
+// ============================================
+
+/**
+ * Chat conversations between users across the swarm.
+ * Each conversation has a unique ID and tracks participants.
+ */
+export const chatConversations = pgTable('chat_conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  // Conversation type: 'direct' (1-on-1) or 'group' (future)
+  type: text('type').default('direct').notNull(),
+  
+  // For direct chats, store both participants
+  participant1Id: uuid('participant1_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  participant2Handle: text('participant2_handle').notNull(), // Can be local or remote (user@domain)
+  
+  // Last message info for sorting
+  lastMessageAt: timestamp('last_message_at'),
+  lastMessagePreview: text('last_message_preview'),
+  
+  // Metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('chat_conversations_participant1_idx').on(table.participant1Id),
+  index('chat_conversations_last_message_idx').on(table.lastMessageAt),
+  // Ensure unique conversation between two users
+  uniqueIndex('chat_conversations_unique').on(table.participant1Id, table.participant2Handle),
+]);
+
+export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
+  participant1: one(users, {
+    fields: [chatConversations.participant1Id],
+    references: [users.id],
+  }),
+  messages: many(chatMessages),
+}));
+
+/**
+ * Individual chat messages within conversations.
+ * Messages are encrypted end-to-end using recipient's public key.
+ */
+export const chatMessages = pgTable('chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  // Which conversation this belongs to
+  conversationId: uuid('conversation_id').notNull().references(() => chatConversations.id, { onDelete: 'cascade' }),
+  
+  // Sender info
+  senderHandle: text('sender_handle').notNull(), // Can be local or remote
+  senderDisplayName: text('sender_display_name'),
+  senderAvatarUrl: text('sender_avatar_url'),
+  senderNodeDomain: text('sender_node_domain'), // null if local
+  
+  // Message content (encrypted for recipient)
+  encryptedContent: text('encrypted_content').notNull(),
+  
+  // Swarm sync info
+  swarmMessageId: text('swarm_message_id').unique(), // Format: swarm:domain:uuid
+  
+  // Status tracking
+  deliveredAt: timestamp('delivered_at'),
+  readAt: timestamp('read_at'),
+  
+  // Metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('chat_messages_conversation_idx').on(table.conversationId),
+  index('chat_messages_created_idx').on(table.createdAt),
+  index('chat_messages_swarm_id_idx').on(table.swarmMessageId),
+]);
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  conversation: one(chatConversations, {
+    fields: [chatMessages.conversationId],
+    references: [chatConversations.id],
+  }),
+}));
+
+/**
+ * Typing indicators for real-time chat UX.
+ * Short-lived records that expire after 10 seconds.
+ */
+export const chatTypingIndicators = pgTable('chat_typing_indicators', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  
+  conversationId: uuid('conversation_id').notNull().references(() => chatConversations.id, { onDelete: 'cascade' }),
+  userHandle: text('user_handle').notNull(),
+  
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('chat_typing_conversation_idx').on(table.conversationId),
+  index('chat_typing_expires_idx').on(table.expiresAt),
+  uniqueIndex('chat_typing_unique').on(table.conversationId, table.userHandle),
+]);
