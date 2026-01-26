@@ -25,6 +25,7 @@ export default function Home() {
   const [replyingTo, setReplyingTo] = useState<Post | null>(null);
   const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
   const [isNsfwNode, setIsNsfwNode] = useState(false);
+  const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
   const [feedMeta, setFeedMeta] = useState<{
     algorithm: string;
     windowHours: number;
@@ -43,8 +44,11 @@ export default function Home() {
       .then(res => res.json())
       .then(data => {
         setIsNsfwNode(data.isNsfw || false);
+        setNodeInfoLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setNodeInfoLoaded(true);
+      });
   }, []);
 
   const loadFeed = async (type: 'latest' | 'curated') => {
@@ -171,7 +175,11 @@ export default function Home() {
       )}
 
       {/* NSFW node gate for unauthenticated users */}
-      {!user && isNsfwNode ? (
+      {!user && !nodeInfoLoaded ? (
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+          Loading...
+        </div>
+      ) : !user && isNsfwNode ? (
         <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <EyeOff size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
           <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--foreground-secondary)', marginBottom: '8px' }}>

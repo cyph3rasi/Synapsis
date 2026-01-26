@@ -244,6 +244,21 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
 
     const postUrl = `/${post.author.handle}/posts/${post.id}`;
 
+    // Get the full handle for profile links (includes domain for remote users)
+    const getProfileHandle = () => {
+        // If handle already has domain, use it
+        if (post.author.handle.includes('@')) {
+            return post.author.handle;
+        }
+        // If this is a swarm post, append the node domain
+        if (post.nodeDomain) {
+            return `${post.author.handle}@${post.nodeDomain}`;
+        }
+        // Local user
+        return post.author.handle;
+    };
+    const profileHandle = getProfileHandle();
+
     // Decode HTML entities from federated posts (e.g., &amp;rsquo; -> ')
     const decodeHtmlEntities = (text: string): string => {
         const entities: Record<string, string> = {
@@ -346,7 +361,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
             {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
             <div className="post-header">
-                <Link href={`/${post.author.handle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
+                <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
                     <div className="avatar">
                         {post.author.avatarUrl ? (
                             <img src={post.author.avatarUrl} alt={post.author.displayName} />
@@ -357,7 +372,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                 </Link>
                 <div className="post-author">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Link href={`/${post.author.handle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                        <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                             {post.author.displayName || post.author.handle}
                         </Link>
                         {post.bot && (

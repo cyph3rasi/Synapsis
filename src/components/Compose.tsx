@@ -31,7 +31,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
     const [isNsfw, setIsNsfw] = useState(false);
     const [canPostNsfw, setCanPostNsfw] = useState(false);
     const [isNsfwNode, setIsNsfwNode] = useState(false);
-    const maxLength = 400;
+    const maxLength = 600;
     const remaining = maxLength - content.length;
 
     // Check if user can post NSFW content and if node is NSFW
