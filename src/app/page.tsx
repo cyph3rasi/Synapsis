@@ -159,17 +159,14 @@ export default function Home() {
 
       {/* NSFW node gate for unauthenticated users */}
       {!user && isNsfwNode ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <EyeOff size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
           <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--foreground-secondary)', marginBottom: '8px' }}>
             Adult Content
           </p>
-          <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto 20px' }}>
+          <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto' }}>
             This node contains adult or sensitive content. You must be 18 or older and signed in to view posts.
           </p>
-          <Link href="/login" className="btn btn-primary">
-            Sign In to Continue
-          </Link>
         </div>
       ) : loading ? (
         <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>

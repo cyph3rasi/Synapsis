@@ -6,7 +6,8 @@ import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
 import { formatFullHandle } from '@/lib/utils/handle';
-import { Bot, Network, Server } from 'lucide-react';
+import { Bot, Network, Server, EyeOff } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface User {
     id: string;
@@ -75,6 +76,7 @@ interface SwarmPost {
 }
 
 export default function ExplorePage() {
+    const { user } = useAuth();
     const [query, setQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'node' | 'swarm' | 'users' | 'search'>('node');
     const [nodePosts, setNodePosts] = useState<Post[]>([]);
@@ -84,6 +86,17 @@ export default function ExplorePage() {
     const [searchResults, setSearchResults] = useState<{ posts: Post[]; users: User[] }>({ posts: [], users: [] });
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
+    const [isNsfwNode, setIsNsfwNode] = useState(false);
+
+    // Fetch node info to check if NSFW
+    useEffect(() => {
+        fetch('/api/node')
+            .then(res => res.json())
+            .then(data => {
+                setIsNsfwNode(data.isNsfw || false);
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         // Load node posts (local only)
@@ -232,7 +245,17 @@ export default function ExplorePage() {
 
             <div className="explore-content">
                 {activeTab === 'node' && (
-                    loading ? (
+                    !user && isNsfwNode ? (
+                        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <EyeOff size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+                            <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--foreground-secondary)', marginBottom: '8px' }}>
+                                Adult Content
+                            </p>
+                            <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto' }}>
+                                This node contains adult or sensitive content. You must be 18 or older and signed in to view posts.
+                            </p>
+                        </div>
+                    ) : loading ? (
                         <div className="explore-loading">Loading posts...</div>
                     ) : nodePosts.length === 0 ? (
                         <div className="explore-empty">

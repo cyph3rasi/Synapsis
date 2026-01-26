@@ -15,8 +15,9 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
-    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string }>({ name: '', description: '' });
+    const [nodeInfo, setNodeInfo] = useState<{ name: string; description: string; logoUrl?: string; isNsfw?: boolean }>({ name: '', description: '' });
     const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+    const [ageVerified, setAgeVerified] = useState(false);
 
     // Import specific state
     const [importFile, setImportFile] = useState<File | null>(null);
@@ -33,7 +34,8 @@ export default function LoginPage() {
                 setNodeInfo({
                     name: data.name || '',
                     description: data.description || 'Synapsis is designed to function like a global signal layer rather than a culture-bound platform. Anyone can run their own node and still participate in a shared, interconnected network, with global identity, clean terminology, and a modern interface that feels current rather than experimental. Synapsis aims to be neutral, resilient infrastructure for human and machine discourse, more like a protocol or nervous system than a social club.',
-                    logoUrl: data.logoUrl || undefined
+                    logoUrl: data.logoUrl || undefined,
+                    isNsfw: data.isNsfw || false
                 });
                 setNodeInfoLoaded(true);
             })
@@ -119,6 +121,11 @@ export default function LoginPage() {
 
         if (mode === 'register' && password !== confirmPassword) {
             setError('Passwords do not match');
+            return;
+        }
+
+        if (mode === 'register' && nodeInfo.isNsfw && !ageVerified) {
+            setError('You must verify your age to register on this node');
             return;
         }
 
@@ -377,6 +384,30 @@ export default function LoginPage() {
                                     required
                                     minLength={8}
                                 />
+                            </div>
+                        )}
+
+                        {mode === 'register' && nodeInfo.isNsfw && (
+                            <div style={{
+                                marginBottom: '20px',
+                                padding: '12px',
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: 'var(--radius-md)',
+                            }}>
+                                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={ageVerified}
+                                        onChange={(e) => setAgeVerified(e.target.checked)}
+                                        style={{ marginTop: '3px' }}
+                                    />
+                                    <span style={{ fontSize: '12px', color: 'var(--foreground-secondary)', lineHeight: 1.4 }}>
+                                        <strong style={{ color: 'var(--error)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                            <TriangleAlert size={12} /> Age Verification:
+                                        </strong> This node contains adult or sensitive content. I confirm that I am at least 18 years of age.
+                                    </span>
+                                </label>
                             </div>
                         )}
 
