@@ -85,11 +85,13 @@ export default function ProfilePage() {
     const [currentUser, setCurrentUser] = useState<{ id: string; handle: string } | null>(null);
     const [isFollowing, setIsFollowing] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'posts' | 'likes' | 'followers' | 'following'>('posts');
+    const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'likes' | 'followers' | 'following'>('posts');
     const [followers, setFollowers] = useState<UserSummary[]>([]);
     const [following, setFollowing] = useState<UserSummary[]>([]);
+    const [repliesPosts, setRepliesPosts] = useState<Post[]>([]);
     const [postsLoading, setPostsLoading] = useState(true);
     const [likesLoading, setLikesLoading] = useState(false);
+    const [repliesLoading, setRepliesLoading] = useState(false);
     const [followersLoading, setFollowersLoading] = useState(false);
     const [followingLoading, setFollowingLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -111,6 +113,7 @@ export default function ProfilePage() {
         setFollowers([]);
         setFollowing([]);
         setLikedPosts([]);
+        setRepliesPosts([]);
         // Get current user
         fetch('/api/auth/me')
             .then(res => res.json())
@@ -217,7 +220,16 @@ export default function ProfilePage() {
                 .catch(() => setLikedPosts([]))
                 .finally(() => setLikesLoading(false));
         }
-    }, [activeTab, handle]);
+
+        if (activeTab === 'replies' && user) {
+            setRepliesLoading(true);
+            fetch(`/api/posts?type=replies&userId=${user.id}`)
+                .then(res => res.json())
+                .then(data => setRepliesPosts(data.posts || []))
+                .catch(() => setRepliesPosts([]))
+                .finally(() => setRepliesLoading(false));
+        }
+    }, [activeTab, handle, user]);
 
     const handleFollow = async () => {
         if (!currentUser) return;
@@ -718,8 +730,8 @@ export default function ProfilePage() {
                 {/* Tabs */}
                 <div style={{ display: 'flex', borderTop: '1px solid var(--border)' }}>
                     {(user?.isBot 
-                        ? ['posts', 'followers', 'following'] as const
-                        : ['posts', 'likes', 'followers', 'following'] as const
+                        ? ['posts', 'replies', 'followers', 'following'] as const
+                        : ['posts', 'replies', 'likes', 'followers', 'following'] as const
                     ).map(tab => (
                         <button
                             key={tab}
@@ -754,6 +766,29 @@ export default function ProfilePage() {
                     </div>
                 ) : (
                     posts.map((post, index) => (
+                        <PostCard
+                            key={`${post.id}-${index}`}
+                            post={post}
+                            onLike={handleLike}
+                            onRepost={handleRepost}
+                            onComment={handleComment}
+                            onDelete={handleDelete}
+                        />
+                    ))
+                )
+            )}
+
+            {activeTab === 'replies' && (
+                repliesLoading ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>Loading...</p>
+                    </div>
+                ) : repliesPosts.length === 0 ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
+                        <p>No replies yet</p>
+                    </div>
+                ) : (
+                    repliesPosts.map((post, index) => (
                         <PostCard
                             key={`${post.id}-${index}`}
                             post={post}

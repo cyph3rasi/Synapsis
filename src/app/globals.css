@@ -273,32 +273,44 @@ a.btn-primary:visited {
 /* Thread Container */
 .thread-container {
   position: relative;
+  border-bottom: none;
 }
 
-.thread-container .post {
+.thread-container > .post {
   border-bottom: none;
-  padding-bottom: 8px;
+  padding-bottom: 0;
+}
+
+.thread-container > .post .post-actions {
+  display: none;
 }
 
 .thread-line {
   position: absolute;
-  left: 36px;
-  top: 56px;
-  bottom: 0;
+  left: 35px;
   width: 2px;
   background: var(--border);
+  top: 52px;
+  bottom: -16px;
+  z-index: 1;
 }
 
 .post.thread-parent {
-  opacity: 0.85;
-}
-
-.post.thread-parent .post-actions {
-  display: none;
+  border-bottom: none;
+  padding-bottom: 4px;
 }
 
 .post.thread-parent .post-content {
+  color: var(--foreground-secondary);
   font-size: 14px;
+}
+
+.post.thread-parent .post-header {
+  margin-bottom: 4px;
+}
+
+.post.thread-parent + .post {
+  padding-top: 8px;
 }
 
 /* Post */

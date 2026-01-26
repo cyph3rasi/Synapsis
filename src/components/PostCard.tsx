@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { HeartIcon, RepeatIcon, MessageIcon, FlagIcon, TrashIcon } from '@/components/Icons';
 import { Bot, MoreHorizontal, UserX, VolumeX, Globe } from 'lucide-react';
 import { Post } from '@/lib/types';
@@ -38,11 +39,13 @@ interface PostCardProps {
     isDetail?: boolean;
     showThread?: boolean; // Show parent post inline as a thread
     isThreadParent?: boolean; // This post is being shown as a parent in a thread
+    parentPostAuthorId?: string; // ID of the parent post's author (for allowing deletion of replies)
 }
 
-export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent }: PostCardProps) {
+export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent, parentPostAuthorId }: PostCardProps) {
     const { user: currentUser } = useAuth();
     const { showToast } = useToast();
+    const router = useRouter();
     const [liked, setLiked] = useState(post.isLiked || false);
     const [reposted, setReposted] = useState(post.isReposted || false);
     const [reporting, setReporting] = useState(false);
@@ -101,7 +104,8 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
     const handleComment = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        onComment?.(post);
+        // Navigate to post detail page
+        router.push(postUrl);
     };
 
     const handleReport = async (e: React.MouseEvent) => {
@@ -375,10 +379,36 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
             : post.swarmReplyToAuthor)?.nodeDomain,
     } as Post : null);
 
+    // If this is a thread parent being rendered, just render the article
+    if (isThreadParent) {
+        return (
+            <article className="post thread-parent">
+                <div className="post-header">
+                    <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
+                        <div className="avatar">
+                            {post.author.avatarUrl ? (
+                                <img src={post.author.avatarUrl} alt={post.author.displayName || ''} />
+                            ) : (
+                                post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
+                            )}
+                        </div>
+                    </Link>
+                    <div className="post-author">
+                        <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                            {post.author.displayName || post.author.handle}
+                        </Link>
+                        <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)}</span>
+                    </div>
+                </div>
+                <div className="post-content">{renderContent(post.content, post.linkPreviewUrl ?? undefined)}</div>
+            </article>
+        );
+    }
+
     return (
         <>
-            {/* Show parent post as part of thread */}
-            {showThread && effectiveReplyTo && !isDetail && !isThreadParent && (
+            {/* Show parent post as part of thread - only on detail page */}
+            {showThread && effectiveReplyTo && isDetail && (
                 <div className="thread-container">
                     <PostCard
                         post={effectiveReplyTo}
@@ -393,7 +423,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                     <div className="thread-line" />
                 </div>
             )}
-            <article className={`post ${isDetail ? 'detail' : ''} ${isThreadParent ? 'thread-parent' : ''}`}>
+            <article className={`post ${isDetail ? 'detail' : ''}`}>
                 {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
             <div className="post-header">
@@ -629,7 +659,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                     <FlagIcon />
                     <span>{reporting ? '...' : ''}</span>
                 </button>
-                {(currentUser?.id === post.author.id || (post.bot && currentUser?.id === post.bot.ownerId)) && (
+                {(currentUser?.id === post.author.id || (post.bot && currentUser?.id === post.bot.ownerId) || (parentPostAuthorId && currentUser?.id === parentPostAuthorId)) && (
                     <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
                         <TrashIcon />
                         <span>{deleting ? '...' : ''}</span>

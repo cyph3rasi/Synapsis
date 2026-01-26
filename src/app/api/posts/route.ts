@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { eq, desc, and, inArray, isNull, notInArray, or } from 'drizzle-orm';
+import { eq, desc, and, inArray, isNull, isNotNull, notInArray, or } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -375,14 +375,25 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url);
-        const type = searchParams.get('type') || 'home'; // home, public, user, curated
+        const type = searchParams.get('type') || 'home'; // home, public, user, curated, replies
         const userId = searchParams.get('userId');
         const cursor = searchParams.get('cursor');
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
         let feedPosts;
+        // Base filter excludes removed posts and replies (replies only show on detail/profile)
         const baseFilter = buildWhere(
-            eq(posts.isRemoved, false)
+            eq(posts.isRemoved, false),
+            isNull(posts.replyToId),
+            isNull(posts.swarmReplyToId)
+        );
+        // Filter for replies only
+        const repliesFilter = buildWhere(
+            eq(posts.isRemoved, false),
+            or(
+                isNotNull(posts.replyToId),
+                isNotNull(posts.swarmReplyToId)
+            )
         );
 
         if (type === 'local') {
@@ -429,9 +440,24 @@ export async function GET(request: Request) {
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .slice(0, limit) as any;
         } else if (type === 'user' && userId) {
-            // User's posts
+            // User's posts (excluding replies)
             feedPosts = await db.query.posts.findMany({
                 where: buildWhere(baseFilter, eq(posts.userId, userId)),
+                with: {
+                    author: true,
+                    bot: true,
+                    media: true,
+                    replyTo: {
+                        with: { author: true, media: true },
+                    },
+                },
+                orderBy: [desc(posts.createdAt)],
+                limit,
+            });
+        } else if (type === 'replies' && userId) {
+            // User's replies only
+            feedPosts = await db.query.posts.findMany({
+                where: buildWhere(repliesFilter, eq(posts.userId, userId)),
                 with: {
                     author: true,
                     bot: true,

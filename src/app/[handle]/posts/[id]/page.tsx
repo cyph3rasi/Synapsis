@@ -165,6 +165,7 @@ export default function PostDetailPage() {
                         onLike={handleLike}
                         onRepost={handleRepost}
                         onDelete={handleDelete}
+                        parentPostAuthorId={post.author.id}
                         onComment={(p) => {
                             // In detail view, commenting on a reply should probably just focus the main composer
                             // but we could also implement nested replies later. 

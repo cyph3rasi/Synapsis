@@ -113,6 +113,60 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * DELETE /api/swarm/replies
+ * 
+ * Receives a deletion request from another node.
+ * Removes a reply that was previously delivered.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    if (!db) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
+    }
+
+    const body = await request.json();
+    const { replyId, nodeDomain, authorHandle } = body;
+
+    if (!replyId || !nodeDomain) {
+      return NextResponse.json({ error: 'replyId and nodeDomain required' }, { status: 400 });
+    }
+
+    // Find the reply by its swarm ID
+    const swarmReplyId = `swarm:${nodeDomain}:${replyId}`;
+    const existingReply = await db.query.posts.findFirst({
+      where: eq(posts.apId, swarmReplyId),
+    });
+
+    if (!existingReply) {
+      // Already deleted or never existed
+      return NextResponse.json({ success: true, message: 'Reply not found or already deleted' });
+    }
+
+    // Decrement parent's reply count
+    if (existingReply.replyToId) {
+      const parentPost = await db.query.posts.findFirst({
+        where: eq(posts.id, existingReply.replyToId),
+      });
+      if (parentPost && parentPost.repliesCount > 0) {
+        await db.update(posts)
+          .set({ repliesCount: parentPost.repliesCount - 1 })
+          .where(eq(posts.id, existingReply.replyToId));
+      }
+    }
+
+    // Delete the reply
+    await db.delete(posts).where(eq(posts.id, existingReply.id));
+
+    console.log(`[Swarm] Deleted reply ${swarmReplyId} from ${nodeDomain}`);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[Swarm] Delete reply error:', error);
+    return NextResponse.json({ error: 'Failed to delete reply' }, { status: 500 });
+  }
+}
+
+/**
  * GET /api/swarm/replies?postId=xxx
  * 
  * Returns replies to a specific post on this node.

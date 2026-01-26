@@ -255,6 +255,8 @@ export async function DELETE(
         const user = await requireAuth();
         const { id } = await params;
 
+        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, id),
             with: {
@@ -267,10 +269,22 @@ export async function DELETE(
         }
 
         // Allow deletion if user owns the post OR if user owns the bot that made the post
+        // OR if user owns the parent post (can delete replies on their posts)
         const isPostOwner = post.userId === user.id;
         const isBotOwner = post.bot && post.bot.ownerId === user.id;
         
-        if (!isPostOwner && !isBotOwner) {
+        // Check if user owns the parent post (for deleting replies on their posts)
+        let isParentPostOwner = false;
+        if (post.replyToId) {
+            const parentPost = await db.query.posts.findFirst({
+                where: eq(posts.id, post.replyToId),
+            });
+            if (parentPost && parentPost.userId === user.id) {
+                isParentPostOwner = true;
+            }
+        }
+        
+        if (!isPostOwner && !isBotOwner && !isParentPostOwner) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
@@ -286,10 +300,43 @@ export async function DELETE(
             }
         }
 
-        // 2. Delete the post (cascades to media, likes, notifications)
+        // 2. If this is a reply to a swarm post, notify the origin node to delete it
+        if (post.swarmReplyToId) {
+            const parts = post.swarmReplyToId.split(':');
+            if (parts.length >= 3) {
+                const originDomain = parts[1];
+                
+                // Fire and forget - don't block on this
+                (async () => {
+                    try {
+                        const protocol = originDomain.includes('localhost') ? 'http' : 'https';
+                        const res = await fetch(`${protocol}://${originDomain}/api/swarm/replies`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                replyId: post.id,
+                                nodeDomain,
+                                authorHandle: user.handle,
+                            }),
+                            signal: AbortSignal.timeout(5000),
+                        });
+                        
+                        if (res.ok) {
+                            console.log(`[Swarm] Deletion propagated to ${originDomain}`);
+                        } else {
+                            console.error(`[Swarm] Failed to propagate deletion: ${res.status}`);
+                        }
+                    } catch (err) {
+                        console.error('[Swarm] Error propagating deletion:', err);
+                    }
+                })();
+            }
+        }
+
+        // 3. Delete the post (cascades to media, likes, notifications)
         await db.delete(posts).where(eq(posts.id, id));
 
-        // 3. Decrement the post author's postsCount
+        // 4. Decrement the post author's postsCount
         const postAuthor = await db.query.users.findFirst({
             where: eq(users.id, post.userId),
         });
