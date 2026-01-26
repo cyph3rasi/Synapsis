@@ -41,7 +41,40 @@ export async function POST(request: Request, context: RouteContext) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
         }
 
-        // Check if post exists
+        // Handle swarm posts (format: swarm:domain:uuid)
+        if (postId.startsWith('swarm:')) {
+            const targetDomain = extractSwarmDomain(postId);
+            const originalPostId = postId.split(':')[2];
+            
+            if (!targetDomain || !originalPostId) {
+                return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
+            }
+
+            // Deliver like directly to the origin node
+            const { deliverSwarmLike } = await import('@/lib/swarm/interactions');
+            
+            const result = await deliverSwarmLike(targetDomain, {
+                postId: originalPostId,
+                like: {
+                    actorHandle: user.handle,
+                    actorDisplayName: user.displayName || user.handle,
+                    actorAvatarUrl: user.avatarUrl || undefined,
+                    actorNodeDomain: nodeDomain,
+                    interactionId: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                },
+            });
+            
+            if (!result.success) {
+                console.error(`[Swarm] Like delivery failed: ${result.error}`);
+                return NextResponse.json({ error: 'Failed to deliver like to remote node' }, { status: 502 });
+            }
+            
+            console.log(`[Swarm] Like delivered to ${targetDomain} for post ${originalPostId}`);
+            return NextResponse.json({ success: true, liked: true });
+        }
+
+        // Local post - check if it exists
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, postId),
         });
@@ -109,7 +142,7 @@ export async function POST(request: Request, context: RouteContext) {
             }
         }
 
-        // SWARM-FIRST: Check if this is a swarm post and deliver directly
+        // If this is a cached swarm post (has swarm: apId), also deliver to origin
         if (isSwarmPost(post.apId)) {
             const targetDomain = extractSwarmDomain(post.apId);
             const originalPostId = extractSwarmPostId(post.apId!);
@@ -135,7 +168,6 @@ export async function POST(request: Request, context: RouteContext) {
                             console.log(`[Swarm] Like delivered to ${targetDomain} for post ${originalPostId}`);
                         } else {
                             console.warn(`[Swarm] Like delivery failed: ${result.error}`);
-                            // Could fall back to ActivityPub here if needed
                         }
                     } catch (err) {
                         console.error('[Swarm] Error delivering like:', err);
@@ -185,7 +217,38 @@ export async function DELETE(request: Request, context: RouteContext) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
         }
 
-        // Check if post exists
+        // Handle swarm posts (format: swarm:domain:uuid)
+        if (postId.startsWith('swarm:')) {
+            const targetDomain = extractSwarmDomain(postId);
+            const originalPostId = postId.split(':')[2];
+            
+            if (!targetDomain || !originalPostId) {
+                return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
+            }
+
+            // Deliver unlike directly to the origin node
+            const { deliverSwarmUnlike } = await import('@/lib/swarm/interactions');
+            
+            const result = await deliverSwarmUnlike(targetDomain, {
+                postId: originalPostId,
+                unlike: {
+                    actorHandle: user.handle,
+                    actorNodeDomain: nodeDomain,
+                    interactionId: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                },
+            });
+            
+            if (!result.success) {
+                console.error(`[Swarm] Unlike delivery failed: ${result.error}`);
+                return NextResponse.json({ error: 'Failed to deliver unlike to remote node' }, { status: 502 });
+            }
+            
+            console.log(`[Swarm] Unlike delivered to ${targetDomain} for post ${originalPostId}`);
+            return NextResponse.json({ success: true, liked: false });
+        }
+
+        // Local post - check if it exists
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, postId),
         });

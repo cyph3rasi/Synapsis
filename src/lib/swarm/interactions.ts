@@ -110,6 +110,16 @@ export interface SwarmUnfollowPayload {
   };
 }
 
+export interface SwarmUnrepostPayload {
+  postId: string;
+  unrepost: {
+    actorHandle: string;
+    actorNodeDomain: string;
+    interactionId: string;
+    timestamp: string;
+  };
+}
+
 export interface SwarmMentionPayload {
   mentionedHandle: string;
   mention: {
@@ -217,6 +227,16 @@ export async function deliverSwarmUnfollow(
   payload: SwarmUnfollowPayload
 ): Promise<SwarmInteractionResponse> {
   return deliverSwarmInteraction(targetDomain, '/api/swarm/interactions/unfollow', payload);
+}
+
+/**
+ * Deliver an unrepost to a swarm node
+ */
+export async function deliverSwarmUnrepost(
+  targetDomain: string,
+  payload: SwarmUnrepostPayload
+): Promise<SwarmInteractionResponse> {
+  return deliverSwarmInteraction(targetDomain, '/api/swarm/interactions/unrepost', payload);
 }
 
 /**

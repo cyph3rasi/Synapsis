@@ -41,7 +41,41 @@ export async function POST(request: Request, context: RouteContext) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
         }
 
-        // Check if post exists
+        // Handle swarm posts (format: swarm:domain:uuid)
+        if (postId.startsWith('swarm:')) {
+            const targetDomain = extractSwarmDomain(postId);
+            const originalPostId = postId.split(':')[2];
+            
+            if (!targetDomain || !originalPostId) {
+                return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
+            }
+
+            // Deliver repost directly to the origin node
+            const { deliverSwarmRepost } = await import('@/lib/swarm/interactions');
+            
+            const result = await deliverSwarmRepost(targetDomain, {
+                postId: originalPostId,
+                repost: {
+                    actorHandle: user.handle,
+                    actorDisplayName: user.displayName || user.handle,
+                    actorAvatarUrl: user.avatarUrl || undefined,
+                    actorNodeDomain: nodeDomain,
+                    repostId: crypto.randomUUID(),
+                    interactionId: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                },
+            });
+            
+            if (!result.success) {
+                console.error(`[Swarm] Repost delivery failed: ${result.error}`);
+                return NextResponse.json({ error: 'Failed to deliver repost to remote node' }, { status: 502 });
+            }
+            
+            console.log(`[Swarm] Repost delivered to ${targetDomain} for post ${originalPostId}`);
+            return NextResponse.json({ success: true, reposted: true });
+        }
+
+        // Local post - check if it exists
         const originalPost = await db.query.posts.findFirst({
             where: eq(posts.id, postId),
         });
@@ -196,12 +230,44 @@ export async function DELETE(request: Request, context: RouteContext) {
     try {
         const user = await requireAuth();
         const { id: postId } = await context.params;
+        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (user.isSuspended || user.isSilenced) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
         }
 
-        // Check if original post exists
+        // Handle swarm posts (format: swarm:domain:uuid)
+        if (postId.startsWith('swarm:')) {
+            const targetDomain = extractSwarmDomain(postId);
+            const originalPostId = postId.split(':')[2];
+            
+            if (!targetDomain || !originalPostId) {
+                return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
+            }
+
+            // Deliver unrepost directly to the origin node
+            const { deliverSwarmUnrepost } = await import('@/lib/swarm/interactions');
+            
+            const result = await deliverSwarmUnrepost(targetDomain, {
+                postId: originalPostId,
+                unrepost: {
+                    actorHandle: user.handle,
+                    actorNodeDomain: nodeDomain,
+                    interactionId: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                },
+            });
+            
+            if (!result.success) {
+                console.error(`[Swarm] Unrepost delivery failed: ${result.error}`);
+                return NextResponse.json({ error: 'Failed to deliver unrepost to remote node' }, { status: 502 });
+            }
+            
+            console.log(`[Swarm] Unrepost delivered to ${targetDomain} for post ${originalPostId}`);
+            return NextResponse.json({ success: true, reposted: false });
+        }
+
+        // Local post - check if original post exists
         const originalPost = await db.query.posts.findFirst({
             where: eq(posts.id, postId),
         });
