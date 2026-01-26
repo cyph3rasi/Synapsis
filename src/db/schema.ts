@@ -319,6 +319,38 @@ export const likesRelations = relations(likes, ({ one }) => ({
 }));
 
 // ============================================
+// REMOTE LIKES (likes from federated users on local posts)
+// ============================================
+
+export const remoteLikes = pgTable('remote_likes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  postId: uuid('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  actorHandle: text('actor_handle').notNull(), // e.g., "user"
+  actorNodeDomain: text('actor_node_domain').notNull(), // e.g., "other.node"
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('remote_likes_post_idx').on(table.postId),
+  index('remote_likes_actor_idx').on(table.actorHandle, table.actorNodeDomain),
+  uniqueIndex('remote_likes_unique').on(table.postId, table.actorHandle, table.actorNodeDomain),
+]);
+
+// ============================================
+// REMOTE REPOSTS (reposts from federated users on local posts)
+// ============================================
+
+export const remoteReposts = pgTable('remote_reposts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  postId: uuid('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
+  actorHandle: text('actor_handle').notNull(),
+  actorNodeDomain: text('actor_node_domain').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('remote_reposts_post_idx').on(table.postId),
+  index('remote_reposts_actor_idx').on(table.actorHandle, table.actorNodeDomain),
+  uniqueIndex('remote_reposts_unique').on(table.postId, table.actorHandle, table.actorNodeDomain),
+]);
+
+// ============================================
 // NOTIFICATIONS
 // ============================================
 

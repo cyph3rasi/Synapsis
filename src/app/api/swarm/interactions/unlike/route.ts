@@ -5,8 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, posts } from '@/db';
-import { eq } from 'drizzle-orm';
+import { db, posts, remoteLikes } from '@/db';
+import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 const swarmUnlikeSchema = z.object({
@@ -42,10 +42,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    // Decrement like count (don't go below 0)
-    await db.update(posts)
-      .set({ likesCount: Math.max(0, post.likesCount - 1) })
-      .where(eq(posts.id, data.postId));
+    // Remove the remote like record
+    const deleted = await db.delete(remoteLikes)
+      .where(and(
+        eq(remoteLikes.postId, data.postId),
+        eq(remoteLikes.actorHandle, data.unlike.actorHandle),
+        eq(remoteLikes.actorNodeDomain, data.unlike.actorNodeDomain)
+      ))
+      .returning();
+
+    // Only decrement if we actually had a like record
+    if (deleted.length > 0) {
+      await db.update(posts)
+        .set({ likesCount: Math.max(0, post.likesCount - 1) })
+        .where(eq(posts.id, data.postId));
+    }
 
     console.log(`[Swarm] Received unlike from ${data.unlike.actorHandle}@${data.unlike.actorNodeDomain} on post ${data.postId}`);
 

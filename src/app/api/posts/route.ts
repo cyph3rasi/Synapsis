@@ -686,31 +686,80 @@ export async function GET(request: Request) {
 
             if (session?.user && feedPosts && feedPosts.length > 0) {
                 const viewer = session.user;
-                const postIds = feedPosts.map((p: { id: string }) => p.id).filter(Boolean);
+                const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+                
+                // Separate local and swarm posts
+                const localPostIds: string[] = [];
+                const swarmPosts: Array<{ id: string; domain: string; originalId: string }> = [];
+                
+                for (const p of feedPosts as Array<{ id: string }>) {
+                    if (p.id.startsWith('swarm:')) {
+                        const parts = p.id.split(':');
+                        if (parts.length >= 3) {
+                            swarmPosts.push({
+                                id: p.id,
+                                domain: parts[1],
+                                originalId: parts[2],
+                            });
+                        }
+                    } else {
+                        localPostIds.push(p.id);
+                    }
+                }
 
-                if (postIds.length > 0) {
+                // Check local likes
+                const likedPostIds = new Set<string>();
+                const repostedPostIds = new Set<string>();
+                
+                if (localPostIds.length > 0) {
                     const viewerLikes = await db.query.likes.findMany({
                         where: and(
                             eq(likes.userId, viewer.id),
-                            inArray(likes.postId, postIds)
+                            inArray(likes.postId, localPostIds)
                         ),
                     });
-                    const likedPostIds = new Set(viewerLikes.map(l => l.postId));
+                    viewerLikes.forEach(l => likedPostIds.add(l.postId));
 
                     const viewerReposts = await db.query.posts.findMany({
                         where: and(
                             eq(posts.userId, viewer.id),
-                            inArray(posts.repostOfId, postIds)
+                            inArray(posts.repostOfId, localPostIds)
                         ),
                     });
-                    const repostedPostIds = new Set(viewerReposts.map(r => r.repostOfId));
-
-                    feedPosts = feedPosts.map((p: { id: string }) => ({
-                        ...p,
-                        isLiked: likedPostIds.has(p.id),
-                        isReposted: repostedPostIds.has(p.id),
-                    })) as any;
+                    viewerReposts.forEach(r => { if (r.repostOfId) repostedPostIds.add(r.repostOfId); });
                 }
+
+                // Check swarm likes in real-time (query origin nodes)
+                if (swarmPosts.length > 0) {
+                    const checkPromises = swarmPosts.map(async (sp) => {
+                        try {
+                            const protocol = sp.domain.includes('localhost') ? 'http' : 'https';
+                            const url = `${protocol}://${sp.domain}/api/swarm/posts/${sp.originalId}/likes?checkHandle=${viewer.handle}&checkDomain=${nodeDomain}`;
+                            
+                            const res = await fetch(url, {
+                                headers: { 'Accept': 'application/json' },
+                                signal: AbortSignal.timeout(3000),
+                            });
+                            
+                            if (res.ok) {
+                                const data = await res.json();
+                                if (data.isLiked) {
+                                    likedPostIds.add(sp.id);
+                                }
+                            }
+                        } catch (err) {
+                            // Timeout or error - just skip
+                        }
+                    });
+                    
+                    await Promise.all(checkPromises);
+                }
+
+                feedPosts = feedPosts.map((p: { id: string }) => ({
+                    ...p,
+                    isLiked: likedPostIds.has(p.id),
+                    isReposted: repostedPostIds.has(p.id),
+                })) as any;
             }
         } catch (error) {
             console.error('Error populating interaction flags:', error);

@@ -5,8 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, posts, users, notifications } from '@/db';
-import { eq } from 'drizzle-orm';
+import { db, posts, users, notifications, remoteLikes } from '@/db';
+import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 const swarmLikeSchema = z.object({
@@ -48,6 +48,26 @@ export async function POST(request: NextRequest) {
     if (post.isRemoved) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
+
+    // Check if already liked by this remote user
+    const existingLike = await db.query.remoteLikes.findFirst({
+      where: and(
+        eq(remoteLikes.postId, data.postId),
+        eq(remoteLikes.actorHandle, data.like.actorHandle),
+        eq(remoteLikes.actorNodeDomain, data.like.actorNodeDomain)
+      ),
+    });
+
+    if (existingLike) {
+      return NextResponse.json({ success: true, message: 'Already liked' });
+    }
+
+    // Track the remote like
+    await db.insert(remoteLikes).values({
+      postId: data.postId,
+      actorHandle: data.like.actorHandle,
+      actorNodeDomain: data.like.actorNodeDomain,
+    });
 
     // Increment like count
     await db.update(posts)
