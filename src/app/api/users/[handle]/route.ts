@@ -94,6 +94,16 @@ export async function GET(request: Request, context: RouteContext) {
                 const swarmData = await fetchSwarmProfile(remoteHandle, remoteDomain);
                 if (swarmData?.profile) {
                     const profile = swarmData.profile;
+                    
+                    // Build botOwner object if this is a bot with an owner
+                    let botOwner = undefined;
+                    if (profile.isBot && profile.botOwnerHandle) {
+                        botOwner = {
+                            id: `swarm:${remoteDomain}:${profile.botOwnerHandle}`,
+                            handle: `${profile.botOwnerHandle}@${remoteDomain}`,
+                        };
+                    }
+                    
                     return NextResponse.json({
                         user: {
                             id: `swarm:${remoteDomain}:${profile.handle}`,
@@ -111,6 +121,7 @@ export async function GET(request: Request, context: RouteContext) {
                             isSwarm: true,
                             nodeDomain: remoteDomain,
                             isBot: profile.isBot || false,
+                            botOwner,
                         }
                     });
                 }

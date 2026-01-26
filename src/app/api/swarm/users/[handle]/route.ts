@@ -20,6 +20,7 @@ export interface SwarmUserProfile {
   postsCount: number;
   createdAt: string;
   isBot?: boolean;
+  botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
 }
 
@@ -62,6 +63,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // Find the user
     const user = await db.query.users.findFirst({
       where: eq(users.handle, cleanHandle),
+      with: {
+        botOwner: true, // Include bot owner if this is a bot
+      },
     });
 
     if (!user) {
@@ -85,6 +89,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       postsCount: user.postsCount,
       createdAt: user.createdAt.toISOString(),
       isBot: user.isBot || undefined,
+      botOwnerHandle: user.isBot && user.botOwner ? user.botOwner.handle : undefined,
       nodeDomain,
     };
 
