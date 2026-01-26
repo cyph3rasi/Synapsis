@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings2 } from 'lucide-react';
 
 export function Sidebar() {
     const { user, isAdmin } = useAuth();
@@ -118,8 +118,14 @@ export function Sidebar() {
                     </Link>
                 )}
                 {isAdmin && (
-                    <Link href="/admin" className={`nav-item ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
+                    <Link href="/moderation" className={`nav-item ${pathname?.startsWith('/moderation') ? 'active' : ''}`}>
                         <ShieldIcon />
+                        <span>Moderation</span>
+                    </Link>
+                )}
+                {isAdmin && (
+                    <Link href="/admin" className={`nav-item ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
+                        <Settings2 size={24} />
                         <span>Admin</span>
                     </Link>
                 )}
