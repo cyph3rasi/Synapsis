@@ -329,17 +329,20 @@ export async function GET(request: Request) {
         } else if (type === 'curated') {
             // Curated feed - swarm posts only (no fediverse)
             let viewer = null;
+            let includeNsfw = false;
             try {
                 const { getSession } = await import('@/lib/auth');
                 const session = await getSession();
                 viewer = session?.user || null;
+                includeNsfw = session?.user?.nsfwEnabled ?? false;
             } catch {
                 viewer = null;
+                includeNsfw = false;
             }
 
-            // Fetch swarm posts
+            // Fetch swarm posts with user's NSFW preference
             const { fetchSwarmTimeline } = await import('@/lib/swarm/timeline');
-            const swarmResult = await fetchSwarmTimeline(10, 30);
+            const swarmResult = await fetchSwarmTimeline(10, 30, { includeNsfw });
             
             // Transform swarm posts to match local post format
             const swarmPosts = swarmResult.posts.map(sp => ({

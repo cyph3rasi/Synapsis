@@ -18,6 +18,85 @@ interface TimelineOptions {
 }
 
 /**
+ * Extract the first URL from post content
+ */
+function extractFirstUrl(content: string): string | null {
+  const urlMatch = content.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+/);
+  if (!urlMatch) return null;
+  // Clean trailing punctuation
+  return urlMatch[0].replace(/[)\].,!?;:]+$/, '');
+}
+
+/**
+ * Fetch link preview for a URL
+ */
+async function fetchLinkPreview(url: string): Promise<{
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+} | null> {
+  try {
+    const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
+    const protocol = nodeDomain === 'localhost' ? 'http' : 'https';
+    const previewUrl = `${protocol}://${nodeDomain}/api/media/preview?url=${encodeURIComponent(url)}`;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout for previews
+    
+    const response = await fetch(previewUrl, {
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeout);
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    return {
+      url: data.url || url,
+      title: data.title || null,
+      description: data.description || null,
+      image: data.image || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Enrich swarm posts with link previews if they have URLs but no preview data
+ */
+async function enrichPostsWithPreviews(posts: SwarmPost[]): Promise<SwarmPost[]> {
+  const enrichmentPromises = posts.map(async (post) => {
+    // Skip if already has link preview data
+    if (post.linkPreviewUrl) return post;
+    
+    // Extract URL from content
+    const url = extractFirstUrl(post.content);
+    if (!url) return post;
+    
+    // Skip video URLs (handled by VideoEmbed component)
+    if (url.match(/(youtube\.com|youtu\.be|vimeo\.com)/)) return post;
+    
+    // Fetch preview
+    const preview = await fetchLinkPreview(url);
+    if (!preview) return post;
+    
+    return {
+      ...post,
+      linkPreviewUrl: preview.url,
+      linkPreviewTitle: preview.title || undefined,
+      linkPreviewDescription: preview.description || undefined,
+      linkPreviewImage: preview.image || undefined,
+    };
+  });
+  
+  return Promise.all(enrichmentPromises);
+}
+
+/**
  * Fetch timeline from a single node
  */
 async function fetchNodeTimeline(
@@ -121,8 +200,11 @@ export async function fetchSwarmTimeline(
       return true;
     });
 
+  // Enrich posts that have URLs but no link preview data
+  const enrichedPosts = await enrichPostsWithPreviews(uniquePosts);
+
   return {
-    posts: uniquePosts,
+    posts: enrichedPosts,
     sources,
     fetchedAt: new Date().toISOString(),
   };

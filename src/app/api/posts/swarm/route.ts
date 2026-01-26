@@ -6,41 +6,30 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchSwarmTimeline } from '@/lib/swarm/timeline';
-
-// Simple in-memory cache for swarm timeline
-let cachedTimeline: Awaited<ReturnType<typeof fetchSwarmTimeline>> | null = null;
-let cacheTimestamp = 0;
-const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+import { getSession } from '@/lib/auth';
 
 /**
  * GET /api/posts/swarm
  * 
  * Returns aggregated posts from across the swarm network.
- * Results are cached for 1 minute to reduce load on other nodes.
+ * NSFW content is included based on user's nsfwEnabled setting.
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const refresh = searchParams.get('refresh') === 'true';
     
-    const now = Date.now();
-    
-    // Return cached data if fresh
-    if (!refresh && cachedTimeline && (now - cacheTimestamp) < CACHE_TTL_MS) {
-      return NextResponse.json({
-        posts: cachedTimeline.posts,
-        sources: cachedTimeline.sources,
-        cached: true,
-        fetchedAt: cachedTimeline.fetchedAt,
-      });
+    // Check user's NSFW preference
+    let includeNsfw = false;
+    try {
+      const session = await getSession();
+      includeNsfw = session?.user?.nsfwEnabled ?? false;
+    } catch {
+      includeNsfw = false;
     }
 
-    // Fetch fresh data
-    const timeline = await fetchSwarmTimeline(10, 15);
-    
-    // Update cache
-    cachedTimeline = timeline;
-    cacheTimestamp = now;
+    // Fetch swarm timeline (no caching - user preferences vary)
+    const timeline = await fetchSwarmTimeline(10, 15, { includeNsfw });
 
     return NextResponse.json({
       posts: timeline.posts,
