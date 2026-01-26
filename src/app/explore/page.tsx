@@ -34,15 +34,15 @@ function UserCard({ user }: { user: User }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className="user-card-name">{user.displayName || user.handle}</span>
                     {user.isBot && (
-                        <span 
-                            style={{ 
+                        <span
+                            style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '3px',
-                                fontSize: '10px', 
-                                padding: '2px 6px', 
-                                borderRadius: '4px', 
-                                background: 'var(--accent-muted)', 
+                                fontSize: '10px',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: 'var(--accent-muted)',
                                 color: 'var(--accent)',
                                 fontWeight: 500,
                             }}
@@ -90,6 +90,11 @@ export default function ExplorePage() {
     const [searchResults, setSearchResults] = useState<{ posts: Post[]; users: User[] }>({ posts: [], users: [] });
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
+    const [nodeCursor, setNodeCursor] = useState<string | null>(null);
+    const [swarmCursor, setSwarmCursor] = useState<string | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMoreNode, setHasMoreNode] = useState(true);
+    const [hasMoreSwarm, setHasMoreSwarm] = useState(true);
     const [isNsfwNode, setIsNsfwNode] = useState(false);
 
     // Fetch node info to check if NSFW
@@ -99,7 +104,7 @@ export default function ExplorePage() {
             .then(data => {
                 setIsNsfwNode(data.isNsfw || false);
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -110,6 +115,8 @@ export default function ExplorePage() {
                 const res = await fetch('/api/posts?type=local&limit=20');
                 const data = await res.json();
                 setNodePosts(data.posts || []);
+                setNodeCursor(data.nextCursor || null);
+                setHasMoreNode(!!data.nextCursor);
             } catch {
                 setNodePosts([]);
             } finally {
@@ -117,8 +124,10 @@ export default function ExplorePage() {
             }
         };
 
-        loadNodePosts();
-    }, []);
+        if (activeTab === 'node' && nodePosts.length === 0) {
+            loadNodePosts();
+        }
+    }, [activeTab, nodePosts.length]);
 
     useEffect(() => {
         // Load swarm posts when tab changes
@@ -130,6 +139,15 @@ export default function ExplorePage() {
                     const data = await res.json();
                     setSwarmPosts(data.posts || []);
                     setSwarmSources(data.sources || []);
+
+                    // Set cursor from the last post if available
+                    if (data.posts && data.posts.length > 0) {
+                        const lastPost = data.posts[data.posts.length - 1];
+                        setSwarmCursor(lastPost.createdAt); // Use timestamp as cursor
+                        setHasMoreSwarm(true);
+                    } else {
+                        setHasMoreSwarm(false);
+                    }
                 } catch {
                     setSwarmPosts([]);
                 } finally {
@@ -139,6 +157,74 @@ export default function ExplorePage() {
             loadSwarm();
         }
     }, [activeTab, swarmPosts.length]);
+
+    // Load more node posts
+    const loadMoreNode = async () => {
+        if (!nodeCursor || loadingMore || !hasMoreNode) return;
+        setLoadingMore(true);
+        try {
+            const res = await fetch(`/api/posts?type=local&limit=20&cursor=${nodeCursor}`);
+            const data = await res.json();
+            if (data.posts && data.posts.length > 0) {
+                setNodePosts(prev => [...prev, ...data.posts]);
+                setNodeCursor(data.nextCursor || null);
+                setHasMoreNode(!!data.nextCursor);
+            } else {
+                setHasMoreNode(false);
+            }
+        } catch {
+            // Error loading more
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    // Load more swarm posts
+    const loadMoreSwarm = async () => {
+        if (!swarmCursor || loadingMore || !hasMoreSwarm) return;
+        setLoadingMore(true);
+        try {
+            // Use timestamp of last post as cursor
+            const res = await fetch(`/api/posts/swarm?limit=20&cursor=${encodeURIComponent(swarmCursor)}`);
+            const data = await res.json();
+            if (data.posts && data.posts.length > 0) {
+                setSwarmPosts(prev => [...prev, ...data.posts]);
+
+                const lastPost = data.posts[data.posts.length - 1];
+                setSwarmCursor(lastPost.createdAt);
+                setHasMoreSwarm(true);
+            } else {
+                setHasMoreSwarm(false);
+            }
+        } catch {
+            // Error loading more
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    // Intersection Observer for Infinite Scroll
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    if (activeTab === 'node') {
+                        loadMoreNode();
+                    } else if (activeTab === 'swarm') {
+                        loadMoreSwarm();
+                    }
+                }
+            },
+            { threshold: 0.5 }
+        );
+
+        const sentinel = document.getElementById('scroll-sentinel');
+        if (sentinel) {
+            observer.observe(sentinel);
+        }
+
+        return () => observer.disconnect();
+    }, [activeTab, nodeCursor, swarmCursor, loadingMore, hasMoreNode, hasMoreSwarm]);
 
     useEffect(() => {
         // Load users when tab changes to users
@@ -278,6 +364,12 @@ export default function ExplorePage() {
                                 {nodePosts.map((post) => (
                                     <PostCard key={post.id} post={post} onLike={handleLike} onRepost={handleRepost} onDelete={handleDelete} />
                                 ))}
+                                {/* Sentinel for Infinite Scroll */}
+                                {hasMoreNode && (
+                                    <div id="scroll-sentinel" style={{ height: '20px', margin: '20px 0', textAlign: 'center', opacity: 0.5 }}>
+                                        {loadingMore ? 'Loading more...' : ''}
+                                    </div>
+                                )}
                             </div>
                         </>
                     )
@@ -342,6 +434,12 @@ export default function ExplorePage() {
                                         />
                                     );
                                 })}
+                                {/* Sentinel for Infinite Scroll */}
+                                {hasMoreSwarm && (
+                                    <div id="scroll-sentinel" style={{ height: '20px', margin: '20px 0', textAlign: 'center', opacity: 0.5 }}>
+                                        {loadingMore ? 'Loading more...' : ''}
+                                    </div>
+                                )}
                             </div>
                         </>
                     )

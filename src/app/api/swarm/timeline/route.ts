@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, media, nodes } from '@/db';
-import { eq, desc, and, isNull } from 'drizzle-orm';
+import { eq, desc, and, isNull, lt } from 'drizzle-orm';
 
 export interface SwarmPost {
   id: string;
@@ -17,6 +17,7 @@ export interface SwarmPost {
     displayName: string;
     avatarUrl?: string;
     isNsfw: boolean;
+    isBot?: boolean;
   };
   nodeDomain: string;
   nodeIsNsfw: boolean;
@@ -43,17 +44,35 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
+    const cursor = searchParams.get('cursor');
+
     if (!db) {
       return NextResponse.json({ posts: [], nodeDomain: '', nodeIsNsfw: false });
     }
 
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
-    
+
     // Get node NSFW status
     const node = await db.query.nodes.findFirst({
       where: eq(nodes.domain, nodeDomain),
     });
     const nodeIsNsfw = node?.isNsfw ?? false;
+
+    // Use query builder for better conditional logic
+    let whereCondition = and(
+      isNull(posts.replyToId), // Not a reply
+      eq(posts.isRemoved, false) // Not removed
+    );
+
+    if (cursor) {
+      // Find the cursor post or use timestamp directly if passed as ISO string
+      // Actually, for swarm, passing ISO timestamp is safer than ID because IDs are local UUIDs
+      // Let's assume cursor is an ISO date string for swarm timeline
+      const cursorDate = new Date(cursor);
+      if (!isNaN(cursorDate.getTime())) {
+        whereCondition = and(whereCondition, lt(posts.createdAt, cursorDate));
+      }
+    }
 
     // Get recent public posts (not replies, local users only, not removed)
     const recentPosts = await db
@@ -73,22 +92,18 @@ export async function GET(request: NextRequest) {
         authorDisplayName: users.displayName,
         authorAvatarUrl: users.avatarUrl,
         authorIsNsfw: users.isNsfw,
+        authorIsBot: users.isBot,
         authorNodeId: users.nodeId,
       })
       .from(posts)
       .innerJoin(users, eq(posts.userId, users.id))
-      .where(
-        and(
-          isNull(posts.replyToId), // Not a reply
-          eq(posts.isRemoved, false) // Not removed
-        )
-      )
+      .where(whereCondition)
       .orderBy(desc(posts.createdAt))
       .limit(limit);
 
     // Fetch media for each post
     const swarmPosts: SwarmPost[] = [];
-    
+
     for (const post of recentPosts) {
       const postMedia = await db
         .select({ url: media.url, mimeType: media.mimeType, altText: media.altText })
@@ -104,6 +119,7 @@ export async function GET(request: NextRequest) {
           displayName: post.authorDisplayName || post.authorHandle,
           avatarUrl: post.authorAvatarUrl || undefined,
           isNsfw: post.authorIsNsfw,
+          isBot: post.authorIsBot,
         },
         nodeDomain,
         nodeIsNsfw,

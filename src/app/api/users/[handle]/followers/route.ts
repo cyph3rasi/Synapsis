@@ -31,7 +31,7 @@ export async function GET(request: Request, context: RouteContext) {
 
         // Check if this is a remote user
         const [remoteHandle, remoteDomain] = cleanHandle.split('@');
-        
+
         if (remoteDomain) {
             // Fetch from remote swarm node
             const swarmData = await fetchSwarmFollowers(remoteHandle, remoteDomain, limit);
@@ -80,15 +80,23 @@ export async function GET(request: Request, context: RouteContext) {
             .where(eq(follows.followingId, user.id))
             .limit(limit);
 
+        const allFollowers = userFollowers.map(f => ({
+            id: f.follower.id,
+            handle: f.follower.handle,
+            displayName: f.follower.displayName,
+            avatarUrl: f.follower.avatarUrl,
+            bio: f.follower.bio,
+            isBot: f.follower.isBot,
+            isRemote: false,
+        }));
+
+        // Hydrate remote users with fresh data from swarm (if we had local storage for remote followers, we'd merge them here)
+        // Since we don't store remote followers locally for local users (only incoming follows), 
+        // we mainly need this if we were merging remote lists which we only do in the swarm endpoint.
+        // However, let's keep it consistent in case we add remote followers storage.
+
         return NextResponse.json({
-            followers: userFollowers.map(f => ({
-                id: f.follower.id,
-                handle: f.follower.handle,
-                displayName: f.follower.displayName,
-                avatarUrl: f.follower.avatarUrl,
-                bio: f.follower.bio,
-                isBot: f.follower.isBot,
-            })),
+            followers: allFollowers,
             nextCursor: userFollowers.length === limit ? userFollowers[userFollowers.length - 1]?.id : null,
         });
     } catch (error) {

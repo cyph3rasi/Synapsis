@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const refresh = searchParams.get('refresh') === 'true';
-    
+    const cursor = searchParams.get('cursor') || undefined;
+
     // Check user's NSFW preference
     let includeNsfw = false;
     try {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch swarm timeline (no caching - user preferences vary)
-    const timeline = await fetchSwarmTimeline(10, 15, { includeNsfw });
+    const timeline = await fetchSwarmTimeline(10, 15, { includeNsfw, cursor });
 
     return NextResponse.json({
       posts: timeline.posts,

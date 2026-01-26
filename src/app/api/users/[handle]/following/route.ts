@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, follows, users, remoteFollows } from '@/db';
 import { eq } from 'drizzle-orm';
+import { hydrateSwarmUsers } from '@/lib/swarm/user-hydration';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
@@ -31,7 +32,7 @@ export async function GET(request: Request, context: RouteContext) {
 
         // Check if this is a remote user
         const [remoteHandle, remoteDomain] = cleanHandle.split('@');
-        
+
         if (remoteDomain) {
             // Fetch from remote swarm node
             const swarmData = await fetchSwarmFollowing(remoteHandle, remoteDomain, limit);
@@ -108,8 +109,11 @@ export async function GET(request: Request, context: RouteContext) {
         // Merge and return
         const allFollowing = [...localFollowing, ...remoteFollowing].slice(0, limit);
 
+        // Hydrate remote users with fresh data from swarm
+        const hydratedFollowing = await hydrateSwarmUsers(allFollowing);
+
         return NextResponse.json({
-            following: allFollowing,
+            following: hydratedFollowing,
             nextCursor: allFollowing.length === limit ? allFollowing[allFollowing.length - 1]?.id : null,
         });
     } catch (error) {

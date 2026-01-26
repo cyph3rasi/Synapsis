@@ -441,7 +441,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                             <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                                 {post.author.displayName || post.author.handle}
                             </Link>
-                            {post.bot && (
+                            {(post.bot || post.author.isBot) && (
                                 <span
                                     style={{
                                         display: 'inline-flex',
@@ -454,7 +454,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                                         color: 'var(--accent)',
                                         fontWeight: 500,
                                     }}
-                                    title={`AI Account: ${post.bot.name}`}
+                                    title={post.bot ? `AI Account: ${post.bot.name}` : `AI Account: ${post.author.displayName || post.author.handle}`}
                                 >
                                     <Bot size={12} />
                                     AI Account
@@ -663,8 +663,11 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                         currentUser.id === post.author.id ||
                         (post.bot && currentUser.id === post.bot.ownerId) ||
                         (parentPostAuthorId && currentUser.id === parentPostAuthorId) ||
-                        // Allow deleting own remote posts (where ID format differs but handle matches)
-                        (post.author.id.startsWith('swarm:') && post.author.handle === currentUser.handle)
+                        // Allow deleting own remote posts where handle might be username@node_domain
+                        (post.author.id.startsWith('swarm:') && (
+                            post.author.handle === currentUser.handle ||
+                            post.author.handle === `${currentUser.handle}@${NODE_DOMAIN}`
+                        ))
                     )) && (
                             <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
                                 <TrashIcon />

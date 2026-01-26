@@ -120,7 +120,7 @@ export async function POST(request: Request) {
             (async () => {
                 try {
                     const targetUrl = `https://${data.swarmReplyTo!.nodeDomain}/api/swarm/replies`;
-                    
+
                     const replyPayload = {
                         postId: data.swarmReplyTo!.postId,
                         reply: {
@@ -159,18 +159,18 @@ export async function POST(request: Request) {
             try {
                 const { extractMentions } = await import('@/lib/swarm/interactions');
                 const { notifications } = await import('@/db');
-                
+
                 const mentions = extractMentions(data.content);
-                
+
                 for (const mention of mentions) {
                     // Only handle local mentions (no domain)
                     if (mention.domain) continue;
-                    
+
                     // Find the mentioned user
                     const mentionedUser = await db.query.users.findFirst({
                         where: eq(users.handle, mention.handle.toLowerCase()),
                     });
-                    
+
                     if (mentionedUser && mentionedUser.id !== user.id && !mentionedUser.isSuspended) {
                         // Create notification for the mentioned user with actor info stored directly
                         await db.insert(notifications).values({
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
                             postContent: post.content?.slice(0, 200) || null,
                             type: 'mention',
                         });
-                        
+
                         // Also notify bot owner if this is a bot being mentioned
                         if (mentionedUser.isBot && mentionedUser.botOwnerId) {
                             await db.insert(notifications).values({
@@ -210,7 +210,7 @@ export async function POST(request: Request) {
         (async () => {
             try {
                 const { deliverSwarmMentions } = await import('@/lib/swarm/interactions');
-                
+
                 const result = await deliverSwarmMentions(
                     data.content,
                     post.id,
@@ -221,7 +221,7 @@ export async function POST(request: Request) {
                         nodeDomain,
                     }
                 );
-                
+
                 if (result.delivered > 0) {
                     console.log(`[Swarm] Delivered ${result.delivered} mentions (${result.failed} failed)`);
                 }
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
             try {
                 // SWARM-FIRST: Deliver to swarm followers directly
                 const { deliverPostToSwarmFollowers } = await import('@/lib/swarm/interactions');
-                
+
                 const swarmResult = await deliverPostToSwarmFollowers(
                     user.id,
                     post,
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
                     attachedMedia,
                     nodeDomain
                 );
-                
+
                 if (swarmResult.delivered > 0) {
                     console.log(`[Swarm] Post ${post.id} delivered to ${swarmResult.delivered} swarm nodes (${swarmResult.failed} failed)`);
                 }
@@ -399,7 +399,7 @@ export async function GET(request: Request) {
         if (type === 'local') {
             // Local node posts only - no fediverse content
             let whereCondition = baseFilter;
-            
+
             // Apply cursor-based pagination
             if (cursor) {
                 const cursorPost = await db.query.posts.findFirst({
@@ -409,7 +409,7 @@ export async function GET(request: Request) {
                     whereCondition = buildWhere(baseFilter, lt(posts.createdAt, cursorPost.createdAt));
                 }
             }
-            
+
             feedPosts = await db.query.posts.findMany({
                 where: whereCondition,
                 with: {
@@ -454,7 +454,7 @@ export async function GET(request: Request) {
         } else if (type === 'user' && userId) {
             // User's posts (excluding replies)
             let whereCondition = buildWhere(baseFilter, eq(posts.userId, userId));
-            
+
             // Apply cursor-based pagination
             if (cursor) {
                 const cursorPost = await db.query.posts.findFirst({
@@ -464,7 +464,7 @@ export async function GET(request: Request) {
                     whereCondition = buildWhere(baseFilter, eq(posts.userId, userId), lt(posts.createdAt, cursorPost.createdAt));
                 }
             }
-            
+
             feedPosts = await db.query.posts.findMany({
                 where: whereCondition,
                 with: {
@@ -481,7 +481,7 @@ export async function GET(request: Request) {
         } else if (type === 'replies' && userId) {
             // User's replies only
             let whereCondition = buildWhere(repliesFilter, eq(posts.userId, userId));
-            
+
             // Apply cursor-based pagination
             if (cursor) {
                 const cursorPost = await db.query.posts.findFirst({
@@ -491,7 +491,7 @@ export async function GET(request: Request) {
                     whereCondition = buildWhere(repliesFilter, eq(posts.userId, userId), lt(posts.createdAt, cursorPost.createdAt));
                 }
             }
-            
+
             feedPosts = await db.query.posts.findMany({
                 where: whereCondition,
                 with: {
@@ -522,7 +522,7 @@ export async function GET(request: Request) {
             // Fetch swarm posts with user's NSFW preference
             const { fetchSwarmTimeline } = await import('@/lib/swarm/timeline');
             const swarmResult = await fetchSwarmTimeline(10, 30, { includeNsfw });
-            
+
             // Transform swarm posts to match local post format
             const swarmPosts = swarmResult.posts.map(sp => ({
                 id: `swarm:${sp.nodeDomain}:${sp.id}`,
@@ -540,6 +540,7 @@ export async function GET(request: Request) {
                     displayName: sp.author.displayName,
                     avatarUrl: sp.author.avatarUrl,
                     isSwarm: true,
+                    isBot: sp.author.isBot,
                     nodeDomain: sp.nodeDomain,
                 },
                 media: sp.media?.map((m, idx) => ({
@@ -630,13 +631,13 @@ export async function GET(request: Request) {
                     .from(follows)
                     .where(eq(follows.followerId, user.id));
                 const followingIds = followRows.map(row => row.followingId);
-                
+
                 // Include own posts + posts from followed users
                 const allowedUserIds = [user.id, ...followingIds];
 
                 // Build where condition with cursor support
                 let whereCondition = buildWhere(baseFilter, inArray(posts.userId, allowedUserIds));
-                
+
                 if (cursor) {
                     const cursorPost = await db.query.posts.findFirst({
                         where: eq(posts.id, cursor),
@@ -671,7 +672,7 @@ export async function GET(request: Request) {
                 if (followedRemoteUsers.length > 0) {
                     const { fetchSwarmUserProfile, isSwarmNode } = await import('@/lib/swarm/interactions');
                     const { resolveRemoteUser } = await import('@/lib/activitypub/fetch');
-                    
+
                     // Wrap each fetch with a timeout to prevent slow nodes from blocking
                     const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
                         return Promise.race([
@@ -679,25 +680,25 @@ export async function GET(request: Request) {
                             new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
                         ]);
                     };
-                    
+
                     const fetchPromises = followedRemoteUsers.map(async (follow) => {
                         try {
                             const atIndex = follow.targetHandle.lastIndexOf('@');
                             if (atIndex === -1) return [];
-                            
+
                             const handle = follow.targetHandle.slice(0, atIndex);
                             const domain = follow.targetHandle.slice(atIndex + 1);
-                            
+
                             // Check if swarm node - use swarm API (faster)
                             const isSwarm = await isSwarmNode(domain);
-                            
+
                             if (isSwarm) {
                                 const profileData = await withTimeout(
                                     fetchSwarmUserProfile(handle, domain, limit),
                                     5000 // 5s timeout per node
                                 );
                                 if (!profileData?.posts) return [];
-                                
+
                                 return profileData.posts.map(post => ({
                                     id: `swarm:${domain}:${post.id}`,
                                     content: post.content,
@@ -717,6 +718,7 @@ export async function GET(request: Request) {
                                         displayName: follow.displayName || profileData.profile?.displayName || handle,
                                         avatarUrl: follow.avatarUrl || profileData.profile?.avatarUrl,
                                         isRemote: true,
+                                        isBot: profileData.profile?.isBot,
                                     },
                                     media: post.media?.map((m: any, idx: number) => ({
                                         id: `swarm:${domain}:${post.id}:media:${idx}`,
@@ -729,14 +731,14 @@ export async function GET(request: Request) {
                                 // ActivityPub - fetch from outbox
                                 const remoteProfile = await resolveRemoteUser(handle, domain);
                                 if (!remoteProfile?.outbox) return [];
-                                
+
                                 // For AP, fall back to cached posts (live outbox fetch is slower)
                                 const cachedPosts = await db.query.remotePosts.findMany({
                                     where: eq(remotePosts.authorHandle, follow.targetHandle),
                                     orderBy: [desc(remotePosts.publishedAt)],
                                     limit: limit,
                                 });
-                                
+
                                 return transformRemotePosts(cachedPosts);
                             }
                         } catch (error) {
@@ -744,7 +746,7 @@ export async function GET(request: Request) {
                             return [];
                         }
                     });
-                    
+
                     const results = await Promise.all(fetchPromises);
                     liveRemotePosts = results.flat();
                 }
@@ -781,11 +783,11 @@ export async function GET(request: Request) {
             if (session?.user && feedPosts && feedPosts.length > 0) {
                 const viewer = session.user;
                 const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
-                
+
                 // Separate local and swarm posts
                 const localPostIds: string[] = [];
                 const swarmPosts: Array<{ id: string; domain: string; originalId: string }> = [];
-                
+
                 for (const p of feedPosts as Array<{ id: string }>) {
                     if (p.id.startsWith('swarm:')) {
                         const parts = p.id.split(':');
@@ -804,7 +806,7 @@ export async function GET(request: Request) {
                 // Check local likes
                 const likedPostIds = new Set<string>();
                 const repostedPostIds = new Set<string>();
-                
+
                 if (localPostIds.length > 0) {
                     const viewerLikes = await db.query.likes.findMany({
                         where: and(
@@ -829,12 +831,12 @@ export async function GET(request: Request) {
                         try {
                             const protocol = sp.domain.includes('localhost') ? 'http' : 'https';
                             const url = `${protocol}://${sp.domain}/api/swarm/posts/${sp.originalId}/likes?checkHandle=${viewer.handle}&checkDomain=${nodeDomain}`;
-                            
+
                             const res = await fetch(url, {
                                 headers: { 'Accept': 'application/json' },
                                 signal: AbortSignal.timeout(3000),
                             });
-                            
+
                             if (res.ok) {
                                 const data = await res.json();
                                 if (data.isLiked) {
@@ -845,7 +847,7 @@ export async function GET(request: Request) {
                             // Timeout or error - just skip
                         }
                     });
-                    
+
                     await Promise.all(checkPromises);
                 }
 

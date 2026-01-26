@@ -187,7 +187,7 @@ function NotificationItem({
         >
             <Link href={actor ? `/@${actor.handle}` : '#'} style={{ flexShrink: 0 }}>
                 {actor?.avatarUrl ? (
-                    <Image
+                    <img
                         src={actor.avatarUrl}
                         alt={actor.displayName || actor.handle}
                         width={40}
@@ -220,7 +220,7 @@ function NotificationItem({
                         href={actor ? `/@${actor.handle}` : '#'}
                         style={{ fontWeight: 600, color: 'var(--foreground)', textDecoration: 'none' }}
                     >
-                        {actor?.displayName || actor?.handle || 'Someone'}
+                        {actor?.displayName || actor?.handle || 'Someone'} <span style={{ fontWeight: 400, color: 'var(--foreground-tertiary)' }}>@{actor?.handle}</span>
                     </Link>
                     <span style={{ color: 'var(--foreground-secondary)' }}>
                         {getNotificationText(notification)}

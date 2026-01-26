@@ -15,6 +15,7 @@ interface TimelineResult {
 
 interface TimelineOptions {
   includeNsfw?: boolean; // Whether to include NSFW content
+  cursor?: string; // Timestamp cursor for pagination
 }
 
 /**
@@ -40,19 +41,19 @@ async function fetchLinkPreview(url: string): Promise<{
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
     const protocol = nodeDomain === 'localhost' ? 'http' : 'https';
     const previewUrl = `${protocol}://${nodeDomain}/api/media/preview?url=${encodeURIComponent(url)}`;
-    
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout for previews
-    
+
     const response = await fetch(previewUrl, {
       headers: { 'Accept': 'application/json' },
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (!response.ok) return null;
-    
+
     const data = await response.json();
     return {
       url: data.url || url,
@@ -72,18 +73,18 @@ async function enrichPostsWithPreviews(posts: SwarmPost[]): Promise<SwarmPost[]>
   const enrichmentPromises = posts.map(async (post) => {
     // Skip if already has link preview data
     if (post.linkPreviewUrl) return post;
-    
+
     // Extract URL from content
     const url = extractFirstUrl(post.content);
     if (!url) return post;
-    
+
     // Skip video URLs (handled by VideoEmbed component)
     if (url.match(/(youtube\.com|youtu\.be|vimeo\.com)/)) return post;
-    
+
     // Fetch preview
     const preview = await fetchLinkPreview(url);
     if (!preview) return post;
-    
+
     return {
       ...post,
       linkPreviewUrl: preview.url,
@@ -92,7 +93,7 @@ async function enrichPostsWithPreviews(posts: SwarmPost[]): Promise<SwarmPost[]>
       linkPreviewImage: preview.image || undefined,
     };
   });
-  
+
   return Promise.all(enrichmentPromises);
 }
 
@@ -101,7 +102,8 @@ async function enrichPostsWithPreviews(posts: SwarmPost[]): Promise<SwarmPost[]>
  */
 async function fetchNodeTimeline(
   domain: string,
-  limit: number = 20
+  limit: number = 20,
+  cursor?: string
 ): Promise<{ posts: SwarmPost[]; nodeIsNsfw?: boolean; error?: string }> {
   try {
     // Determine protocol - use http for localhost, https for everything else
@@ -113,7 +115,7 @@ async function fetchNodeTimeline(
     } else {
       baseUrl = `https://${domain}`;
     }
-    const url = `${baseUrl}/api/swarm/timeline?limit=${limit}`;
+    const url = `${baseUrl}/api/swarm/timeline?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
@@ -148,14 +150,14 @@ export async function fetchSwarmTimeline(
   postsPerNode: number = 10,
   options: TimelineOptions = {}
 ): Promise<TimelineResult> {
-  const { includeNsfw = false } = options;
-  
+  const { includeNsfw = false, cursor } = options;
+
   // Get active nodes to query
   const nodes = await getActiveSwarmNodes(maxNodes);
-  
+
   // Always include our own posts
   const ourDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
-  
+
   // Always query all nodes - we filter posts, not nodes
   const nodesToQuery = [
     ourDomain,
@@ -163,12 +165,12 @@ export async function fetchSwarmTimeline(
   ].slice(0, maxNodes);
 
   console.log(`[Swarm Timeline] Querying ${nodesToQuery.length} nodes: ${nodesToQuery.join(', ')}`);
-  console.log(`[Swarm Timeline] includeNsfw: ${includeNsfw}`);
+  console.log(`[Swarm Timeline] includeNsfw: ${includeNsfw}, cursor: ${cursor || 'none'}`);
 
   // Fetch from all nodes in parallel
   const results = await Promise.all(
     nodesToQuery.map(async (domain) => {
-      const result = await fetchNodeTimeline(domain, postsPerNode);
+      const result = await fetchNodeTimeline(domain, postsPerNode, cursor);
       return {
         domain,
         ...result,
@@ -183,17 +185,17 @@ export async function fetchSwarmTimeline(
   for (const result of results) {
     // Filter NSFW posts only if user doesn't want NSFW content
     // A post is NSFW if it's explicitly marked OR comes from an NSFW node
-    const filteredPosts = includeNsfw 
-      ? result.posts 
+    const filteredPosts = includeNsfw
+      ? result.posts
       : result.posts.filter(p => !p.isNsfw && !p.nodeIsNsfw);
-    
+
     // Log filtering details for debugging
     if (!includeNsfw && result.posts.length > 0) {
       const nsfwPosts = result.posts.filter(p => p.isNsfw);
       const nodeNsfwPosts = result.posts.filter(p => p.nodeIsNsfw);
       console.log(`[Swarm Timeline] ${result.domain}: ${result.posts.length} posts, ${nsfwPosts.length} marked NSFW, ${nodeNsfwPosts.length} from NSFW node, ${filteredPosts.length} after filter`);
     }
-    
+
     sources.push({
       domain: result.domain,
       postCount: result.posts.length,
@@ -201,7 +203,7 @@ export async function fetchSwarmTimeline(
       isNsfw: result.nodeIsNsfw,
       error: result.error,
     });
-    
+
     allPosts.push(...filteredPosts);
   }
 
