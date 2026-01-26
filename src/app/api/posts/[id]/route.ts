@@ -15,6 +15,111 @@ export async function GET(
         let mainPost: any = null;
         let replyPosts: any[] = [];
 
+        // Handle swarm post IDs (format: swarm:domain:uuid)
+        if (id.startsWith('swarm:')) {
+            const parts = id.split(':');
+            if (parts.length >= 3) {
+                const originDomain = parts[1];
+                const originalPostId = parts[2];
+                
+                // Fetch from origin node in real-time
+                try {
+                    const protocol = originDomain.includes('localhost') ? 'http' : 'https';
+                    const res = await fetch(`${protocol}://${originDomain}/api/swarm/posts/${originalPostId}`, {
+                        headers: { 'Accept': 'application/json' },
+                        signal: AbortSignal.timeout(10000),
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        
+                        // Transform to match expected format
+                        mainPost = {
+                            id: id,
+                            originalPostId: originalPostId,
+                            content: data.post.content,
+                            createdAt: data.post.createdAt,
+                            likesCount: data.post.likesCount || 0,
+                            repostsCount: data.post.repostsCount || 0,
+                            repliesCount: data.post.repliesCount || 0,
+                            isSwarm: true,
+                            nodeDomain: originDomain,
+                            author: {
+                                id: `swarm:${originDomain}:${data.post.author.handle}`,
+                                handle: data.post.author.handle,
+                                displayName: data.post.author.displayName,
+                                avatarUrl: data.post.author.avatarUrl,
+                                isSwarm: true,
+                                nodeDomain: originDomain,
+                            },
+                            media: data.post.media?.map((m: any, idx: number) => ({
+                                id: `swarm:${originDomain}:${originalPostId}:media:${idx}`,
+                                url: m.url,
+                                altText: m.altText || null,
+                            })) || [],
+                            linkPreviewUrl: data.post.linkPreviewUrl,
+                            linkPreviewTitle: data.post.linkPreviewTitle,
+                            linkPreviewDescription: data.post.linkPreviewDescription,
+                            linkPreviewImage: data.post.linkPreviewImage,
+                        };
+                        
+                        // Transform replies
+                        replyPosts = (data.replies || []).map((r: any) => ({
+                            id: `swarm:${originDomain}:${r.id}`,
+                            originalPostId: r.id,
+                            content: r.content,
+                            createdAt: r.createdAt,
+                            likesCount: r.likesCount || 0,
+                            repostsCount: r.repostsCount || 0,
+                            repliesCount: r.repliesCount || 0,
+                            isSwarm: true,
+                            nodeDomain: originDomain,
+                            author: {
+                                id: `swarm:${originDomain}:${r.author.handle}`,
+                                handle: r.author.handle,
+                                displayName: r.author.displayName,
+                                avatarUrl: r.author.avatarUrl,
+                                isSwarm: true,
+                                nodeDomain: originDomain,
+                            },
+                            media: r.media?.map((m: any, idx: number) => ({
+                                id: `swarm:${originDomain}:${r.id}:media:${idx}`,
+                                url: m.url,
+                                altText: m.altText || null,
+                            })) || [],
+                        }));
+                        
+                        // Check if current user has liked this post
+                        try {
+                            const { requireAuth } = await import('@/lib/auth');
+                            const viewer = await requireAuth();
+                            
+                            const likeCheckRes = await fetch(
+                                `${protocol}://${originDomain}/api/swarm/posts/${originalPostId}/likes?checkHandle=${viewer.handle}&checkDomain=${nodeDomain}`,
+                                { signal: AbortSignal.timeout(3000) }
+                            );
+                            
+                            if (likeCheckRes.ok) {
+                                const likeData = await likeCheckRes.json();
+                                mainPost.isLiked = likeData.isLiked;
+                            }
+                        } catch {
+                            // Not logged in or timeout
+                        }
+                        
+                        return NextResponse.json({
+                            post: mainPost,
+                            replies: replyPosts,
+                        });
+                    }
+                } catch (err) {
+                    console.error(`[Swarm] Failed to fetch post from ${originDomain}:`, err);
+                }
+                
+                return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+            }
+        }
+
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, id),
             with: {
