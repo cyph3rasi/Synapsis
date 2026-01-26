@@ -34,8 +34,35 @@ async function runBotTasks() {
     const autonomousResult = await processAllAutonomousBots();
     
     const posted = autonomousResult.filter(r => r.result.posted).length;
+    const skipped = scheduledResult.skipped;
+    const errors = scheduledResult.errors.length + autonomousResult.filter(r => r.error).length;
+    
+    // Always log bot task results for debugging
     if (scheduledResult.processed > 0 || posted > 0) {
       log('BOTS', `Processed ${scheduledResult.processed} scheduled, ${posted} autonomous posts`);
+    } else if (scheduledResult.details.length > 0 || autonomousResult.length > 0) {
+      // Log why bots didn't post
+      const reasons = scheduledResult.details
+        .filter(d => d.status !== 'posted')
+        .map(d => `${d.botId.slice(0, 8)}: ${d.status}${d.message ? ` (${d.message})` : ''}`)
+        .slice(0, 3);
+      
+      const autoReasons = autonomousResult
+        .filter(r => !r.result.posted)
+        .map(r => `${r.botHandle}: ${r.result.reason || r.error || 'unknown'}`)
+        .slice(0, 3);
+      
+      if (reasons.length > 0 || autoReasons.length > 0) {
+        log('BOTS', `No posts created. Scheduled: ${scheduledResult.details.length} checked, ${skipped} skipped. Autonomous: ${autonomousResult.length} checked.`);
+        if (reasons.length > 0) log('BOTS', `Scheduled skip reasons: ${reasons.join('; ')}`);
+        if (autoReasons.length > 0) log('BOTS', `Autonomous skip reasons: ${autoReasons.join('; ')}`);
+      }
+    } else {
+      log('BOTS', 'No active bots found');
+    }
+    
+    if (errors > 0) {
+      log('BOTS', `Errors: ${scheduledResult.errors.join('; ')}`);
     }
   } catch (error) {
     log('BOTS', `Error: ${error}`);

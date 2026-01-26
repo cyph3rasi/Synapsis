@@ -232,6 +232,16 @@ export default function NewBotPage() {
               body: JSON.stringify(sourcePayload),
             });
           }
+          
+          // Trigger the first post to establish a reference point for the schedule
+          // This runs in the background - we don't wait for it
+          fetch(`/api/bots/${data.bot.id}/post`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).catch(() => {
+            // Silently fail - the bot will post on the next scheduled run
+          });
         }
         
         router.push(`/settings/bots/${data.bot.id}`);

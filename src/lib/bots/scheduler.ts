@@ -10,6 +10,8 @@
 import { db, bots, botContentSources, botContentItems } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { canPost } from './rateLimiter';
+import { triggerPost } from './posting';
+import { fetchAllSourcesForBot } from './contentFetcher';
 
 // ============================================
 // TYPES
@@ -833,6 +835,9 @@ export async function processScheduledPosts(): Promise<ProcessScheduledPostsResu
         continue;
       }
       
+      // Fetch fresh content from sources before checking availability
+      await fetchAllSourcesForBot(bot.id, { maxItems: 20, timeout: 15000 });
+      
       // Check for unprocessed content (Requirement 5.5)
       const hasContent = await hasUnprocessedContent(bot.id);
       
@@ -859,15 +864,26 @@ export async function processScheduledPosts(): Promise<ProcessScheduledPostsResu
         continue;
       }
       
-      // At this point, we would trigger post generation
-      // This will be implemented in the posting module (Task 15)
-      // For now, we just mark it as ready to post
-      result.details.push({
-        botId: bot.id,
-        status: 'posted',
-        message: `Ready to post content: ${contentItem.title}`,
+      // Trigger post creation with the content item
+      const postResult = await triggerPost(bot.id, {
+        sourceContentId: contentItem.id,
       });
-      result.processed++;
+      
+      if (postResult.success) {
+        result.details.push({
+          botId: bot.id,
+          status: 'posted',
+          message: `Posted: ${contentItem.title.substring(0, 50)}...`,
+        });
+        result.processed++;
+      } else {
+        result.details.push({
+          botId: bot.id,
+          status: 'error',
+          message: postResult.error || 'Failed to create post',
+        });
+        result.errors.push(`Bot ${bot.id}: ${postResult.error}`);
+      }
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
