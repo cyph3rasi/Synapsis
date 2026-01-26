@@ -15,14 +15,14 @@ import { formatFullHandle, NODE_DOMAIN } from '@/lib/utils/handle';
 // Component for link preview image that hides on error
 function LinkPreviewImage({ src, alt }: { src: string; alt: string }) {
     const [hasError, setHasError] = useState(false);
-    
+
     if (hasError) return null;
-    
+
     return (
         <div className="link-preview-image">
-            <img 
-                src={src} 
-                alt={alt} 
+            <img
+                src={src}
+                alt={alt}
                 onError={() => setHasError(true)}
             />
         </div>
@@ -60,19 +60,19 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
 
     const formatTime = (dateStr: string | Date) => {
         const date = new Date(dateStr);
-        
+
         if (isNaN(date.getTime())) {
             return '';
         }
-        
+
         const now = new Date();
         const diff = now.getTime() - date.getTime();
-        
+
         // If post is in the future (minor clock skew), show "now"
         if (diff < 0) {
             return 'now';
         }
-        
+
         const seconds = Math.floor(diff / 1000);
         const minutes = Math.floor(seconds / 60);
         const hours = Math.floor(minutes / 60);
@@ -163,7 +163,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.preventDefault();
         e.stopPropagation();
         setShowMenu(false);
-        
+
         if (!currentUser) {
             showToast('Please log in to block users', 'error');
             return;
@@ -188,7 +188,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.preventDefault();
         e.stopPropagation();
         setShowMenu(false);
-        
+
         if (!currentUser) {
             showToast('Please log in to mute users', 'error');
             return;
@@ -222,8 +222,8 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         }
 
         // Extract node domain from the post
-        const nodeDomain = post.nodeDomain || (post.author.handle.includes('@') 
-            ? post.author.handle.split('@')[1] 
+        const nodeDomain = post.nodeDomain || (post.author.handle.includes('@')
+            ? post.author.handle.split('@')[1]
             : null);
 
         if (!nodeDomain) {
@@ -370,11 +370,11 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         likesCount: 0,
         repostsCount: 0,
         repliesCount: 0,
-        author: typeof post.swarmReplyToAuthor === 'string' 
+        author: typeof post.swarmReplyToAuthor === 'string'
             ? JSON.parse(post.swarmReplyToAuthor)
             : post.swarmReplyToAuthor,
         isSwarm: true,
-        nodeDomain: (typeof post.swarmReplyToAuthor === 'string' 
+        nodeDomain: (typeof post.swarmReplyToAuthor === 'string'
             ? JSON.parse(post.swarmReplyToAuthor)
             : post.swarmReplyToAuthor)?.nodeDomain,
     } as Post : null);
@@ -426,137 +426,98 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
             <article className={`post ${isDetail ? 'detail' : ''}`}>
                 {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
-            <div className="post-header">
-                <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
-                    <div className="avatar">
-                        {post.author.avatarUrl ? (
-                            <img src={post.author.avatarUrl} alt={post.author.displayName} />
-                        ) : (
-                            post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
-                        )}
-                    </div>
-                </Link>
-                <div className="post-author">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
-                            {post.author.displayName || post.author.handle}
-                        </Link>
-                        {post.bot && (
-                            <span 
-                                style={{ 
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '3px',
-                                    fontSize: '10px', 
-                                    padding: '2px 6px', 
-                                    borderRadius: '4px', 
-                                    background: 'var(--accent-muted)', 
-                                    color: 'var(--accent)',
-                                    fontWeight: 500,
-                                }}
-                                title={`AI Account: ${post.bot.name}`}
-                            >
-                                <Bot size={12} />
-                                AI Account
-                            </span>
-                        )}
-                    </div>
-                    <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)} · {formatTime(post.createdAt)}</span>
-                </div>
-                {currentUser && currentUser.id !== post.author.id && (
-                    <div style={{ position: 'relative', marginLeft: 'auto' }}>
-                        <button
-                            className="post-menu-btn"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setShowMenu(!showMenu);
-                            }}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: '4px',
-                                cursor: 'pointer',
-                                color: 'var(--foreground-tertiary)',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <MoreHorizontal size={18} />
-                        </button>
-                        {showMenu && (
-                            <>
-                                <div
+                <div className="post-header">
+                    <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
+                        <div className="avatar">
+                            {post.author.avatarUrl ? (
+                                <img src={post.author.avatarUrl} alt={post.author.displayName} />
+                            ) : (
+                                post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
+                            )}
+                        </div>
+                    </Link>
+                    <div className="post-author">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                                {post.author.displayName || post.author.handle}
+                            </Link>
+                            {post.bot && (
+                                <span
                                     style={{
-                                        position: 'fixed',
-                                        inset: 0,
-                                        zIndex: 99,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '3px',
+                                        fontSize: '10px',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        background: 'var(--accent-muted)',
+                                        color: 'var(--accent)',
+                                        fontWeight: 500,
                                     }}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setShowMenu(false);
-                                    }}
-                                />
-                                <div
-                                    className="post-menu-dropdown"
-                                    style={{
-                                        position: 'absolute',
-                                        right: 0,
-                                        top: '100%',
-                                        marginTop: '4px',
-                                        background: 'var(--background-secondary)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: 'var(--radius-md)',
-                                        minWidth: '180px',
-                                        zIndex: 100,
-                                        overflow: 'hidden',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                    }}
+                                    title={`AI Account: ${post.bot.name}`}
                                 >
-                                    <button
-                                        onClick={handleMuteUser}
+                                    <Bot size={12} />
+                                    AI Account
+                                </span>
+                            )}
+                        </div>
+                        <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)} · {formatTime(post.createdAt)}</span>
+                    </div>
+                    {currentUser && currentUser.id !== post.author.id && (
+                        <div style={{ position: 'relative', marginLeft: 'auto' }}>
+                            <button
+                                className="post-menu-btn"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setShowMenu(!showMenu);
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '4px',
+                                    cursor: 'pointer',
+                                    color: 'var(--foreground-tertiary)',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <MoreHorizontal size={18} />
+                            </button>
+                            {showMenu && (
+                                <>
+                                    <div
                                         style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            background: 'none',
-                                            border: 'none',
-                                            textAlign: 'left',
-                                            cursor: 'pointer',
-                                            color: 'var(--foreground)',
-                                            fontSize: '14px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
+                                            position: 'fixed',
+                                            inset: 0,
+                                            zIndex: 99,
+                                        }}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowMenu(false);
+                                        }}
+                                    />
+                                    <div
+                                        className="post-menu-dropdown"
+                                        style={{
+                                            position: 'absolute',
+                                            right: 0,
+                                            top: '100%',
+                                            marginTop: '4px',
+                                            background: 'var(--background-secondary)',
+                                            border: '1px solid var(--border)',
+                                            borderRadius: 'var(--radius-md)',
+                                            minWidth: '180px',
+                                            zIndex: 100,
+                                            overflow: 'hidden',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                         }}
                                     >
-                                        <VolumeX size={16} />
-                                        Mute
-                                    </button>
-                                    <button
-                                        onClick={handleBlockUser}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            background: 'none',
-                                            border: 'none',
-                                            textAlign: 'left',
-                                            cursor: 'pointer',
-                                            color: 'var(--foreground)',
-                                            fontSize: '14px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                        }}
-                                    >
-                                        <UserX size={16} />
-                                        Block
-                                    </button>
-                                    {(post.nodeDomain || post.author.handle.includes('@')) && (
                                         <button
-                                            onClick={handleMuteNode}
+                                            onClick={handleMuteUser}
                                             style={{
                                                 width: '100%',
                                                 padding: '10px 14px',
@@ -569,104 +530,149 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '10px',
-                                                borderTop: '1px solid var(--border)',
                                             }}
                                         >
-                                            <Globe size={16} />
-                                            Mute node
+                                            <VolumeX size={16} />
+                                            Mute
                                         </button>
+                                        <button
+                                            onClick={handleBlockUser}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                background: 'none',
+                                                border: 'none',
+                                                textAlign: 'left',
+                                                cursor: 'pointer',
+                                                color: 'var(--foreground)',
+                                                fontSize: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                            }}
+                                        >
+                                            <UserX size={16} />
+                                            Block
+                                        </button>
+                                        {(post.nodeDomain || post.author.handle.includes('@')) && (
+                                            <button
+                                                onClick={handleMuteNode}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px 14px',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    color: 'var(--foreground)',
+                                                    fontSize: '14px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '10px',
+                                                    borderTop: '1px solid var(--border)',
+                                                }}
+                                            >
+                                                <Globe size={16} />
+                                                Mute node
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {effectiveReplyTo && !showThread && (
+                    <div className="post-reply-to">
+                        Replying to <Link href={`/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
+                    </div>
+                )}
+
+                <div className="post-content">{renderContent(post.content, post.linkPreviewUrl ?? undefined)}</div>
+
+                {post.media && post.media.length > 0 && (
+                    <div className="post-media-grid">
+                        {post.media.map((item) => {
+                            const isVideo = item.mimeType?.startsWith('video/');
+                            return (
+                                <div className="post-media-item" key={item.id}>
+                                    {isVideo ? (
+                                        <BlurredVideo
+                                            src={item.url}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const video = e.currentTarget;
+                                                video.muted = !video.muted;
+                                            }}
+                                        />
+                                    ) : (
+                                        <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
                                     )}
                                 </div>
-                            </>
-                        )}
+                            );
+                        })}
                     </div>
                 )}
-            </div>
 
-            {effectiveReplyTo && !showThread && (
-                <div className="post-reply-to">
-                    Replying to <Link href={`/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
-                </div>
-            )}
+                {post.linkPreviewUrl && (
+                    <VideoEmbed url={post.linkPreviewUrl} />
+                )}
 
-            <div className="post-content">{renderContent(post.content, post.linkPreviewUrl ?? undefined)}</div>
-
-            {post.media && post.media.length > 0 && (
-                <div className="post-media-grid">
-                    {post.media.map((item) => {
-                        const isVideo = item.mimeType?.startsWith('video/');
-                        return (
-                            <div className="post-media-item" key={item.id}>
-                                {isVideo ? (
-                                    <BlurredVideo
-                                        src={item.url}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            const video = e.currentTarget;
-                                            video.muted = !video.muted;
-                                        }}
-                                    />
-                                ) : (
-                                    <img src={item.url} alt={item.altText || 'Post media'} loading="lazy" />
-                                )}
+                {post.linkPreviewUrl && !post.linkPreviewUrl.match(/(youtube\.com|youtu\.be|vimeo\.com)/) && (
+                    <a
+                        href={post.linkPreviewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="link-preview-card"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {post.linkPreviewImage && (
+                            <LinkPreviewImage src={post.linkPreviewImage} alt={post.linkPreviewTitle || ''} />
+                        )}
+                        <div className="link-preview-info">
+                            <div className="link-preview-title">{post.linkPreviewTitle ? decodeHtmlEntities(post.linkPreviewTitle) : ''}</div>
+                            {post.linkPreviewDescription && (
+                                <div className="link-preview-description">{decodeHtmlEntities(post.linkPreviewDescription)}</div>
+                            )}
+                            <div className="link-preview-url">
+                                {new URL(post.linkPreviewUrl.startsWith('http') ? post.linkPreviewUrl : `https://${post.linkPreviewUrl}`).hostname}
                             </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {post.linkPreviewUrl && (
-                <VideoEmbed url={post.linkPreviewUrl} />
-            )}
-
-            {post.linkPreviewUrl && !post.linkPreviewUrl.match(/(youtube\.com|youtu\.be|vimeo\.com)/) && (
-                <a
-                    href={post.linkPreviewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="link-preview-card"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {post.linkPreviewImage && (
-                        <LinkPreviewImage src={post.linkPreviewImage} alt={post.linkPreviewTitle || ''} />
-                    )}
-                    <div className="link-preview-info">
-                        <div className="link-preview-title">{post.linkPreviewTitle ? decodeHtmlEntities(post.linkPreviewTitle) : ''}</div>
-                        {post.linkPreviewDescription && (
-                            <div className="link-preview-description">{decodeHtmlEntities(post.linkPreviewDescription)}</div>
-                        )}
-                        <div className="link-preview-url">
-                            {new URL(post.linkPreviewUrl.startsWith('http') ? post.linkPreviewUrl : `https://${post.linkPreviewUrl}`).hostname}
                         </div>
-                    </div>
-                </a>
-            )}
-
-            <div className="post-actions">
-                <button className="post-action" onClick={handleComment}>
-                    <MessageIcon />
-                    <span>{post.repliesCount || ''}</span>
-                </button>
-                <button className={`post-action ${reposted ? 'reposted' : ''}`} onClick={handleRepost}>
-                    <RepeatIcon />
-                    <span>{(post.repostsCount - (post.isReposted ? 1 : 0)) + (reposted ? 1 : 0) || ''}</span>
-                </button>
-                <button className={`post-action ${liked ? 'liked' : ''}`} onClick={handleLike}>
-                    <HeartIcon filled={liked} />
-                    <span>{(post.likesCount - (post.isLiked ? 1 : 0)) + (liked ? 1 : 0) || ''}</span>
-                </button>
-                <button className="post-action" onClick={handleReport} disabled={reporting}>
-                    <FlagIcon />
-                    <span>{reporting ? '...' : ''}</span>
-                </button>
-                {(currentUser?.id === post.author.id || (post.bot && currentUser?.id === post.bot.ownerId) || (parentPostAuthorId && currentUser?.id === parentPostAuthorId)) && (
-                    <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
-                        <TrashIcon />
-                        <span>{deleting ? '...' : ''}</span>
-                    </button>
+                    </a>
                 )}
-            </div>
-        </article>
+
+                <div className="post-actions">
+                    <button className="post-action" onClick={handleComment}>
+                        <MessageIcon />
+                        <span>{post.repliesCount || ''}</span>
+                    </button>
+                    <button className={`post-action ${reposted ? 'reposted' : ''}`} onClick={handleRepost}>
+                        <RepeatIcon />
+                        <span>{(post.repostsCount - (post.isReposted ? 1 : 0)) + (reposted ? 1 : 0) || ''}</span>
+                    </button>
+                    <button className={`post-action ${liked ? 'liked' : ''}`} onClick={handleLike}>
+                        <HeartIcon filled={liked} />
+                        <span>{(post.likesCount - (post.isLiked ? 1 : 0)) + (liked ? 1 : 0) || ''}</span>
+                    </button>
+                    <button className="post-action" onClick={handleReport} disabled={reporting}>
+                        <FlagIcon />
+                        <span>{reporting ? '...' : ''}</span>
+                    </button>
+                    {(currentUser && (
+                        currentUser.id === post.author.id ||
+                        (post.bot && currentUser.id === post.bot.ownerId) ||
+                        (parentPostAuthorId && currentUser.id === parentPostAuthorId) ||
+                        // Allow deleting own remote posts (where ID format differs but handle matches)
+                        (post.author.id.startsWith('swarm:') && post.author.handle === currentUser.handle)
+                    )) && (
+                            <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">
+                                <TrashIcon />
+                                <span>{deleting ? '...' : ''}</span>
+                            </button>
+                        )}
+                </div>
+            </article>
         </>
     );
 }
