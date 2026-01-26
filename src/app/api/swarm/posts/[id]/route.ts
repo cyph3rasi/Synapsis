@@ -51,10 +51,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     });
 
     const author = post.author as any;
-    
+
     return NextResponse.json({
       post: {
         id: post.id,
+        apId: post.apId, // Expose apId for swarm coordination (e.g. deletion recovery)
         content: post.content,
         createdAt: post.createdAt.toISOString(),
         likesCount: post.likesCount,

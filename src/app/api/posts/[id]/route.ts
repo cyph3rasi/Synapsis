@@ -19,11 +19,11 @@ export async function GET(
 
         // Handle swarm post IDs (format: swarm:domain:uuid)
         if (id.startsWith('swarm:')) {
-            const parts = id.split(':');
-            if (parts.length >= 3) {
-                const originDomain = parts[1];
-                const originalPostId = parts[2];
-                
+            const lastColonIndex = id.lastIndexOf(':');
+            if (lastColonIndex > 6) {
+                const originDomain = id.substring(6, lastColonIndex);
+                const originalPostId = id.substring(lastColonIndex + 1);
+
                 // Fetch from origin node in real-time
                 try {
                     const protocol = originDomain.includes('localhost') ? 'http' : 'https';
@@ -31,10 +31,10 @@ export async function GET(
                         headers: { 'Accept': 'application/json' },
                         signal: AbortSignal.timeout(10000),
                     });
-                    
+
                     if (res.ok) {
                         const data = await res.json();
-                        
+
                         // Transform to match expected format
                         mainPost = {
                             id: id,
@@ -64,7 +64,7 @@ export async function GET(
                             linkPreviewDescription: data.post.linkPreviewDescription,
                             linkPreviewImage: data.post.linkPreviewImage,
                         };
-                        
+
                         // Transform replies
                         replyPosts = (data.replies || []).map((r: any) => ({
                             id: `swarm:${originDomain}:${r.id}`,
@@ -90,17 +90,17 @@ export async function GET(
                                 altText: m.altText || null,
                             })) || [],
                         }));
-                        
+
                         // Check if current user has liked this post
                         try {
                             const { requireAuth } = await import('@/lib/auth');
                             const viewer = await requireAuth();
-                            
+
                             const likeCheckRes = await fetch(
                                 `${protocol}://${originDomain}/api/swarm/posts/${originalPostId}/likes?checkHandle=${viewer.handle}&checkDomain=${nodeDomain}`,
                                 { signal: AbortSignal.timeout(3000) }
                             );
-                            
+
                             if (likeCheckRes.ok) {
                                 const likeData = await likeCheckRes.json();
                                 mainPost.isLiked = likeData.isLiked;
@@ -108,7 +108,7 @@ export async function GET(
                         } catch {
                             // Not logged in or timeout
                         }
-                        
+
                         return NextResponse.json({
                             post: mainPost,
                             replies: replyPosts,
@@ -117,7 +117,7 @@ export async function GET(
                 } catch (err) {
                     console.error(`[Swarm] Failed to fetch post from ${originDomain}:`, err);
                 }
-                
+
                 return NextResponse.json({ error: 'Post not found' }, { status: 404 });
             }
         }
@@ -257,6 +257,100 @@ export async function DELETE(
 
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
+        // Handle swarm post IDs (format: swarm:domain:uuid)
+        if (id.startsWith('swarm:')) {
+            const lastColonIndex = id.lastIndexOf(':');
+            if (lastColonIndex > 6) {
+                const originDomain = id.substring(6, lastColonIndex);
+                const originalPostId = id.substring(lastColonIndex + 1);
+
+                // We need to fetch the post from the remote node to check if the current user is the author
+                // The remote node should have the post with proper attribution
+                try {
+                    const protocol = originDomain.includes('localhost') ? 'http' : 'https';
+                    const res = await fetch(`${protocol}://${originDomain}/api/swarm/posts/${originalPostId}`, {
+                        headers: { 'Accept': 'application/json' },
+                        signal: AbortSignal.timeout(5000),
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        const remotePost = data.post;
+
+                        // Check authorship
+                        // Format: handle or handle@domain
+                        // If the user authored it, the remote post author handle should match current user handle
+                        // AND the remote post author node domain should be THIS node
+
+                        // The remote node returns author as: 
+                        // { handle: "user", displayName: "...", nodeDomain: "our-domain" } 
+                        // OR if it's a "local" user on that node (which shouldn't correspond to us unless we possess that account)
+
+                        // In the swarm reply scenario, the remote node stores our user as a "remote user"
+                        // Its logic: handle = "user@our-domain"
+
+                        // So we check if remotePost.author.handle starts with user.handle
+                        // AND (remotePost.author.handle ends with @nodeDomain OR remotePost.nodeDomain == nodeDomain?)
+
+                        let isAuthor = false;
+                        if (remotePost.author.handle === user.handle ||
+                            remotePost.author.handle === `${user.handle}@${nodeDomain}`) {
+                            isAuthor = true;
+                        }
+
+                        if (!isAuthor) {
+                            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+                        }
+
+                        // It is our post (or reply). We can delete it.
+                        // We need the original ID that WE sent when creating it.
+                        // Ideally, the remote node preserves the apId we sent, which contains our original ID.
+                        // But the remote node endpoint returns 'apId', let's use that if available.
+
+                        let replyIdToDelete = originalPostId; // Fallback to their ID if we can't find ours (unlikely to work for replies endpoint)
+
+                        // If we are deleting a reply we sent
+                        // The remote node has it stored. 
+                        // We need to send DELETE /api/swarm/replies with { replyId: <OUR_ID> }
+                        // The remote node checks `swarm:ourDomain:<OUR_ID>`
+
+                        // We need to extract <OUR_ID> from the remote post's apId
+                        // remotePost.apId should be `swarm:ourDomain:ourId`
+
+                        if (remotePost.apId && remotePost.apId.startsWith(`swarm:${nodeDomain}:`)) {
+                            const parts = remotePost.apId.split(':');
+                            if (parts.length >= 3) {
+                                replyIdToDelete = parts[2];
+                            }
+                        }
+
+                        // Propagate deletion
+                        const deleteRes = await fetch(`${protocol}://${originDomain}/api/swarm/replies`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                replyId: replyIdToDelete,
+                                nodeDomain,
+                                authorHandle: user.handle,
+                            }),
+                            signal: AbortSignal.timeout(5000),
+                        });
+
+                        if (deleteRes.ok) {
+                            return NextResponse.json({ success: true });
+                        } else {
+                            return NextResponse.json({ error: 'Failed to delete on remote node' }, { status: deleteRes.status });
+                        }
+                    } else {
+                        return NextResponse.json({ error: 'Remote post not found for verification' }, { status: 404 });
+                    }
+                } catch (err) {
+                    console.error('[Swarm] Error deleting remote post:', err);
+                    return NextResponse.json({ error: 'Failed to communicate with remote node' }, { status: 502 });
+                }
+            }
+        }
+
         const post = await db.query.posts.findFirst({
             where: eq(posts.id, id),
             with: {
@@ -272,7 +366,7 @@ export async function DELETE(
         // OR if user owns the parent post (can delete replies on their posts)
         const isPostOwner = post.userId === user.id;
         const isBotOwner = post.bot && post.bot.ownerId === user.id;
-        
+
         // Check if user owns the parent post (for deleting replies on their posts)
         let isParentPostOwner = false;
         if (post.replyToId) {
@@ -283,7 +377,7 @@ export async function DELETE(
                 isParentPostOwner = true;
             }
         }
-        
+
         if (!isPostOwner && !isBotOwner && !isParentPostOwner) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
@@ -302,34 +396,33 @@ export async function DELETE(
 
         // 2. If this is a reply to a swarm post, notify the origin node to delete it
         if (post.swarmReplyToId) {
-            const parts = post.swarmReplyToId.split(':');
-            if (parts.length >= 3) {
-                const originDomain = parts[1];
-                
-                // Fire and forget - don't block on this
-                (async () => {
-                    try {
-                        const protocol = originDomain.includes('localhost') ? 'http' : 'https';
-                        const res = await fetch(`${protocol}://${originDomain}/api/swarm/replies`, {
-                            method: 'DELETE',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                replyId: post.id,
-                                nodeDomain,
-                                authorHandle: user.handle,
-                            }),
-                            signal: AbortSignal.timeout(5000),
-                        });
-                        
-                        if (res.ok) {
-                            console.log(`[Swarm] Deletion propagated to ${originDomain}`);
-                        } else {
-                            console.error(`[Swarm] Failed to propagate deletion: ${res.status}`);
-                        }
-                    } catch (err) {
-                        console.error('[Swarm] Error propagating deletion:', err);
+            // Correctly parse swarm:domain:postId where domain might contain port
+            const lastColonIndex = post.swarmReplyToId.lastIndexOf(':');
+            if (lastColonIndex > 6) { // 'swarm:'.length = 6
+                const originDomain = post.swarmReplyToId.substring(6, lastColonIndex);
+
+                // Propagate deletion to origin node
+                try {
+                    const protocol = originDomain.includes('localhost') ? 'http' : 'https';
+                    const res = await fetch(`${protocol}://${originDomain}/api/swarm/replies`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            replyId: post.id,
+                            nodeDomain,
+                            authorHandle: user.handle,
+                        }),
+                        signal: AbortSignal.timeout(5000),
+                    });
+
+                    if (res.ok) {
+                        console.log(`[Swarm] Deletion propagated to ${originDomain}`);
+                    } else {
+                        console.error(`[Swarm] Failed to propagate deletion: ${res.status}`);
                     }
-                })();
+                } catch (err) {
+                    console.error('[Swarm] Error propagating deletion:', err);
+                }
             }
         }
 

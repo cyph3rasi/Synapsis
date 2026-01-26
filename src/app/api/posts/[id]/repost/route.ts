@@ -11,8 +11,9 @@ type RouteContext = { params: Promise<{ id: string }> };
  */
 function extractSwarmDomain(apId: string | null): string | null {
     if (!apId?.startsWith('swarm:')) return null;
-    const parts = apId.split(':');
-    return parts.length >= 2 ? parts[1] : null;
+    const lastColonIndex = apId.lastIndexOf(':');
+    if (lastColonIndex <= 6) return null;
+    return apId.substring(6, lastColonIndex);
 }
 
 /**
@@ -26,8 +27,10 @@ function isSwarmPost(apId: string | null): boolean {
  * Extract the original post ID from a swarm apId
  */
 function extractSwarmPostId(apId: string): string | null {
-    const parts = apId.split(':');
-    return parts.length >= 3 ? parts[2] : null;
+    if (!apId) return null;
+    const lastColonIndex = apId.lastIndexOf(':');
+    if (lastColonIndex === -1) return null;
+    return apId.substring(lastColonIndex + 1);
 }
 
 // Repost a post
@@ -45,15 +48,15 @@ export async function POST(request: Request, context: RouteContext) {
         // Handle swarm posts (format: swarm:domain:uuid)
         if (postId.startsWith('swarm:')) {
             const targetDomain = extractSwarmDomain(postId);
-            const originalPostId = postId.split(':')[2];
-            
+            const originalPostId = extractSwarmPostId(postId);
+
             if (!targetDomain || !originalPostId) {
                 return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
             }
 
             // Deliver repost directly to the origin node
             const { deliverSwarmRepost } = await import('@/lib/swarm/interactions');
-            
+
             const result = await deliverSwarmRepost(targetDomain, {
                 postId: originalPostId,
                 repost: {
@@ -66,12 +69,12 @@ export async function POST(request: Request, context: RouteContext) {
                     timestamp: new Date().toISOString(),
                 },
             });
-            
+
             if (!result.success) {
                 console.error(`[Swarm] Repost delivery failed: ${result.error}`);
                 return NextResponse.json({ error: 'Failed to deliver repost to remote node' }, { status: 502 });
             }
-            
+
             console.log(`[Swarm] Repost delivered to ${targetDomain} for post ${originalPostId}`);
             return NextResponse.json({ success: true, reposted: true });
         }
@@ -158,12 +161,12 @@ export async function POST(request: Request, context: RouteContext) {
         if (isSwarmPost(originalPost.apId)) {
             const targetDomain = extractSwarmDomain(originalPost.apId);
             const originalPostIdOnRemote = extractSwarmPostId(originalPost.apId!);
-            
+
             if (targetDomain && originalPostIdOnRemote) {
                 (async () => {
                     try {
                         const { deliverSwarmRepost } = await import('@/lib/swarm/interactions');
-                        
+
                         const result = await deliverSwarmRepost(targetDomain, {
                             postId: originalPostIdOnRemote,
                             repost: {
@@ -176,7 +179,7 @@ export async function POST(request: Request, context: RouteContext) {
                                 timestamp: new Date().toISOString(),
                             },
                         });
-                        
+
                         if (result.success) {
                             console.log(`[Swarm] Repost delivered to ${targetDomain}`);
                         } else {
@@ -241,15 +244,15 @@ export async function DELETE(request: Request, context: RouteContext) {
         // Handle swarm posts (format: swarm:domain:uuid)
         if (postId.startsWith('swarm:')) {
             const targetDomain = extractSwarmDomain(postId);
-            const originalPostId = postId.split(':')[2];
-            
+            const originalPostId = extractSwarmPostId(postId);
+
             if (!targetDomain || !originalPostId) {
                 return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
             }
 
             // Deliver unrepost directly to the origin node
             const { deliverSwarmUnrepost } = await import('@/lib/swarm/interactions');
-            
+
             const result = await deliverSwarmUnrepost(targetDomain, {
                 postId: originalPostId,
                 unrepost: {
@@ -259,12 +262,12 @@ export async function DELETE(request: Request, context: RouteContext) {
                     timestamp: new Date().toISOString(),
                 },
             });
-            
+
             if (!result.success) {
                 console.error(`[Swarm] Unrepost delivery failed: ${result.error}`);
                 return NextResponse.json({ error: 'Failed to deliver unrepost to remote node' }, { status: 502 });
             }
-            
+
             console.log(`[Swarm] Unrepost delivered to ${targetDomain} for post ${originalPostId}`);
             return NextResponse.json({ success: true, reposted: false });
         }

@@ -11,8 +11,9 @@ type RouteContext = { params: Promise<{ id: string }> };
  */
 function extractSwarmDomain(apId: string | null): string | null {
     if (!apId?.startsWith('swarm:')) return null;
-    const parts = apId.split(':');
-    return parts.length >= 2 ? parts[1] : null;
+    const lastColonIndex = apId.lastIndexOf(':');
+    if (lastColonIndex <= 6) return null;
+    return apId.substring(6, lastColonIndex);
 }
 
 /**
@@ -26,8 +27,10 @@ function isSwarmPost(apId: string | null): boolean {
  * Extract the original post ID from a swarm apId
  */
 function extractSwarmPostId(apId: string): string | null {
-    const parts = apId.split(':');
-    return parts.length >= 3 ? parts[2] : null;
+    if (!apId) return null;
+    const lastColonIndex = apId.lastIndexOf(':');
+    if (lastColonIndex === -1) return null;
+    return apId.substring(lastColonIndex + 1);
 }
 
 // Like a post
@@ -45,15 +48,15 @@ export async function POST(request: Request, context: RouteContext) {
         // Handle swarm posts (format: swarm:domain:uuid)
         if (postId.startsWith('swarm:')) {
             const targetDomain = extractSwarmDomain(postId);
-            const originalPostId = postId.split(':')[2];
-            
+            const originalPostId = extractSwarmPostId(postId);
+
             if (!targetDomain || !originalPostId) {
                 return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
             }
 
             // Deliver like directly to the origin node
             const { deliverSwarmLike } = await import('@/lib/swarm/interactions');
-            
+
             const result = await deliverSwarmLike(targetDomain, {
                 postId: originalPostId,
                 like: {
@@ -65,12 +68,12 @@ export async function POST(request: Request, context: RouteContext) {
                     timestamp: new Date().toISOString(),
                 },
             });
-            
+
             if (!result.success) {
                 console.error(`[Swarm] Like delivery failed: ${result.error}`);
                 return NextResponse.json({ error: 'Failed to deliver like to remote node' }, { status: 502 });
             }
-            
+
             console.log(`[Swarm] Like delivered to ${targetDomain} for post ${originalPostId}`);
             return NextResponse.json({ success: true, liked: true });
         }
@@ -147,12 +150,12 @@ export async function POST(request: Request, context: RouteContext) {
         if (isSwarmPost(post.apId)) {
             const targetDomain = extractSwarmDomain(post.apId);
             const originalPostId = extractSwarmPostId(post.apId!);
-            
+
             if (targetDomain && originalPostId) {
                 (async () => {
                     try {
                         const { deliverSwarmLike } = await import('@/lib/swarm/interactions');
-                        
+
                         const result = await deliverSwarmLike(targetDomain, {
                             postId: originalPostId,
                             like: {
@@ -164,7 +167,7 @@ export async function POST(request: Request, context: RouteContext) {
                                 timestamp: new Date().toISOString(),
                             },
                         });
-                        
+
                         if (result.success) {
                             console.log(`[Swarm] Like delivered to ${targetDomain} for post ${originalPostId}`);
                         } else {
@@ -223,14 +226,14 @@ export async function DELETE(request: Request, context: RouteContext) {
         if (postId.startsWith('swarm:')) {
             const targetDomain = extractSwarmDomain(postId);
             const originalPostId = postId.split(':')[2];
-            
+
             if (!targetDomain || !originalPostId) {
                 return NextResponse.json({ error: 'Invalid swarm post ID' }, { status: 400 });
             }
 
             // Deliver unlike directly to the origin node
             const { deliverSwarmUnlike } = await import('@/lib/swarm/interactions');
-            
+
             const result = await deliverSwarmUnlike(targetDomain, {
                 postId: originalPostId,
                 unlike: {
@@ -240,12 +243,12 @@ export async function DELETE(request: Request, context: RouteContext) {
                     timestamp: new Date().toISOString(),
                 },
             });
-            
+
             if (!result.success) {
                 console.error(`[Swarm] Unlike delivery failed: ${result.error}`);
                 return NextResponse.json({ error: 'Failed to deliver unlike to remote node' }, { status: 502 });
             }
-            
+
             console.log(`[Swarm] Unlike delivered to ${targetDomain} for post ${originalPostId}`);
             return NextResponse.json({ success: true, liked: false });
         }
@@ -286,12 +289,12 @@ export async function DELETE(request: Request, context: RouteContext) {
         if (isSwarmPost(post.apId)) {
             const targetDomain = extractSwarmDomain(post.apId);
             const originalPostId = extractSwarmPostId(post.apId!);
-            
+
             if (targetDomain && originalPostId) {
                 (async () => {
                     try {
                         const { deliverSwarmUnlike } = await import('@/lib/swarm/interactions');
-                        
+
                         const result = await deliverSwarmUnlike(targetDomain, {
                             postId: originalPostId,
                             unlike: {
@@ -301,7 +304,7 @@ export async function DELETE(request: Request, context: RouteContext) {
                                 timestamp: new Date().toISOString(),
                             },
                         });
-                        
+
                         if (result.success) {
                             console.log(`[Swarm] Unlike delivered to ${targetDomain}`);
                         } else {
