@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
                 isBot: users.isBot,
             })
             .from(users)
-            .where(sql`${users.isSuspended} IS FALSE`)
+            .where(sql`${users.isSuspended} IS FALSE AND ${users.handle} NOT LIKE '%@%'`)
             .orderBy(desc(users.createdAt))
             .limit(limit);
 

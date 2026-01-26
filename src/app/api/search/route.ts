@@ -106,7 +106,7 @@ export async function GET(request: Request) {
                 eq(users.isSuspended, false),
                 eq(users.isSilenced, false)
             );
-            searchUsers = await db.select({
+            const localUsers = await db.select({
                 id: users.id,
                 handle: users.handle,
                 displayName: users.displayName,
@@ -117,6 +117,9 @@ export async function GET(request: Request) {
                 .from(users)
                 .where(userConditions)
                 .limit(limit);
+            
+            // Filter out remote placeholder users (those with @ in handle)
+            searchUsers = localUsers.filter(u => !u.handle.includes('@'));
         }
 
         // Federated user lookup (exact handle@domain queries)
