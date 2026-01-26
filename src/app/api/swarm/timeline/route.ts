@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
         },
         nodeDomain,
         nodeIsNsfw,
-        isNsfw: post.isNsfw || post.authorIsNsfw || nodeIsNsfw, // Cascade NSFW flag
+        isNsfw: post.isNsfw || post.authorIsNsfw, // Post-level NSFW (not node-level)
         likeCount: post.likesCount,
         repostCount: post.repostsCount,
         replyCount: post.repliesCount,
