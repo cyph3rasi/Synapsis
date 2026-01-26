@@ -72,7 +72,11 @@ interface SwarmPost {
     likeCount: number;
     repostCount: number;
     replyCount: number;
-    mediaUrls?: string[];
+    media?: { url: string; mimeType?: string; altText?: string }[];
+    linkPreviewUrl?: string;
+    linkPreviewTitle?: string;
+    linkPreviewDescription?: string;
+    linkPreviewImage?: string;
 }
 
 export default function ExplorePage() {
@@ -299,43 +303,45 @@ export default function ExplorePage() {
                                 </div>
                             </div>
                             <div className="explore-posts">
-                                {swarmPosts.map((post) => (
-                                    <div key={`${post.nodeDomain}:${post.id}`} className="swarm-post-wrapper">
-                                        <div className="swarm-post-card card">
-                                            <div className="swarm-post-header">
-                                                <div className="avatar">
-                                                    {post.author.avatarUrl ? (
-                                                        <img src={post.author.avatarUrl} alt={post.author.displayName} />
-                                                    ) : (
-                                                        post.author.displayName?.charAt(0).toUpperCase() || post.author.handle.charAt(0).toUpperCase()
-                                                    )}
-                                                </div>
-                                                <div className="swarm-post-meta">
-                                                    <span className="swarm-post-author">{post.author.displayName}</span>
-                                                    <span className="swarm-post-handle">@{post.author.handle}@{post.nodeDomain}</span>
-                                                </div>
-                                            </div>
-                                            <div className="swarm-post-content">{post.content}</div>
-                                            {post.mediaUrls && post.mediaUrls.length > 0 && (
-                                                <div className="swarm-post-media">
-                                                    {post.mediaUrls.map((url, i) => (
-                                                        <img key={i} src={url} alt="" />
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <div className="swarm-post-footer">
-                                                <span className="swarm-post-time">
-                                                    {new Date(post.createdAt).toLocaleString()}
-                                                </span>
-                                                <span className="swarm-post-stats">
-                                                    {post.likeCount > 0 && `${post.likeCount} likes`}
-                                                    {post.likeCount > 0 && post.repostCount > 0 && ' · '}
-                                                    {post.repostCount > 0 && `${post.repostCount} reposts`}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                {swarmPosts.map((post) => {
+                                    // Transform swarm post to Post format for PostCard
+                                    const transformedPost: Post = {
+                                        id: `swarm:${post.nodeDomain}:${post.id}`,
+                                        originalPostId: post.id,
+                                        content: post.content,
+                                        createdAt: post.createdAt,
+                                        likesCount: post.likeCount,
+                                        repostsCount: post.repostCount,
+                                        repliesCount: post.replyCount,
+                                        isSwarm: true,
+                                        nodeDomain: post.nodeDomain,
+                                        author: {
+                                            id: `swarm:${post.nodeDomain}:${post.author.handle}`,
+                                            handle: post.author.handle,
+                                            displayName: post.author.displayName,
+                                            avatarUrl: post.author.avatarUrl,
+                                        },
+                                        media: post.media?.map((m, idx) => ({
+                                            id: `swarm:${post.nodeDomain}:${post.id}:media:${idx}`,
+                                            url: m.url,
+                                            altText: m.altText || null,
+                                            mimeType: m.mimeType || null,
+                                        })) || [],
+                                        linkPreviewUrl: post.linkPreviewUrl || null,
+                                        linkPreviewTitle: post.linkPreviewTitle || null,
+                                        linkPreviewDescription: post.linkPreviewDescription || null,
+                                        linkPreviewImage: post.linkPreviewImage || null,
+                                    };
+                                    return (
+                                        <PostCard
+                                            key={`${post.nodeDomain}:${post.id}`}
+                                            post={transformedPost}
+                                            onLike={handleLike}
+                                            onRepost={handleRepost}
+                                            onDelete={handleDelete}
+                                        />
+                                    );
+                                })}
                             </div>
                         </>
                     )

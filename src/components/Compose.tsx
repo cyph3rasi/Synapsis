@@ -30,16 +30,26 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
     const [lastDetectedUrl, setLastDetectedUrl] = useState<string | null>(null);
     const [isNsfw, setIsNsfw] = useState(false);
     const [canPostNsfw, setCanPostNsfw] = useState(false);
+    const [isNsfwNode, setIsNsfwNode] = useState(false);
     const maxLength = 400;
     const remaining = maxLength - content.length;
 
-    // Check if user can post NSFW content
+    // Check if user can post NSFW content and if node is NSFW
     useEffect(() => {
         fetch('/api/settings/nsfw')
             .then(res => res.ok ? res.json() : null)
             .then(data => {
                 if (data?.nsfwEnabled) {
                     setCanPostNsfw(true);
+                }
+            })
+            .catch(() => {});
+        
+        fetch('/api/node')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data?.isNsfw) {
+                    setIsNsfwNode(true);
                 }
             })
             .catch(() => {});
@@ -214,7 +224,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     <span className={`compose-counter ${remaining < 50 ? (remaining < 0 ? 'error' : 'warning') : ''}`}>
                         {remaining}
                     </span>
-                    {canPostNsfw && (
+                    {canPostNsfw && !isNsfwNode && (
                         <label className="compose-nsfw-toggle" title="Mark as sensitive content">
                             <input
                                 type="checkbox"

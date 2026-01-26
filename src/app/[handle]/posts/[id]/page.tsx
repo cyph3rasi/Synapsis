@@ -42,10 +42,23 @@ export default function PostDetailPage() {
     }, [id]);
 
     const handlePost = async (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => {
+        // Check if we're replying to a swarm post
+        let swarmReplyTo: { postId: string; nodeDomain: string } | undefined;
+        let localReplyToId: string | undefined = replyToId;
+
+        if (post?.isSwarm && post.nodeDomain && post.originalPostId) {
+            // This is a reply to a swarm post - send to the origin node
+            swarmReplyTo = {
+                postId: post.originalPostId,
+                nodeDomain: post.nodeDomain,
+            };
+            localReplyToId = undefined; // Don't set local replyToId for swarm posts
+        }
+
         const res = await fetch('/api/posts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, mediaIds, linkPreview, replyToId, isNsfw }),
+            body: JSON.stringify({ content, mediaIds, linkPreview, replyToId: localReplyToId, swarmReplyTo, isNsfw }),
         });
 
         if (res.ok) {

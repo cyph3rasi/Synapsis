@@ -380,7 +380,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                             </span>
                         )}
                     </div>
-                    <span className="post-time">{formatFullHandle(post.author.handle)} · {formatTime(post.createdAt)}</span>
+                    <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)} · {formatTime(post.createdAt)}</span>
                 </div>
                 {currentUser && currentUser.id !== post.author.id && (
                     <div style={{ position: 'relative', marginLeft: 'auto' }}>

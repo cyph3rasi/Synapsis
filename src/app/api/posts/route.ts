@@ -18,7 +18,11 @@ const buildWhere = (...conditions: Array<SQL | undefined>) => {
 
 const createPostSchema = z.object({
     content: z.string().min(1).max(POST_MAX_LENGTH),
-    replyToId: z.string().uuid().optional(),
+    replyToId: z.string().optional(), // Can be UUID or swarm:domain:uuid
+    swarmReplyTo: z.object({
+        postId: z.string(),
+        nodeDomain: z.string(),
+    }).optional(),
     mediaIds: z.array(z.string().uuid()).max(4).optional(),
     isNsfw: z.boolean().optional(),
     linkPreview: z.object({
@@ -89,6 +93,45 @@ export async function POST(request: Request) {
                     .set({ repliesCount: parentPost.repliesCount + 1 })
                     .where(eq(posts.id, data.replyToId));
             }
+        }
+
+        // If this is a reply to a swarm post, deliver it to the origin node
+        if (data.swarmReplyTo) {
+            (async () => {
+                try {
+                    const targetUrl = `https://${data.swarmReplyTo!.nodeDomain}/api/swarm/replies`;
+                    
+                    const replyPayload = {
+                        postId: data.swarmReplyTo!.postId,
+                        reply: {
+                            id: post.id,
+                            content: post.content,
+                            createdAt: post.createdAt.toISOString(),
+                            author: {
+                                handle: user.handle,
+                                displayName: user.displayName || user.handle,
+                                avatarUrl: user.avatarUrl || undefined,
+                            },
+                            nodeDomain,
+                            mediaUrls: attachedMedia.map(m => m.url),
+                        },
+                    };
+
+                    const response = await fetch(targetUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(replyPayload),
+                    });
+
+                    if (response.ok) {
+                        console.log(`[Swarm] Reply delivered to ${data.swarmReplyTo!.nodeDomain}`);
+                    } else {
+                        console.error(`[Swarm] Failed to deliver reply: ${response.status}`);
+                    }
+                } catch (err) {
+                    console.error('[Swarm] Error delivering reply:', err);
+                }
+            })();
         }
 
         // Federate the post to remote followers (non-blocking)
@@ -301,6 +344,7 @@ export async function GET(request: Request) {
             // Transform swarm posts to match local post format
             const swarmPosts = swarmResult.posts.map(sp => ({
                 id: `swarm:${sp.nodeDomain}:${sp.id}`,
+                originalPostId: sp.id, // Keep the original ID for replies
                 content: sp.content,
                 createdAt: new Date(sp.createdAt),
                 likesCount: sp.likeCount,
@@ -316,11 +360,16 @@ export async function GET(request: Request) {
                     isSwarm: true,
                     nodeDomain: sp.nodeDomain,
                 },
-                media: sp.mediaUrls?.map((url, idx) => ({
+                media: sp.media?.map((m, idx) => ({
                     id: `swarm:${sp.nodeDomain}:${sp.id}:media:${idx}`,
-                    url,
-                    altText: null,
+                    url: m.url,
+                    altText: m.altText || null,
+                    mimeType: m.mimeType || null,
                 })) || [],
+                linkPreviewUrl: sp.linkPreviewUrl || null,
+                linkPreviewTitle: sp.linkPreviewTitle || null,
+                linkPreviewDescription: sp.linkPreviewDescription || null,
+                linkPreviewImage: sp.linkPreviewImage || null,
                 replyTo: null,
             }));
 

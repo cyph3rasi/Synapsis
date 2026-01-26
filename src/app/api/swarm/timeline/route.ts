@@ -24,7 +24,12 @@ export interface SwarmPost {
   likeCount: number;
   repostCount: number;
   replyCount: number;
-  mediaUrls?: string[];
+  media?: { url: string; mimeType?: string; altText?: string }[];
+  // Link preview
+  linkPreviewUrl?: string;
+  linkPreviewTitle?: string;
+  linkPreviewDescription?: string;
+  linkPreviewImage?: string;
 }
 
 /**
@@ -60,6 +65,10 @@ export async function GET(request: NextRequest) {
         likesCount: posts.likesCount,
         repostsCount: posts.repostsCount,
         repliesCount: posts.repliesCount,
+        linkPreviewUrl: posts.linkPreviewUrl,
+        linkPreviewTitle: posts.linkPreviewTitle,
+        linkPreviewDescription: posts.linkPreviewDescription,
+        linkPreviewImage: posts.linkPreviewImage,
         authorHandle: users.handle,
         authorDisplayName: users.displayName,
         authorAvatarUrl: users.avatarUrl,
@@ -82,7 +91,7 @@ export async function GET(request: NextRequest) {
     
     for (const post of recentPosts) {
       const postMedia = await db
-        .select({ url: media.url })
+        .select({ url: media.url, mimeType: media.mimeType, altText: media.altText })
         .from(media)
         .where(eq(media.postId, post.id));
 
@@ -102,7 +111,15 @@ export async function GET(request: NextRequest) {
         likeCount: post.likesCount,
         repostCount: post.repostsCount,
         replyCount: post.repliesCount,
-        mediaUrls: postMedia.length > 0 ? postMedia.map(m => m.url) : undefined,
+        media: postMedia.length > 0 ? postMedia.map(m => ({
+          url: m.url,
+          mimeType: m.mimeType || undefined,
+          altText: m.altText || undefined,
+        })) : undefined,
+        linkPreviewUrl: post.linkPreviewUrl || undefined,
+        linkPreviewTitle: post.linkPreviewTitle || undefined,
+        linkPreviewDescription: post.linkPreviewDescription || undefined,
+        linkPreviewImage: post.linkPreviewImage || undefined,
       });
     }
 
