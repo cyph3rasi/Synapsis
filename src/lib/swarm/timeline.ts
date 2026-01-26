@@ -9,7 +9,7 @@ import type { SwarmPost } from '@/app/api/swarm/timeline/route';
 
 interface TimelineResult {
   posts: SwarmPost[];
-  sources: { domain: string; postCount: number; isNsfw?: boolean; error?: string }[];
+  sources: { domain: string; postCount: number; filteredCount?: number; isNsfw?: boolean; error?: string }[];
   fetchedAt: string;
 }
 
@@ -104,7 +104,15 @@ async function fetchNodeTimeline(
   limit: number = 20
 ): Promise<{ posts: SwarmPost[]; nodeIsNsfw?: boolean; error?: string }> {
   try {
-    const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+    // Determine protocol - use http for localhost, https for everything else
+    let baseUrl: string;
+    if (domain.startsWith('http')) {
+      baseUrl = domain;
+    } else if (domain.startsWith('localhost') || domain.startsWith('127.0.0.1')) {
+      baseUrl = `http://${domain}`;
+    } else {
+      baseUrl = `https://${domain}`;
+    }
     const url = `${baseUrl}/api/swarm/timeline?limit=${limit}`;
 
     const controller = new AbortController();
@@ -154,6 +162,9 @@ export async function fetchSwarmTimeline(
     ...nodes.map(n => n.domain).filter(d => d !== ourDomain)
   ].slice(0, maxNodes);
 
+  console.log(`[Swarm Timeline] Querying ${nodesToQuery.length} nodes: ${nodesToQuery.join(', ')}`);
+  console.log(`[Swarm Timeline] includeNsfw: ${includeNsfw}`);
+
   // Fetch from all nodes in parallel
   const results = await Promise.all(
     nodesToQuery.map(async (domain) => {
@@ -170,18 +181,26 @@ export async function fetchSwarmTimeline(
   const sources: TimelineResult['sources'] = [];
 
   for (const result of results) {
-    sources.push({
-      domain: result.domain,
-      postCount: result.posts.length,
-      isNsfw: result.nodeIsNsfw,
-      error: result.error,
-    });
-    
     // Filter NSFW posts only if user doesn't want NSFW content
     // A post is NSFW if it's explicitly marked OR comes from an NSFW node
     const filteredPosts = includeNsfw 
       ? result.posts 
       : result.posts.filter(p => !p.isNsfw && !p.nodeIsNsfw);
+    
+    // Log filtering details for debugging
+    if (!includeNsfw && result.posts.length > 0) {
+      const nsfwPosts = result.posts.filter(p => p.isNsfw);
+      const nodeNsfwPosts = result.posts.filter(p => p.nodeIsNsfw);
+      console.log(`[Swarm Timeline] ${result.domain}: ${result.posts.length} posts, ${nsfwPosts.length} marked NSFW, ${nodeNsfwPosts.length} from NSFW node, ${filteredPosts.length} after filter`);
+    }
+    
+    sources.push({
+      domain: result.domain,
+      postCount: result.posts.length,
+      filteredCount: filteredPosts.length,
+      isNsfw: result.nodeIsNsfw,
+      error: result.error,
+    });
     
     allPosts.push(...filteredPosts);
   }

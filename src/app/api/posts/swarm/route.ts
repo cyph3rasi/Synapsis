@@ -36,6 +36,13 @@ export async function GET(request: NextRequest) {
       sources: timeline.sources,
       cached: false,
       fetchedAt: timeline.fetchedAt,
+      // Debug info
+      debug: {
+        includeNsfw,
+        sourceCount: timeline.sources.length,
+        totalPostsBeforeFilter: timeline.sources.reduce((sum, s) => sum + s.postCount, 0),
+        postsAfterFilter: timeline.posts.length,
+      },
     });
   } catch (error) {
     console.error('Swarm posts error:', error);
