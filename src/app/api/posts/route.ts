@@ -22,6 +22,13 @@ const createPostSchema = z.object({
     swarmReplyTo: z.object({
         postId: z.string(),
         nodeDomain: z.string(),
+        content: z.string().optional(),
+        author: z.object({
+            handle: z.string(),
+            displayName: z.string().optional().nullable(),
+            avatarUrl: z.string().optional().nullable(),
+            nodeDomain: z.string().optional().nullable(),
+        }).optional(),
     }).optional(),
     mediaIds: z.array(z.string().uuid()).max(4).optional(),
     isNsfw: z.boolean().optional(),
@@ -46,10 +53,23 @@ export async function POST(request: Request) {
 
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
+        // Build swarm reply fields if replying to a swarm post
+        const swarmReplyFields = data.swarmReplyTo ? {
+            swarmReplyToId: `swarm:${data.swarmReplyTo.nodeDomain}:${data.swarmReplyTo.postId}`,
+            swarmReplyToContent: data.swarmReplyTo.content?.slice(0, 300) || null,
+            swarmReplyToAuthor: data.swarmReplyTo.author ? JSON.stringify({
+                handle: data.swarmReplyTo.author.handle,
+                displayName: data.swarmReplyTo.author.displayName,
+                avatarUrl: data.swarmReplyTo.author.avatarUrl,
+                nodeDomain: data.swarmReplyTo.nodeDomain,
+            }) : null,
+        } : {};
+
         const [post] = await db.insert(posts).values({
             userId: user.id,
             content: data.content,
             replyToId: data.replyToId,
+            ...swarmReplyFields,
             isNsfw: data.isNsfw || user.isNsfw || false, // Inherit from account if account is NSFW
             apId: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
             apUrl: `https://${nodeDomain}/posts/${crypto.randomUUID()}`,
@@ -374,7 +394,7 @@ export async function GET(request: Request) {
                     bot: true,
                     media: true,
                     replyTo: {
-                        with: { author: true },
+                        with: { author: true, media: true },
                     },
                 },
                 orderBy: [desc(posts.createdAt)],
@@ -389,7 +409,7 @@ export async function GET(request: Request) {
                     bot: true,
                     media: true,
                     replyTo: {
-                        with: { author: true },
+                        with: { author: true, media: true },
                     },
                 },
                 orderBy: [desc(posts.createdAt)],
@@ -417,7 +437,7 @@ export async function GET(request: Request) {
                     bot: true,
                     media: true,
                     replyTo: {
-                        with: { author: true },
+                        with: { author: true, media: true },
                     },
                 },
                 orderBy: [desc(posts.createdAt)],
@@ -560,7 +580,7 @@ export async function GET(request: Request) {
                         bot: true,
                         media: true,
                         replyTo: {
-                            with: { author: true },
+                            with: { author: true, media: true },
                         },
                     },
                     orderBy: [desc(posts.createdAt)],
@@ -670,7 +690,7 @@ export async function GET(request: Request) {
                         bot: true,
                         media: true,
                         replyTo: {
-                            with: { author: true },
+                            with: { author: true, media: true },
                         },
                     },
                     orderBy: [desc(posts.createdAt)],

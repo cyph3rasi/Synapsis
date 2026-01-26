@@ -36,9 +36,11 @@ interface PostCardProps {
     onDelete?: (id: string) => void;
     onHide?: (id: string) => void; // Called when post should be hidden (block/mute)
     isDetail?: boolean;
+    showThread?: boolean; // Show parent post inline as a thread
+    isThreadParent?: boolean; // This post is being shown as a parent in a thread
 }
 
-export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail }: PostCardProps) {
+export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent }: PostCardProps) {
     const { user: currentUser } = useAuth();
     const { showToast } = useToast();
     const [liked, setLiked] = useState(post.isLiked || false);
@@ -356,9 +358,43 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         });
     };
 
+    // Build a synthetic replyTo for swarm replies
+    const effectiveReplyTo = post.replyTo || (post.swarmReplyToId && post.swarmReplyToAuthor ? {
+        id: post.swarmReplyToId,
+        content: post.swarmReplyToContent || '',
+        createdAt: post.createdAt, // Use same time as approximation
+        likesCount: 0,
+        repostsCount: 0,
+        repliesCount: 0,
+        author: typeof post.swarmReplyToAuthor === 'string' 
+            ? JSON.parse(post.swarmReplyToAuthor)
+            : post.swarmReplyToAuthor,
+        isSwarm: true,
+        nodeDomain: (typeof post.swarmReplyToAuthor === 'string' 
+            ? JSON.parse(post.swarmReplyToAuthor)
+            : post.swarmReplyToAuthor)?.nodeDomain,
+    } as Post : null);
+
     return (
-        <article className={`post ${isDetail ? 'detail' : ''}`}>
-            {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
+        <>
+            {/* Show parent post as part of thread */}
+            {showThread && effectiveReplyTo && !isDetail && !isThreadParent && (
+                <div className="thread-container">
+                    <PostCard
+                        post={effectiveReplyTo}
+                        onLike={onLike}
+                        onRepost={onRepost}
+                        onComment={onComment}
+                        onDelete={onDelete}
+                        onHide={onHide}
+                        showThread={false}
+                        isThreadParent={true}
+                    />
+                    <div className="thread-line" />
+                </div>
+            )}
+            <article className={`post ${isDetail ? 'detail' : ''} ${isThreadParent ? 'thread-parent' : ''}`}>
+                {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
             <div className="post-header">
                 <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
@@ -517,9 +553,9 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                 )}
             </div>
 
-            {post.replyTo && (
+            {effectiveReplyTo && !showThread && (
                 <div className="post-reply-to">
-                    Replied to <Link href={`/${post.replyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(post.replyTo.author.handle)}</Link>
+                    Replying to <Link href={`/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
                 </div>
             )}
 
@@ -601,5 +637,6 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                 )}
             </div>
         </article>
+        </>
     );
 }

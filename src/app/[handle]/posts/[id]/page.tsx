@@ -43,7 +43,7 @@ export default function PostDetailPage() {
 
     const handlePost = async (content: string, mediaIds: string[], linkPreview?: any, replyToId?: string, isNsfw?: boolean) => {
         // Check if we're replying to a swarm post
-        let swarmReplyTo: { postId: string; nodeDomain: string } | undefined;
+        let swarmReplyTo: { postId: string; nodeDomain: string; content?: string; author?: any } | undefined;
         let localReplyToId: string | undefined = replyToId;
 
         if (post?.isSwarm && post.nodeDomain && post.originalPostId) {
@@ -51,8 +51,10 @@ export default function PostDetailPage() {
             swarmReplyTo = {
                 postId: post.originalPostId,
                 nodeDomain: post.nodeDomain,
+                content: post.content,
+                author: post.author,
             };
-            localReplyToId = undefined; // Don't set local replyToId for swarm posts
+            localReplyToId = undefined; // Can't use UUID foreign key for swarm posts
         }
 
         const res = await fetch('/api/posts', {

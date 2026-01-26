@@ -270,6 +270,37 @@ a.btn-primary:visited {
   overflow-y: auto;
 }
 
+/* Thread Container */
+.thread-container {
+  position: relative;
+}
+
+.thread-container .post {
+  border-bottom: none;
+  padding-bottom: 8px;
+}
+
+.thread-line {
+  position: absolute;
+  left: 36px;
+  top: 56px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.post.thread-parent {
+  opacity: 0.85;
+}
+
+.post.thread-parent .post-actions {
+  display: none;
+}
+
+.post.thread-parent .post-content {
+  font-size: 14px;
+}
+
 /* Post */
 .post {
   padding: 16px;

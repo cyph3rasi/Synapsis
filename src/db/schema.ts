@@ -106,6 +106,10 @@ export const posts = pgTable('posts', {
   content: text('content').notNull(),
   replyToId: uuid('reply_to_id'),
   repostOfId: uuid('repost_of_id'),
+  // Swarm reply reference (when replying to a post on another node)
+  swarmReplyToId: text('swarm_reply_to_id'), // Format: "swarm:domain:postId"
+  swarmReplyToContent: text('swarm_reply_to_content'), // Cached content for display
+  swarmReplyToAuthor: text('swarm_reply_to_author'), // JSON: {handle, displayName, avatarUrl, nodeDomain}
   likesCount: integer('likes_count').default(0).notNull(),
   repostsCount: integer('reposts_count').default(0).notNull(),
   repliesCount: integer('replies_count').default(0).notNull(),

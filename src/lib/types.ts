@@ -50,11 +50,16 @@ export interface Post {
     linkPreviewTitle?: string | null;
     linkPreviewDescription?: string | null;
     linkPreviewImage?: string | null;
-    replyTo?: {
-        author: {
-            handle: string;
-            displayName: string;
-        };
+    replyTo?: Post | null;
+    replyToId?: string | null;
+    // Swarm reply info (when replying to a post on another node)
+    swarmReplyToId?: string | null;
+    swarmReplyToContent?: string | null;
+    swarmReplyToAuthor?: {
+        handle: string;
+        displayName?: string | null;
+        avatarUrl?: string | null;
+        nodeDomain?: string | null;
     } | null;
     isLiked?: boolean;
     isReposted?: boolean;
