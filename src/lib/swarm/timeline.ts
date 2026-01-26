@@ -181,7 +181,7 @@ export async function fetchSwarmTimeline(
     // A post is NSFW if it's explicitly marked OR comes from an NSFW node
     const filteredPosts = includeNsfw 
       ? result.posts 
-      : result.posts.filter(p => !p.isNsfw);
+      : result.posts.filter(p => !p.isNsfw && !p.nodeIsNsfw);
     
     allPosts.push(...filteredPosts);
   }
