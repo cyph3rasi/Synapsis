@@ -88,7 +88,10 @@ export async function GET(request: Request, context: RouteContext) {
             where: eq(users.handle, cleanHandle),
         });
 
-        if (!user) {
+        // If user exists but is a remote placeholder (handle contains @), fetch fresh data from remote
+        const isRemotePlaceholder = user && cleanHandle.includes('@');
+        
+        if (!user || isRemotePlaceholder) {
             if (remoteHandle && remoteDomain) {
                 // Try Swarm API first (for Synapsis nodes)
                 const swarmData = await fetchSwarmProfile(remoteHandle, remoteDomain);
@@ -157,7 +160,10 @@ export async function GET(request: Request, context: RouteContext) {
                     });
                 }
             }
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            // Only return 404 if this wasn't a remote placeholder we were trying to refresh
+            if (!isRemotePlaceholder) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
         }
         if (user.isSuspended) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
