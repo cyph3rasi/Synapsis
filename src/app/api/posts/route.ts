@@ -519,23 +519,92 @@ export async function GET(request: Request) {
                 const followedRemoteUsers = await db.query.remoteFollows.findMany({
                     where: eq(remoteFollows.followerId, user.id),
                 });
-                const followedRemoteHandles = followedRemoteUsers.map(f => f.targetHandle);
 
-                // Get cached remote posts from followed users
-                let remotePostsData: typeof remotePosts.$inferSelect[] = [];
-                if (followedRemoteHandles.length > 0) {
-                    remotePostsData = await db.query.remotePosts.findMany({
-                        where: inArray(remotePosts.authorHandle, followedRemoteHandles),
-                        orderBy: [desc(remotePosts.publishedAt)],
-                        limit: limit,
+                // Fetch posts LIVE from followed remote users (in parallel, with timeout)
+                let liveRemotePosts: any[] = [];
+                if (followedRemoteUsers.length > 0) {
+                    const { fetchSwarmUserProfile, isSwarmNode } = await import('@/lib/swarm/interactions');
+                    const { resolveRemoteUser } = await import('@/lib/activitypub/fetch');
+                    
+                    // Wrap each fetch with a timeout to prevent slow nodes from blocking
+                    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
+                        return Promise.race([
+                            promise,
+                            new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
+                        ]);
+                    };
+                    
+                    const fetchPromises = followedRemoteUsers.map(async (follow) => {
+                        try {
+                            const atIndex = follow.targetHandle.lastIndexOf('@');
+                            if (atIndex === -1) return [];
+                            
+                            const handle = follow.targetHandle.slice(0, atIndex);
+                            const domain = follow.targetHandle.slice(atIndex + 1);
+                            
+                            // Check if swarm node - use swarm API (faster)
+                            const isSwarm = await isSwarmNode(domain);
+                            
+                            if (isSwarm) {
+                                const profileData = await withTimeout(
+                                    fetchSwarmUserProfile(handle, domain, limit),
+                                    5000 // 5s timeout per node
+                                );
+                                if (!profileData?.posts) return [];
+                                
+                                return profileData.posts.map(post => ({
+                                    id: `swarm:${domain}:${post.id}`,
+                                    content: post.content,
+                                    createdAt: new Date(post.createdAt),
+                                    likesCount: post.likesCount || 0,
+                                    repostsCount: post.repostsCount || 0,
+                                    repliesCount: post.repliesCount || 0,
+                                    isRemote: true,
+                                    isNsfw: post.isNsfw,
+                                    linkPreviewUrl: post.linkPreviewUrl,
+                                    linkPreviewTitle: post.linkPreviewTitle,
+                                    linkPreviewDescription: post.linkPreviewDescription,
+                                    linkPreviewImage: post.linkPreviewImage,
+                                    author: {
+                                        id: `swarm:${domain}:${handle}`,
+                                        handle: follow.targetHandle,
+                                        displayName: follow.displayName || profileData.profile?.displayName || handle,
+                                        avatarUrl: follow.avatarUrl || profileData.profile?.avatarUrl,
+                                        isRemote: true,
+                                    },
+                                    media: post.media?.map((m: any, idx: number) => ({
+                                        id: `swarm:${domain}:${post.id}:media:${idx}`,
+                                        url: m.url,
+                                        altText: m.altText || null,
+                                    })) || [],
+                                    replyTo: null,
+                                }));
+                            } else {
+                                // ActivityPub - fetch from outbox
+                                const remoteProfile = await resolveRemoteUser(handle, domain);
+                                if (!remoteProfile?.outbox) return [];
+                                
+                                // For AP, fall back to cached posts (live outbox fetch is slower)
+                                const cachedPosts = await db.query.remotePosts.findMany({
+                                    where: eq(remotePosts.authorHandle, follow.targetHandle),
+                                    orderBy: [desc(remotePosts.publishedAt)],
+                                    limit: limit,
+                                });
+                                
+                                return transformRemotePosts(cachedPosts);
+                            }
+                        } catch (error) {
+                            console.error(`[Home] Error fetching posts from ${follow.targetHandle}:`, error);
+                            return [];
+                        }
                     });
+                    
+                    const results = await Promise.all(fetchPromises);
+                    liveRemotePosts = results.flat();
                 }
 
-                // Transform remote posts to match local post format (with deduplication)
-                const transformedRemotePosts = transformRemotePosts(remotePostsData);
-
                 // Merge and sort by date
-                const allPosts = [...localPosts, ...transformedRemotePosts]
+                const allPosts = [...localPosts, ...liveRemotePosts]
                     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                     .slice(0, limit);
 

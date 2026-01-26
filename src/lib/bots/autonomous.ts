@@ -11,9 +11,10 @@
 import { db, botContentItems, bots } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { ContentGenerator, type Bot as ContentGeneratorBot, type ContentItem } from './contentGenerator';
-import { canPost, recordPost } from './rateLimiter';
+import { canPost } from './rateLimiter';
 import { decryptApiKey, deserializeEncryptedData } from './encryption';
 import { parseScheduleConfig, isDue } from './scheduler';
+import { triggerPost } from './posting';
 
 // ============================================
 // TYPES
@@ -446,9 +447,6 @@ export async function attemptAutonomousPost(
     );
   }
 
-  const contentGeneratorBot = toContentGeneratorBot(dbBot, dbBot.user.handle);
-  const generator = new ContentGenerator(contentGeneratorBot);
-
   // Check if bot has content sources
   const hasSourcesConfigured = await hasContentSources(botId);
 
@@ -471,25 +469,25 @@ export async function attemptAutonomousPost(
           );
 
           if (evaluation.shouldPost) {
-            const generatedContent = await generator.generatePost(contentItem);
+            // Use triggerPost to actually create the post in the database
+            const postResult = await triggerPost(botId, {
+              sourceContentId: contentItem.id,
+              skipRateLimitCheck, // Already checked above
+            });
 
-            // Record the post for rate limiting
-            if (!skipRateLimitCheck) {
-              await recordPost(botId);
+            if (postResult.success) {
+              return {
+                posted: true,
+                postId: postResult.post?.id,
+                postText: postResult.post?.content,
+                contentItem,
+              };
+            } else {
+              throw new AutonomousPostError(
+                postResult.error || 'Failed to create post',
+                postResult.errorCode as AutonomousPostErrorCode || 'POST_CREATION_FAILED'
+              );
             }
-
-            await markContentItemProcessed(
-              contentItem.id,
-              'pending',
-              evaluation.interestScore,
-              evaluation.reason
-            );
-
-            return {
-              posted: true,
-              postText: generatedContent.text,
-              contentItem,
-            };
           }
         } catch (error) {
           console.error(`Error evaluating content item ${contentItem.id}:`, error);
@@ -507,24 +505,21 @@ export async function attemptAutonomousPost(
   }
 
   // Generate original post based on personality (no content source needed)
-  try {
-    const generatedContent = await generator.generatePost(undefined, undefined);
+  // Use triggerPost which handles database insertion, rate limiting, and federation
+  const postResult = await triggerPost(botId, {
+    skipRateLimitCheck, // Already checked above
+  });
 
-    // Record the post for rate limiting
-    if (!skipRateLimitCheck) {
-      await recordPost(botId);
-    }
-
+  if (postResult.success) {
     return {
       posted: true,
-      postText: generatedContent.text,
+      postId: postResult.post?.id,
+      postText: postResult.post?.content,
     };
-  } catch (error) {
-    if (error instanceof AutonomousPostError) throw error;
+  } else {
     throw new AutonomousPostError(
-      `Failed to create post: ${error instanceof Error ? error.message : String(error)}`,
-      'POST_CREATION_FAILED',
-      error instanceof Error ? error : undefined
+      postResult.error || 'Failed to create post',
+      postResult.errorCode as AutonomousPostErrorCode || 'POST_CREATION_FAILED'
     );
   }
 }

@@ -4,6 +4,7 @@
  * Runs periodic tasks within the Next.js process:
  * - Bot autonomous posting (every 1 minute)
  * - Swarm gossip (every 5 minutes)
+ * - Remote follows sync (every 10 minutes)
  * - Swarm announcement (on startup)
  */
 
@@ -11,9 +12,11 @@ import { processAllAutonomousBots } from '@/lib/bots/autonomous';
 import { runGossipRound } from '@/lib/swarm/gossip';
 import { announceToSeeds } from '@/lib/swarm/discovery';
 import { getSwarmStats } from '@/lib/swarm/registry';
+import { syncRemoteFollowsPosts } from '@/lib/background/remote-sync';
 
 const BOT_INTERVAL_MS = 60 * 1000; // 1 minute
 const GOSSIP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const REMOTE_SYNC_INTERVAL_MS = 60 * 1000; // 1 minute - keep feeds fresh
 const STARTUP_DELAY_MS = 10 * 1000; // Wait 10s for server to be ready
 
 let isStarted = false;
@@ -82,13 +85,33 @@ async function announceToSwarm() {
   }
 }
 
-export function startBackgroundTasks() {
+async function runRemoteSync(origin: string) {
+  try {
+    const result = await syncRemoteFollowsPosts(origin);
+    if (result.synced > 0 || result.errors > 0) {
+      log('REMOTE_SYNC', `Synced ${result.synced} users, skipped ${result.skipped}, errors ${result.errors}`);
+      if (result.details.length > 0) {
+        const newPosts = result.details.filter(d => d.cached > 0);
+        if (newPosts.length > 0) {
+          log('REMOTE_SYNC', `New posts: ${newPosts.map(d => `${d.handle}: ${d.cached}`).join(', ')}`);
+        }
+      }
+    }
+  } catch (error) {
+    log('REMOTE_SYNC', `Error: ${error}`);
+  }
+}
+
+export function startBackgroundTasks(origin?: string) {
   // Prevent double-start (Next.js can call register() multiple times in dev)
   if (isStarted) return;
   isStarted = true;
 
+  // Default origin for remote sync (can be overridden)
+  const syncOrigin = origin || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
   log('STARTUP', 'Background task scheduler starting...');
-  log('STARTUP', `Bot interval: ${BOT_INTERVAL_MS / 1000}s, Gossip interval: ${GOSSIP_INTERVAL_MS / 1000}s`);
+  log('STARTUP', `Bot interval: ${BOT_INTERVAL_MS / 1000}s, Gossip interval: ${GOSSIP_INTERVAL_MS / 1000}s, Remote sync interval: ${REMOTE_SYNC_INTERVAL_MS / 1000}s`);
 
   // Wait for server to be fully ready before starting tasks
   setTimeout(async () => {
@@ -100,9 +123,13 @@ export function startBackgroundTasks() {
     // Run initial bot check
     await runBotTasks();
     
+    // Run initial remote sync (after 15s to let server stabilize)
+    setTimeout(() => runRemoteSync(syncOrigin), 15 * 1000);
+    
     // Schedule recurring tasks
     setInterval(runBotTasks, BOT_INTERVAL_MS);
     setInterval(runSwarmGossip, GOSSIP_INTERVAL_MS);
+    setInterval(() => runRemoteSync(syncOrigin), REMOTE_SYNC_INTERVAL_MS);
     
     // First gossip after 30s (let announcement propagate)
     setTimeout(runSwarmGossip, 30 * 1000);
