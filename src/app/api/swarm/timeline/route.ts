@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, media, nodes } from '@/db';
-import { eq, desc, and, isNull, lt } from 'drizzle-orm';
+import { eq, desc, and, isNull, lt, sql } from 'drizzle-orm';
 
 export interface SwarmPost {
   id: string;
@@ -59,9 +59,11 @@ export async function GET(request: NextRequest) {
     const nodeIsNsfw = node?.isNsfw ?? false;
 
     // Use query builder for better conditional logic
+    // Only return posts from local users (not remote placeholder users)
     let whereCondition = and(
       isNull(posts.replyToId), // Not a reply
-      eq(posts.isRemoved, false) // Not removed
+      eq(posts.isRemoved, false), // Not removed
+      isNull(posts.apId) // Not a federated/swarm post (local posts only)
     );
 
     if (cursor) {
@@ -75,6 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recent public posts (not replies, local users only, not removed)
+    // Filter out remote placeholder users by checking handle doesn't contain @
     const recentPosts = await db
       .select({
         id: posts.id,
@@ -97,7 +100,7 @@ export async function GET(request: NextRequest) {
       })
       .from(posts)
       .innerJoin(users, eq(posts.userId, users.id))
-      .where(whereCondition)
+      .where(and(whereCondition, sql`${users.handle} NOT LIKE '%@%'`))
       .orderBy(desc(posts.createdAt))
       .limit(limit);
 
