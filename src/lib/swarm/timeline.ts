@@ -148,14 +148,10 @@ export async function fetchSwarmTimeline(
   // Always include our own posts
   const ourDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
   
-  // Filter out NSFW nodes if not including NSFW content
-  const eligibleNodes = includeNsfw 
-    ? nodes 
-    : nodes.filter(n => !n.isNsfw);
-  
+  // Always query all nodes - we filter posts, not nodes
   const nodesToQuery = [
     ourDomain,
-    ...eligibleNodes.map(n => n.domain).filter(d => d !== ourDomain)
+    ...nodes.map(n => n.domain).filter(d => d !== ourDomain)
   ].slice(0, maxNodes);
 
   // Fetch from all nodes in parallel
@@ -181,7 +177,8 @@ export async function fetchSwarmTimeline(
       error: result.error,
     });
     
-    // Filter NSFW posts if not including NSFW
+    // Filter NSFW posts only if user doesn't want NSFW content
+    // A post is NSFW if it's explicitly marked OR comes from an NSFW node
     const filteredPosts = includeNsfw 
       ? result.posts 
       : result.posts.filter(p => !p.isNsfw);
