@@ -1,11 +1,10 @@
 /**
- * Cron endpoint for bot scheduled posting
+ * Cron endpoint for bot autonomous posting
  * 
  * Call this endpoint periodically (e.g., every minute) via cron job or PM2
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processScheduledPosts } from '@/lib/bots/scheduler';
 import { processAllAutonomousBots } from '@/lib/bots/autonomous';
 
 export async function POST(request: NextRequest) {
@@ -18,23 +17,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Process scheduled posts
-    const scheduledResult = await processScheduledPosts();
-    
-    // Process autonomous bots
-    const autonomousResult = await processAllAutonomousBots();
+    const results = await processAllAutonomousBots();
 
     return NextResponse.json({
       success: true,
-      scheduled: {
-        processed: scheduledResult.processed,
-        skipped: scheduledResult.skipped,
-        errors: scheduledResult.errors.length,
-      },
-      autonomous: {
-        total: autonomousResult.length,
-        posted: autonomousResult.filter(r => r.result.posted).length,
-      },
+      total: results.length,
+      posted: results.filter(r => r.result.posted).length,
+      errors: results.filter(r => r.error).length,
+      details: results.map(r => ({
+        handle: r.botHandle,
+        posted: r.result.posted,
+        reason: r.result.reason || r.error,
+      })),
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

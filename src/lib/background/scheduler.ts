@@ -2,12 +2,11 @@
  * Background Task Scheduler
  * 
  * Runs periodic tasks within the Next.js process:
- * - Bot scheduling (every 1 minute)
+ * - Bot autonomous posting (every 1 minute)
  * - Swarm gossip (every 5 minutes)
  * - Swarm announcement (on startup)
  */
 
-import { processScheduledPosts } from '@/lib/bots/scheduler';
 import { processAllAutonomousBots } from '@/lib/bots/autonomous';
 import { runGossipRound } from '@/lib/swarm/gossip';
 import { announceToSeeds } from '@/lib/swarm/discovery';
@@ -30,39 +29,30 @@ function log(category: string, message: string, data?: unknown) {
 
 async function runBotTasks() {
   try {
-    const scheduledResult = await processScheduledPosts();
-    const autonomousResult = await processAllAutonomousBots();
+    const results = await processAllAutonomousBots();
     
-    const posted = autonomousResult.filter(r => r.result.posted).length;
-    const skipped = scheduledResult.skipped;
-    const errors = scheduledResult.errors.length + autonomousResult.filter(r => r.error).length;
+    const posted = results.filter(r => r.result.posted).length;
+    const errors = results.filter(r => r.error).length;
     
-    // Always log bot task results for debugging
-    if (scheduledResult.processed > 0 || posted > 0) {
-      log('BOTS', `Processed ${scheduledResult.processed} scheduled, ${posted} autonomous posts`);
-    } else if (scheduledResult.details.length > 0 || autonomousResult.length > 0) {
+    if (posted > 0) {
+      log('BOTS', `Created ${posted} posts`);
+    } else if (results.length > 0) {
       // Log why bots didn't post
-      const reasons = scheduledResult.details
-        .filter(d => d.status !== 'posted')
-        .map(d => `${d.botId.slice(0, 8)}: ${d.status}${d.message ? ` (${d.message})` : ''}`)
-        .slice(0, 3);
-      
-      const autoReasons = autonomousResult
+      const reasons = results
         .filter(r => !r.result.posted)
         .map(r => `${r.botHandle}: ${r.result.reason || r.error || 'unknown'}`)
-        .slice(0, 3);
+        .slice(0, 5);
       
-      if (reasons.length > 0 || autoReasons.length > 0) {
-        log('BOTS', `No posts created. Scheduled: ${scheduledResult.details.length} checked, ${skipped} skipped. Autonomous: ${autonomousResult.length} checked.`);
-        if (reasons.length > 0) log('BOTS', `Scheduled skip reasons: ${reasons.join('; ')}`);
-        if (autoReasons.length > 0) log('BOTS', `Autonomous skip reasons: ${autoReasons.join('; ')}`);
+      if (reasons.length > 0) {
+        log('BOTS', `${results.length} bots checked, no posts. Reasons: ${reasons.join('; ')}`);
       }
     } else {
       log('BOTS', 'No active bots found');
     }
     
     if (errors > 0) {
-      log('BOTS', `Errors: ${scheduledResult.errors.join('; ')}`);
+      const errorMsgs = results.filter(r => r.error).map(r => `${r.botHandle}: ${r.error}`);
+      log('BOTS', `Errors: ${errorMsgs.join('; ')}`);
     }
   } catch (error) {
     log('BOTS', `Error: ${error}`);

@@ -2,8 +2,8 @@
  * Autonomous Posting Module
  * 
  * Implements autonomous posting logic for bots. When autonomous mode is enabled,
- * bots evaluate content from their sources and decide whether to post based on
- * content interest. All posting respects rate limits.
+ * bots post based on their schedule configuration. Content sources are optional -
+ * bots without sources generate original posts based on their personality.
  * 
  * Requirements: 6.1, 6.2, 6.3, 6.5
  */
@@ -12,8 +12,8 @@ import { db, botContentItems, bots } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { ContentGenerator, type Bot as ContentGeneratorBot, type ContentItem } from './contentGenerator';
 import { canPost, recordPost } from './rateLimiter';
-import { getBotById } from './botManager';
 import { decryptApiKey, deserializeEncryptedData } from './encryption';
+import { parseScheduleConfig, isDue } from './scheduler';
 
 // ============================================
 // TYPES
@@ -104,6 +104,25 @@ export const MIN_INTEREST_SCORE = 60;
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Check if a bot has any active content sources configured.
+ * 
+ * @param botId - The ID of the bot
+ * @returns True if bot has content sources
+ */
+async function hasContentSources(botId: string): Promise<boolean> {
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.id, botId),
+    with: {
+      contentSources: {
+        where: (sources, { eq }) => eq(sources.isActive, true),
+      },
+    },
+  });
+
+  return !!(bot?.contentSources && bot.contentSources.length > 0);
+}
 
 /**
  * Get unprocessed content items for a bot.
@@ -261,25 +280,7 @@ export async function evaluateContentForPosting(
   botId: string,
   contentItem: ContentItem
 ): Promise<AutonomousPostEvaluation> {
-  // Get bot
-  const bot = await getBotById(botId);
-  if (!bot) {
-    throw new AutonomousPostError(
-      `Bot not found: ${botId}`,
-      'BOT_NOT_FOUND'
-    );
-  }
-
-  // Check if autonomous mode is enabled
-  if (!bot.autonomousMode) {
-    return {
-      shouldPost: false,
-      reason: 'Autonomous mode is disabled for this bot',
-      contentItem,
-    };
-  }
-
-  // Get bot with encrypted API key
+  // Get bot with user relation
   const dbBot = await db.query.bots.findFirst({
     where: eq(bots.id, botId),
     with: { user: true },
@@ -290,6 +291,15 @@ export async function evaluateContentForPosting(
       `Bot not found: ${botId}`,
       'BOT_NOT_FOUND'
     );
+  }
+
+  // Check if autonomous mode is enabled
+  if (!dbBot.autonomousMode) {
+    return {
+      shouldPost: false,
+      reason: 'Autonomous mode is disabled for this bot',
+      contentItem,
+    };
   }
 
   // Check if bot has API key
@@ -340,7 +350,7 @@ export async function evaluateContentForPosting(
 
 /**
  * Attempt to create an autonomous post for a bot.
- * Evaluates unprocessed content and posts if interesting and rate limits allow.
+ * Checks schedule timing, then either uses content sources or generates original posts.
  * 
  * This is the main entry point for autonomous posting.
  * 
@@ -359,9 +369,13 @@ export async function attemptAutonomousPost(
     skipRateLimitCheck = false,
   } = options;
 
-  // Get bot
-  const bot = await getBotById(botId);
-  if (!bot) {
+  // Get bot with schedule config
+  const dbBot = await db.query.bots.findFirst({
+    where: eq(bots.id, botId),
+    with: { user: true },
+  });
+
+  if (!dbBot) {
     throw new AutonomousPostError(
       `Bot not found: ${botId}`,
       'BOT_NOT_FOUND'
@@ -369,11 +383,38 @@ export async function attemptAutonomousPost(
   }
 
   // Check if autonomous mode is enabled (Requirement 6.5)
-  if (!bot.autonomousMode) {
+  if (!dbBot.autonomousMode) {
     return {
       posted: false,
-      reason: 'Autonomous mode is disabled for this bot',
+      reason: 'Autonomous mode is disabled',
     };
+  }
+
+  // Check if bot is active and not suspended
+  if (!dbBot.isActive) {
+    return {
+      posted: false,
+      reason: 'Bot is not active',
+    };
+  }
+
+  if (dbBot.isSuspended) {
+    return {
+      posted: false,
+      reason: 'Bot is suspended',
+    };
+  }
+
+  // Check schedule timing (if configured)
+  const scheduleConfig = parseScheduleConfig(dbBot.scheduleConfig);
+  if (scheduleConfig) {
+    const dueResult = isDue(scheduleConfig, dbBot.lastPostAt);
+    if (!dueResult.isDue) {
+      return {
+        posted: false,
+        reason: dueResult.reason || 'Not scheduled to post yet',
+      };
+    }
   }
 
   // Check rate limits (Requirement 6.3)
@@ -387,95 +428,105 @@ export async function attemptAutonomousPost(
     }
   }
 
-  // Get unprocessed content items (Requirement 6.1)
-  const contentItems = await getUnprocessedContentItems(botId, maxEvaluations);
-
-  if (contentItems.length === 0) {
-    return {
-      posted: false,
-      reason: 'No unprocessed content available',
-    };
+  // Check if bot has API key
+  try {
+    const apiKey = getDecryptedApiKeyForBot(dbBot);
+    if (!apiKey || apiKey === '__REMOVED__') {
+      throw new AutonomousPostError(
+        'Bot does not have a valid API key configured',
+        'NO_API_KEY'
+      );
+    }
+  } catch (error) {
+    if (error instanceof AutonomousPostError) throw error;
+    throw new AutonomousPostError(
+      'Failed to decrypt bot API key',
+      'NO_API_KEY',
+      error instanceof Error ? error : undefined
+    );
   }
 
-  // Evaluate content items until we find one worth posting (Requirement 6.2)
-  for (const contentItem of contentItems) {
-    try {
-      const evaluation = await evaluateContentForPosting(botId, contentItem);
+  const contentGeneratorBot = toContentGeneratorBot(dbBot, dbBot.user.handle);
+  const generator = new ContentGenerator(contentGeneratorBot);
 
-      // Mark as processed regardless of decision
-      await markContentItemProcessed(
-        contentItem.id,
-        undefined,
-        evaluation.interestScore,
-        evaluation.reason
-      );
+  // Check if bot has content sources
+  const hasSourcesConfigured = await hasContentSources(botId);
 
-      if (evaluation.shouldPost) {
-        // Generate and create the post (Requirement 6.3)
+  if (hasSourcesConfigured) {
+    // Bot has content sources - try content-based posting first
+    const contentItems = await getUnprocessedContentItems(botId, maxEvaluations);
+
+    if (contentItems.length > 0) {
+      // Evaluate content items until we find one worth posting
+      for (const contentItem of contentItems) {
         try {
-          const dbBot = await db.query.bots.findFirst({
-            where: eq(bots.id, botId),
-            with: { user: true },
-          });
+          const evaluation = await evaluateContentForPosting(botId, contentItem);
 
-          if (!dbBot) {
-            throw new Error('Bot not found');
-          }
-
-          const contentGeneratorBot = toContentGeneratorBot(dbBot, dbBot.user.handle);
-          const generator = new ContentGenerator(contentGeneratorBot);
-
-          const generatedContent = await generator.generatePost(contentItem);
-
-          // Record the post for rate limiting
-          if (!skipRateLimitCheck) {
-            await recordPost(botId);
-          }
-
-          // Update the content item with the post ID
-          // Note: Actual post creation would happen in the posting module
-          // For now, we just return the generated content
+          // Mark as processed regardless of decision
           await markContentItemProcessed(
             contentItem.id,
-            'pending', // Placeholder - actual post ID would be set by posting module
+            undefined,
             evaluation.interestScore,
             evaluation.reason
           );
 
-          return {
-            posted: true,
-            postText: generatedContent.text,
-            contentItem,
-          };
+          if (evaluation.shouldPost) {
+            const generatedContent = await generator.generatePost(contentItem);
+
+            // Record the post for rate limiting
+            if (!skipRateLimitCheck) {
+              await recordPost(botId);
+            }
+
+            await markContentItemProcessed(
+              contentItem.id,
+              'pending',
+              evaluation.interestScore,
+              evaluation.reason
+            );
+
+            return {
+              posted: true,
+              postText: generatedContent.text,
+              contentItem,
+            };
+          }
         } catch (error) {
-          throw new AutonomousPostError(
-            `Failed to create post: ${error instanceof Error ? error.message : String(error)}`,
-            'POST_CREATION_FAILED',
-            error instanceof Error ? error : undefined
+          console.error(`Error evaluating content item ${contentItem.id}:`, error);
+          await markContentItemProcessed(
+            contentItem.id,
+            undefined,
+            0,
+            `Evaluation failed: ${error instanceof Error ? error.message : String(error)}`
           );
+          continue;
         }
       }
-    } catch (error) {
-      // Log error but continue to next content item
-      console.error(`Error evaluating content item ${contentItem.id}:`, error);
-
-      // Mark as processed with error
-      await markContentItemProcessed(
-        contentItem.id,
-        undefined,
-        0,
-        `Evaluation failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-
-      continue;
+      // No interesting content found - fall through to generate original post
     }
   }
 
-  // No interesting content found
-  return {
-    posted: false,
-    reason: 'No interesting content found after evaluating available items',
-  };
+  // Generate original post based on personality (no content source needed)
+  try {
+    const generatedContent = await generator.generatePost(undefined, undefined);
+
+    // Record the post for rate limiting
+    if (!skipRateLimitCheck) {
+      await recordPost(botId);
+    }
+
+    return {
+      posted: true,
+      postText: generatedContent.text,
+    };
+  } catch (error) {
+    if (error instanceof AutonomousPostError) throw error;
+    throw new AutonomousPostError(
+      `Failed to create post: ${error instanceof Error ? error.message : String(error)}`,
+      'POST_CREATION_FAILED',
+      error instanceof Error ? error : undefined
+    );
+  }
 }
 
 /**
@@ -542,7 +593,10 @@ export async function canPostAutonomously(botId: string): Promise<{
   reason?: string;
 }> {
   // Get bot
-  const bot = await getBotById(botId);
+  const bot = await db.query.bots.findFirst({
+    where: eq(bots.id, botId),
+  });
+  
   if (!bot) {
     return {
       canPost: false,
@@ -573,6 +627,18 @@ export async function canPostAutonomously(botId: string): Promise<{
     };
   }
 
+  // Check schedule timing (if configured)
+  const scheduleConfig = parseScheduleConfig(bot.scheduleConfig);
+  if (scheduleConfig) {
+    const dueResult = isDue(scheduleConfig, bot.lastPostAt);
+    if (!dueResult.isDue) {
+      return {
+        canPost: false,
+        reason: dueResult.reason || 'Not scheduled to post yet',
+      };
+    }
+  }
+
   // Check rate limits (Requirement 6.3)
   const rateLimitCheck = await canPost(botId);
   if (!rateLimitCheck.allowed) {
@@ -582,15 +648,7 @@ export async function canPostAutonomously(botId: string): Promise<{
     };
   }
 
-  // Check if there's content to evaluate (Requirement 6.1)
-  const contentItems = await getUnprocessedContentItems(botId, 1);
-  if (contentItems.length === 0) {
-    return {
-      canPost: false,
-      reason: 'No unprocessed content available',
-    };
-  }
-
+  // Bots can always post - content sources are optional
   return {
     canPost: true,
   };

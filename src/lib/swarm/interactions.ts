@@ -363,6 +363,76 @@ export async function fetchSwarmUserProfile(
 }
 
 /**
+ * Cache swarm user posts in the remotePosts table
+ * Similar to cacheRemoteUserPosts but for swarm nodes
+ */
+export async function cacheSwarmUserPosts(
+  handle: string,
+  domain: string,
+  fullHandle: string, // e.g., "user@domain.com"
+  limit: number = 20
+): Promise<{ cached: number; skipped: number }> {
+  try {
+    const profileData = await fetchSwarmUserProfile(handle, domain, limit);
+    
+    if (!profileData || !profileData.posts) {
+      return { cached: 0, skipped: 0 };
+    }
+
+    const { db, remotePosts } = await import('@/db');
+    const { eq } = await import('drizzle-orm');
+
+    if (!db) {
+      return { cached: 0, skipped: 0 };
+    }
+
+    let cached = 0;
+    let skipped = 0;
+
+    const actorUrl = `swarm://${domain}/${handle}`;
+    const profile = profileData.profile;
+
+    for (const post of profileData.posts) {
+      // Generate a unique AP-style ID for the post
+      const apId = `swarm://${domain}/posts/${post.id}`;
+
+      // Check if we already have this post
+      const existing = await db.query.remotePosts.findFirst({
+        where: eq(remotePosts.apId, apId),
+      });
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      // Cache the post
+      await db.insert(remotePosts).values({
+        apId,
+        authorHandle: fullHandle,
+        authorActorUrl: actorUrl,
+        authorDisplayName: profile.displayName || handle,
+        authorAvatarUrl: profile.avatarUrl || null,
+        content: post.content,
+        publishedAt: new Date(post.createdAt),
+        linkPreviewUrl: post.linkPreviewUrl || null,
+        linkPreviewTitle: post.linkPreviewTitle || null,
+        linkPreviewDescription: post.linkPreviewDescription || null,
+        linkPreviewImage: post.linkPreviewImage || null,
+        mediaJson: post.media ? JSON.stringify(post.media) : null,
+      });
+
+      cached++;
+    }
+
+    return { cached, skipped };
+  } catch (error) {
+    console.error(`[Swarm] Error caching posts for ${fullHandle}:`, error);
+    return { cached: 0, skipped: 0 };
+  }
+}
+
+/**
  * Fetch a single post from a swarm node
  */
 export async function fetchSwarmPost(

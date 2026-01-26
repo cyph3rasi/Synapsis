@@ -7,7 +7,7 @@ import { resolveRemoteUser } from '@/lib/activitypub/fetch';
 import { createFollowActivity, createUndoActivity } from '@/lib/activitypub/activities';
 import { deliverActivity } from '@/lib/activitypub/outbox';
 import { cacheRemoteUserPosts } from '@/lib/activitypub/cache';
-import { isSwarmNode, deliverSwarmFollow, deliverSwarmUnfollow } from '@/lib/swarm/interactions';
+import { isSwarmNode, deliverSwarmFollow, deliverSwarmUnfollow, cacheSwarmUserPosts } from '@/lib/swarm/interactions';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
@@ -155,6 +155,11 @@ export async function POST(request: Request, context: RouteContext) {
                     await db.update(users)
                         .set({ followingCount: currentUser.followingCount + 1 })
                         .where(eq(users.id, currentUser.id));
+
+                    // Cache the remote user's recent posts in the background
+                    cacheSwarmUserPosts(remote.handle, remote.domain, targetHandle, 20)
+                        .then(result => console.log(`[Swarm] Cached ${result.cached} posts for ${targetHandle}`))
+                        .catch(err => console.error('[Swarm] Error caching remote posts:', err));
 
                     console.log(`[Swarm] Follow delivered to ${remote.domain} for @${remote.handle}`);
                     return NextResponse.json({ success: true, following: true, remote: true, swarm: true });

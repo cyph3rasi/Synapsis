@@ -773,6 +773,7 @@ export async function getNextUnprocessedContent(botId: string): Promise<{
 /**
  * Process scheduled posts for all active bots.
  * Checks each bot's schedule, rate limits, and content availability.
+ * Bots without content sources can still post based on their personality.
  * 
  * @returns Processing result with statistics
  * 
@@ -835,54 +836,79 @@ export async function processScheduledPosts(): Promise<ProcessScheduledPostsResu
         continue;
       }
       
-      // Fetch fresh content from sources before checking availability
-      await fetchAllSourcesForBot(bot.id, { maxItems: 20, timeout: 15000 });
+      // Check if bot has content sources
+      const hasContentSources = await hasUnprocessedContent(bot.id).catch(() => false);
       
-      // Check for unprocessed content (Requirement 5.5)
-      const hasContent = await hasUnprocessedContent(bot.id);
-      
-      if (!hasContent) {
-        result.details.push({
-          botId: bot.id,
-          status: 'skipped_no_content',
-          message: 'No unprocessed content available',
+      // If bot has content sources, fetch fresh content and check availability
+      if (hasContentSources || await botHasActiveSources(bot.id)) {
+        // Fetch fresh content from sources before checking availability
+        await fetchAllSourcesForBot(bot.id, { maxItems: 20, timeout: 15000 });
+        
+        // Check for unprocessed content (Requirement 5.5)
+        const hasContent = await hasUnprocessedContent(bot.id);
+        
+        if (!hasContent) {
+          result.details.push({
+            botId: bot.id,
+            status: 'skipped_no_content',
+            message: 'No unprocessed content available',
+          });
+          result.skipped++;
+          continue;
+        }
+        
+        // Get the next content item
+        const contentItem = await getNextUnprocessedContent(bot.id);
+        
+        if (!contentItem) {
+          result.details.push({
+            botId: bot.id,
+            status: 'skipped_no_content',
+            message: 'Failed to retrieve content item',
+          });
+          result.skipped++;
+          continue;
+        }
+        
+        // Trigger post creation with the content item
+        const postResult = await triggerPost(bot.id, {
+          sourceContentId: contentItem.id,
         });
-        result.skipped++;
-        continue;
-      }
-      
-      // Get the next content item
-      const contentItem = await getNextUnprocessedContent(bot.id);
-      
-      if (!contentItem) {
-        result.details.push({
-          botId: bot.id,
-          status: 'skipped_no_content',
-          message: 'Failed to retrieve content item',
-        });
-        result.skipped++;
-        continue;
-      }
-      
-      // Trigger post creation with the content item
-      const postResult = await triggerPost(bot.id, {
-        sourceContentId: contentItem.id,
-      });
-      
-      if (postResult.success) {
-        result.details.push({
-          botId: bot.id,
-          status: 'posted',
-          message: `Posted: ${contentItem.title.substring(0, 50)}...`,
-        });
-        result.processed++;
+        
+        if (postResult.success) {
+          result.details.push({
+            botId: bot.id,
+            status: 'posted',
+            message: `Posted: ${contentItem.title.substring(0, 50)}...`,
+          });
+          result.processed++;
+        } else {
+          result.details.push({
+            botId: bot.id,
+            status: 'error',
+            message: postResult.error || 'Failed to create post',
+          });
+          result.errors.push(`Bot ${bot.id}: ${postResult.error}`);
+        }
       } else {
-        result.details.push({
-          botId: bot.id,
-          status: 'error',
-          message: postResult.error || 'Failed to create post',
-        });
-        result.errors.push(`Bot ${bot.id}: ${postResult.error}`);
+        // Bot has no content sources - generate original post based on personality
+        const postResult = await triggerPost(bot.id, {});
+        
+        if (postResult.success) {
+          result.details.push({
+            botId: bot.id,
+            status: 'posted',
+            message: 'Posted original content',
+          });
+          result.processed++;
+        } else {
+          result.details.push({
+            botId: bot.id,
+            status: 'error',
+            message: postResult.error || 'Failed to create post',
+          });
+          result.errors.push(`Bot ${bot.id}: ${postResult.error}`);
+        }
       }
       
     } catch (error) {
@@ -897,6 +923,24 @@ export async function processScheduledPosts(): Promise<ProcessScheduledPostsResu
   }
   
   return result;
+}
+
+/**
+ * Check if a bot has any active content sources.
+ * 
+ * @param botId - The bot ID
+ * @returns True if bot has active sources
+ */
+async function botHasActiveSources(botId: string): Promise<boolean> {
+  const sources = await db.query.botContentSources.findMany({
+    where: and(
+      eq(botContentSources.botId, botId),
+      eq(botContentSources.isActive, true)
+    ),
+    columns: { id: true },
+  });
+  
+  return sources.length > 0;
 }
 
 /**
