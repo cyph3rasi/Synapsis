@@ -104,11 +104,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Create notification
-    await db.insert(notifications).values({
-      userId: targetUser.id,
-      actorId: remoteUser.id,
-      type: 'follow',
-    });
+    try {
+      await db.insert(notifications).values({
+        userId: targetUser.id,
+        actorId: remoteUser.id,
+        type: 'follow',
+      });
+      console.log(`[Swarm] Created follow notification for @${data.targetHandle} from ${remoteHandle}`);
+    } catch (notifError) {
+      console.error(`[Swarm] Failed to create notification:`, notifError);
+    }
 
     // Also notify bot owner if this is a bot being followed
     const { notifyBotOwnerForFollow } = await import('@/lib/notifications/botOwnerNotify');

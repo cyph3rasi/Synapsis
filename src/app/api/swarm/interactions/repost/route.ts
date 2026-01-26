@@ -72,12 +72,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Create notification
-    await db.insert(notifications).values({
-      userId: post.userId,
-      actorId: remoteUser.id,
-      postId: data.postId,
-      type: 'repost',
-    });
+    try {
+      await db.insert(notifications).values({
+        userId: post.userId,
+        actorId: remoteUser.id,
+        postId: data.postId,
+        type: 'repost',
+      });
+      console.log(`[Swarm] Created repost notification for post ${data.postId} from ${remoteHandle}`);
+    } catch (notifError) {
+      console.error(`[Swarm] Failed to create repost notification:`, notifError);
+    }
 
     // Also notify bot owner if this is a bot's post
     const { notifyBotOwnerForPost } = await import('@/lib/notifications/botOwnerNotify');
