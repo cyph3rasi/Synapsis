@@ -10,12 +10,17 @@ const registerSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     displayName: z.string().optional(),
-    turnstileToken: z.string().optional(),
+    turnstileToken: z.string().nullable().optional(),
 });
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
+
+        // Log registration attempt (excluding password)
+        const { password, ...logData } = body;
+        console.log('Registration attempt details:', logData);
+
         const data = registerSchema.parse(body);
 
         // Verify Turnstile token if provided
@@ -23,6 +28,7 @@ export async function POST(request: Request) {
             const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
             const isValid = await verifyTurnstileToken(data.turnstileToken, ip);
             if (!isValid) {
+                console.error('Turnstile verification failed for handle:', data.handle);
                 return NextResponse.json(
                     { error: 'Bot verification failed. Please try again.' },
                     { status: 400 }
@@ -46,9 +52,9 @@ export async function POST(request: Request) {
         if (node?.isNsfw) {
             // Auto-enable NSFW viewing and mark account as NSFW for users on NSFW nodes
             await db.update(users)
-                .set({ 
+                .set({
                     nsfwEnabled: true,
-                    isNsfw: true 
+                    isNsfw: true
                 })
                 .where(eq(users.id, user.id));
         }
@@ -65,18 +71,30 @@ export async function POST(request: Request) {
             },
         });
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error('Registration error detailed:', error);
 
         if (error instanceof z.ZodError) {
+            console.error('Validation error:', error.issues);
             return NextResponse.json(
                 { error: 'Invalid input', details: error.issues },
                 { status: 400 }
             );
         }
 
+        const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+
+        // Return 400 for known business logic errors
+        if (errorMessage.includes('taken') || errorMessage.includes('registered') || errorMessage.includes('Handle must be')) {
+            return NextResponse.json(
+                { error: errorMessage },
+                { status: 400 }
+            );
+        }
+
+        // Return 500 for everything else so we can see it's a server error
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Registration failed' },
-            { status: 400 }
+            { error: `Server error: ${errorMessage}` },
+            { status: 500 }
         );
     }
 }
