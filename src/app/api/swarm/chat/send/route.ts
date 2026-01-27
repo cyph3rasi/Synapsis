@@ -82,8 +82,11 @@ export async function POST(request: NextRequest) {
         where: eq(users.handle, recipientHandle),
       });
 
-      if (!recipientUser) {
-        // Fetch from remote node
+      // Check if we have a valid public key (not a placeholder)
+      const hasValidPublicKey = recipientUser?.publicKey?.startsWith('-----BEGIN');
+      
+      if (!recipientUser || !hasValidPublicKey) {
+        // Fetch from remote node to get the real public key
         try {
           console.log('[Chat Send] Fetching remote user from node:', domain);
           const protocol = domain.includes('localhost') ? 'http' : 'https';
@@ -95,25 +98,39 @@ export async function POST(request: NextRequest) {
           }
 
           const remoteUserData = await response.json();
-          recipientPublicKey = remoteUserData.publicKey;
+          const userData = remoteUserData.user || remoteUserData;
+          recipientPublicKey = userData.publicKey;
+          
+          if (!recipientPublicKey || !recipientPublicKey.startsWith('-----BEGIN')) {
+            console.error('[Chat Send] Remote user has no valid public key');
+            return NextResponse.json({ error: 'Recipient does not support encrypted chat' }, { status: 400 });
+          }
 
-          // Cache the remote user
-          const [newUser] = await db.insert(users).values({
-            did: remoteUserData.did || `did:swarm:${domain}:${handle}`,
-            handle: recipientHandle,
-            displayName: remoteUserData.displayName,
-            avatarUrl: remoteUserData.avatarUrl,
-            publicKey: recipientPublicKey,
-          }).returning();
-          recipientUser = newUser;
-          console.log('[Chat Send] Remote user cached');
+          if (recipientUser) {
+            // Update existing cached user with real public key
+            await db.update(users)
+              .set({ publicKey: recipientPublicKey })
+              .where(eq(users.id, recipientUser.id));
+            console.log('[Chat Send] Updated cached user with real public key');
+          } else {
+            // Cache the remote user
+            const [newUser] = await db.insert(users).values({
+              did: userData.did || `did:swarm:${domain}:${handle}`,
+              handle: recipientHandle,
+              displayName: userData.displayName,
+              avatarUrl: userData.avatarUrl,
+              publicKey: recipientPublicKey,
+            }).returning();
+            recipientUser = newUser;
+            console.log('[Chat Send] Remote user cached');
+          }
         } catch (error) {
           console.error('[Chat Send] Failed to fetch remote user:', error);
           return NextResponse.json({ error: 'Failed to reach recipient node' }, { status: 503 });
         }
       } else {
         recipientPublicKey = recipientUser.publicKey;
-        console.log('[Chat Send] Remote user found in cache');
+        console.log('[Chat Send] Remote user found in cache with valid key');
       }
     } else {
       // Local user

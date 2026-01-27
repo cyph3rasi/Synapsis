@@ -94,6 +94,7 @@ export async function GET(request: Request, context: RouteContext) {
             website: user.website,
             movedTo: user.movedTo,
             isBot: user.isBot,
+            publicKey: user.publicKey, // Needed for E2E encrypted chat
         };
         
         // If this is a bot, include owner info
