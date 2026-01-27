@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     console.log('[Chat Send] Sender retrieved:', sender.handle);
 
     // Parse recipient handle (could be local or remote)
-    const recipientHandle = data.recipientHandle.toLowerCase();
+    // Strip leading @ if present, then normalize
+    const recipientHandle = data.recipientHandle.toLowerCase().replace(/^@/, '');
     const isRemote = recipientHandle.includes('@');
 
     let recipientUser: typeof users.$inferSelect | undefined;
@@ -69,7 +70,10 @@ export async function POST(request: NextRequest) {
 
     if (isRemote) {
       // Remote user - need to fetch their public key
-      const [handle, domain] = recipientHandle.split('@');
+      // Format: handle@domain (e.g., matterbator@batorbros.bond)
+      const atIndex = recipientHandle.indexOf('@');
+      const handle = recipientHandle.substring(0, atIndex);
+      const domain = recipientHandle.substring(atIndex + 1);
       recipientNodeDomain = domain;
       console.log('[Chat Send] Processing remote recipient:', handle, '@', domain);
 
