@@ -172,8 +172,15 @@ export function useChatEncryption() {
     senderPublicKey: string
   ): Promise<string> => {
     if (!keys?.privateKey) {
+      console.error('[Decrypt] No private key available');
       throw new Error('No chat keys available');
     }
+
+    console.log('[Decrypt] Starting decryption', {
+      hasPrivateKey: !!keys.privateKey,
+      hasSenderPublicKey: !!senderPublicKey,
+      encryptedLength: encryptedMessage.length
+    });
 
     const myPrivateKey = await importPrivateKey(keys.privateKey);
     const theirPublicKey = await importPublicKey(senderPublicKey);
@@ -183,6 +190,11 @@ export function useChatEncryption() {
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
 
+    console.log('[Decrypt] Decrypting with shared key', {
+      ivLength: iv.byteLength,
+      ciphertextLength: ciphertext.byteLength
+    });
+
     const decrypted = await window.crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
       sharedKey,
@@ -190,7 +202,9 @@ export function useChatEncryption() {
     );
 
     const decoder = new TextDecoder();
-    return decoder.decode(decrypted);
+    const result = decoder.decode(decrypted);
+    console.log('[Decrypt] Success:', result.substring(0, 50));
+    return result;
   }, [keys]);
 
   // Clear keys (on logout)

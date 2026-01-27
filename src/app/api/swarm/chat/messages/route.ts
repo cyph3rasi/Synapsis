@@ -65,26 +65,38 @@ export async function GET(request: NextRequest) {
       limit,
     });
 
-    // Decrypt messages
-    // Note: In production, you'd decrypt the private key first using a user password/session key
-    // For now, we'll return encrypted content and decrypt client-side
+    // Get recipient info for sent messages
+    const recipientHandle = conversation.participant2Handle;
+    let recipientPublicKey: string | null = null;
+    
+    console.log('[Messages API] Fetching recipient key for:', recipientHandle);
+    
+    // Fetch recipient's chat public key
+    const recipientUser = await db.query.users.findFirst({
+      where: eq(users.handle, recipientHandle),
+    });
+    recipientPublicKey = recipientUser?.chatPublicKey || null;
+    
+    console.log('[Messages API] Recipient public key found:', !!recipientPublicKey);
+
     const messagesWithDecryption = messages.map((msg) => {
       const isSentByMe = msg.senderHandle === session.user.handle;
       
-      // Return the appropriate encrypted content:
-      // - For sent messages: use senderEncryptedContent (encrypted with sender's key)
-      // - For received messages: use encryptedContent (encrypted with recipient's key)
-      const encryptedForViewer = isSentByMe 
-        ? (msg.senderEncryptedContent || msg.encryptedContent)
-        : msg.encryptedContent;
+      const senderPubKey = isSentByMe ? recipientPublicKey : msg.senderChatPublicKey;
+      
+      console.log('[Messages API] Message:', msg.id, 'isSentByMe:', isSentByMe, 'senderPubKey:', !!senderPubKey, 'msgSenderChatPubKey:', !!msg.senderChatPublicKey);
       
       return {
         id: msg.id,
         senderHandle: msg.senderHandle,
         senderDisplayName: msg.senderDisplayName,
         senderAvatarUrl: msg.senderAvatarUrl,
-        senderPublicKey: msg.senderChatPublicKey, // For E2E decryption
-        encryptedContent: encryptedForViewer,
+        // For decryption:
+        // - Sent messages: need recipient's public key
+        // - Received messages: need sender's public key
+        senderPublicKey: senderPubKey,
+        isE2E: !!msg.senderChatPublicKey || (isSentByMe && !!recipientPublicKey),
+        encryptedContent: msg.encryptedContent,
         deliveredAt: msg.deliveredAt,
         readAt: msg.readAt,
         createdAt: msg.createdAt,
