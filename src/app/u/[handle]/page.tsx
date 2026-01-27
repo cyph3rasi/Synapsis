@@ -35,7 +35,7 @@ const stripHtml = (html: string | null | undefined): string | null => {
 
 function UserRow({ user }: { user: UserSummary }) {
     return (
-        <Link href={`/${user.handle}`} className="user-row">
+        <Link href={`/u/${user.handle}`} className="user-row">
             <div className="avatar">
                 {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.displayName || user.handle} />
@@ -215,7 +215,7 @@ export default function ProfilePage() {
     const handleComment = (post: Post) => {
         // Navigation is handled by the PostCard overlay, 
         // but we can also use router.push if they explicitly click the comment button.
-        router.push(`/${post.author.handle}/posts/${post.id}`);
+        router.push(`/u/${post.author.handle}/posts/${post.id}`);
     };
 
     const handleDelete = (postId: string) => {
@@ -624,7 +624,7 @@ export default function ProfilePage() {
                                         <>
                                             {' · Managed by '}
                                             <Link 
-                                                href={`/${(user as any).botOwner.handle}`}
+                                                href={`/u/${(user as any).botOwner.handle}`}
                                                 style={{ color: 'var(--accent)', fontWeight: 500 }}
                                             >
                                                 @{(user as any).botOwner.handle}

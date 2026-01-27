@@ -115,7 +115,10 @@ export async function POST(request: Request) {
             }
         }
 
-        // If this is a reply to a swarm post, deliver it to the origin node
+        // DEPRECATED: Push-based federation disabled
+        // Swarm now uses real-time pull-based federation
+        // Replies are fetched in real-time from the origin node
+        /*
         if (data.swarmReplyTo) {
             (async () => {
                 try {
@@ -153,6 +156,7 @@ export async function POST(request: Request) {
                 }
             })();
         }
+        */
 
         // Handle local mentions (create notifications for users on this node)
         (async () => {

@@ -85,7 +85,7 @@ export default function PostDetailPage() {
 
     const handleDelete = (postId: string) => {
         if (postId === id) {
-            router.push(`/${handle}`);
+            router.push(`/u/${handle}`);
         } else {
             setReplies(prev => prev.filter(r => r.id !== postId));
             if (post) {

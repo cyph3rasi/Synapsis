@@ -144,7 +144,7 @@ export function Sidebar() {
                     </Link>
                 )}
                 {user ? (
-                    <Link href={`/${user.handle}`} className={`nav-item ${pathname === '/' + user.handle ? 'active' : ''}`}>
+                    <Link href={`/u/${user.handle}`} className={`nav-item ${pathname === '/u/' + user.handle ? 'active' : ''}`}>
                         <UserIcon />
                         <span>Profile</span>
                     </Link>

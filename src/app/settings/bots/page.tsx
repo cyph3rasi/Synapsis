@@ -111,7 +111,7 @@ export default function BotsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: 0 }}>
                   <Link 
-                    href={`/${bot.handle}`} 
+                    href={`/u/${bot.handle}`} 
                     onClick={(e) => e.stopPropagation()}
                     className="avatar"
                     style={{ 
@@ -147,7 +147,7 @@ export default function BotsPage() {
                       )}
                     </div>
                     <Link 
-                      href={`/${bot.handle}`} 
+                      href={`/u/${bot.handle}`} 
                       onClick={(e) => e.stopPropagation()}
                       style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}
                     >

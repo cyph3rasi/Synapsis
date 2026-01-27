@@ -248,7 +248,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         }
     };
 
-    const postUrl = `/${post.author.handle}/posts/${post.id}`;
+    const postUrl = `/u/${post.author.handle}/posts/${post.id}`;
 
     // Get the full handle for profile links (includes domain for remote users)
     const getProfileHandle = () => {
@@ -384,7 +384,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         return (
             <article className="post thread-parent">
                 <div className="post-header">
-                    <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
+                    <Link href={`/u/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
                         <div className="avatar">
                             {post.author.avatarUrl ? (
                                 <img src={post.author.avatarUrl} alt={post.author.displayName || ''} />
@@ -394,7 +394,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                         </div>
                     </Link>
                     <div className="post-author">
-                        <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                        <Link href={`/u/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                             {post.author.displayName || post.author.handle}
                         </Link>
                         <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)}</span>
@@ -427,7 +427,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                 {!isDetail && <Link href={postUrl} className="post-link-overlay" aria-label="View post" />}
 
                 <div className="post-header">
-                    <Link href={`/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
+                    <Link href={`/u/${profileHandle}`} className="avatar-link" onClick={(e) => e.stopPropagation()}>
                         <div className="avatar">
                             {post.author.avatarUrl ? (
                                 <img src={post.author.avatarUrl} alt={post.author.displayName} />
@@ -438,7 +438,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                     </Link>
                     <div className="post-author">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Link href={`/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
+                            <Link href={`/u/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                                 {post.author.displayName || post.author.handle}
                             </Link>
                             {(post.bot || post.author.isBot) && (
@@ -585,7 +585,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
 
                 {effectiveReplyTo && !showThread && (
                     <div className="post-reply-to">
-                        Replying to <Link href={`/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
+                        Replying to <Link href={`/u/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
                     </div>
                 )}
 

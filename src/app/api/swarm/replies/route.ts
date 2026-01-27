@@ -30,86 +30,13 @@ const swarmReplySchema = z.object({
 /**
  * POST /api/swarm/replies
  * 
- * Receives a reply from another node in the swarm.
- * The reply is stored as a remote reply linked to the local post.
+ * DEPRECATED: This endpoint is disabled.
+ * We now use real-time pull-based federation instead of push-based caching.
  */
 export async function POST(request: NextRequest) {
-  try {
-    if (!db) {
-      return NextResponse.json({ error: 'Database not available' }, { status: 503 });
-    }
-
-    const body = await request.json();
-    const data = swarmReplySchema.parse(body);
-
-    // Verify the target post exists on this node
-    const targetPost = await db.query.posts.findFirst({
-      where: eq(posts.id, data.postId),
-    });
-
-    if (!targetPost) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    }
-
-    // Check if we already have this reply (by swarm ID)
-    const swarmReplyId = `swarm:${data.reply.nodeDomain}:${data.reply.id}`;
-    const existingReply = await db.query.posts.findFirst({
-      where: eq(posts.apId, swarmReplyId),
-    });
-
-    if (existingReply) {
-      return NextResponse.json({ success: true, message: 'Reply already exists' });
-    }
-
-    // We need a system user to attribute swarm replies to
-    // For now, we'll store them with metadata in the apId/apUrl fields
-    // and create a virtual representation
-
-    // Get or create a placeholder user for this remote author
-    let remoteUser = await db.query.users.findFirst({
-      where: eq(users.handle, `${data.reply.author.handle}@${data.reply.nodeDomain}`),
-    });
-
-    if (!remoteUser) {
-      // Create a placeholder user for the remote author
-      const [newUser] = await db.insert(users).values({
-        did: `did:swarm:${data.reply.nodeDomain}:${data.reply.author.handle}`,
-        handle: `${data.reply.author.handle}@${data.reply.nodeDomain}`,
-        displayName: data.reply.author.displayName,
-        avatarUrl: data.reply.author.avatarUrl || null,
-        publicKey: 'swarm-remote-user', // Placeholder
-      }).returning();
-      remoteUser = newUser;
-    }
-
-    // Create the reply post
-    const [replyPost] = await db.insert(posts).values({
-      userId: remoteUser.id,
-      content: data.reply.content,
-      replyToId: data.postId,
-      apId: swarmReplyId,
-      apUrl: `https://${data.reply.nodeDomain}/${data.reply.author.handle}/posts/${data.reply.id}`,
-      createdAt: new Date(data.reply.createdAt),
-    }).returning();
-
-    // Update the parent post's reply count
-    await db.update(posts)
-      .set({ repliesCount: targetPost.repliesCount + 1 })
-      .where(eq(posts.id, data.postId));
-
-    console.log(`[Swarm] Received reply from ${data.reply.nodeDomain} to post ${data.postId}`);
-
-    return NextResponse.json({ 
-      success: true, 
-      replyId: replyPost.id,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid request', details: error.issues }, { status: 400 });
-    }
-    console.error('[Swarm] Reply error:', error);
-    return NextResponse.json({ error: 'Failed to process reply' }, { status: 500 });
-  }
+  return NextResponse.json({
+    error: 'This endpoint is deprecated. Swarm uses real-time pull-based federation.',
+  }, { status: 410 }); // 410 Gone
 }
 
 /**

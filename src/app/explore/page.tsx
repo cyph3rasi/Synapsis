@@ -22,7 +22,7 @@ interface User {
 
 function UserCard({ user }: { user: User }) {
     return (
-        <Link href={`/${user.handle}`} className="user-card">
+        <Link href={`/u/${user.handle}`} className="user-card">
             <div className="avatar">
                 {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt={user.displayName} />

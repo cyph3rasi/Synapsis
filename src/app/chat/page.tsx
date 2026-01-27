@@ -489,15 +489,21 @@ export default function ChatPage() {
                                 marginLeft: msg.isSentByMe ? 'auto' : '0',
                                 flexDirection: msg.isSentByMe ? 'row-reverse' : 'row'
                             }}>
-                                {!msg.isSentByMe && (
-                                    <div className="avatar avatar-sm" style={{ flexShrink: 0 }}>
-                                        {msg.senderAvatarUrl ? (
+                                <div className="avatar avatar-sm" style={{ flexShrink: 0 }}>
+                                    {msg.isSentByMe ? (
+                                        user.avatarUrl ? (
+                                            <img src={user.avatarUrl} alt="" />
+                                        ) : (
+                                            user.displayName[0]
+                                        )
+                                    ) : (
+                                        msg.senderAvatarUrl ? (
                                             <img src={msg.senderAvatarUrl} alt="" />
                                         ) : (
                                             msg.senderDisplayName?.[0]
-                                        )}
-                                    </div>
-                                )}
+                                        )
+                                    )}
+                                </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: msg.isSentByMe ? 'flex-end' : 'flex-start' }}>
                                     <div style={{
@@ -682,7 +688,7 @@ export default function ChatPage() {
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap'
                                 }}>
-                                    {conv.lastMessagePreview}
+                                    {conv.lastMessagePreview === 'New message' ? 'Encrypted Message' : conv.lastMessagePreview}
                                 </div>
                             </div>
                         </div>

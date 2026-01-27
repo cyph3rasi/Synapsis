@@ -147,7 +147,7 @@ export function RightSidebar() {
                             {nodeInfo.admins.map((admin) => (
                                 <Link
                                     key={admin.handle}
-                                    href={`/${admin.handle}`}
+                                    href={`/u/${admin.handle}`}
                                     style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'inherit' }}
                                 >
                                     <img

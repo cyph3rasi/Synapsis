@@ -102,6 +102,7 @@ export async function GET(request: Request) {
                 post: row.postId ? {
                     id: row.postId,
                     content: row.postContent,
+                    authorHandle: row.actorHandle, // The actor is the post author for likes/reposts
                 } : null,
             };
         });
