@@ -6,7 +6,7 @@ import { db, users, sessions } from '@/db';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
-import { generateKeyPair } from '@/lib/activitypub/signatures';
+import { generateKeyPair } from '@/lib/crypto/keys';
 import { cookies } from 'next/headers';
 import { upsertHandleEntries } from '@/lib/federation/handles';
 
@@ -146,7 +146,7 @@ export async function registerUser(
         throw new Error('Email is already registered');
     }
 
-    // Generate keys for ActivityPub
+    // Generate cryptographic keys
     const { publicKey, privateKey } = await generateKeyPair();
 
     // Create the user

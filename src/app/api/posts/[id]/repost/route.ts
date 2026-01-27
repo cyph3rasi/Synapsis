@@ -191,33 +191,7 @@ export async function POST(request: Request, context: RouteContext) {
                 })();
             }
         } else if (originalPost.apId) {
-            // FALLBACK: Use ActivityPub for non-swarm posts
-            (async () => {
-                try {
-                    const { createAnnounceActivity } = await import('@/lib/activitypub/activities');
-                    const { getFollowerInboxes, deliverToFollowers } = await import('@/lib/activitypub/outbox');
-
-                    // Send Announce to our followers
-                    const followerInboxes = await getFollowerInboxes(user.id);
-                    if (followerInboxes.length > 0) {
-                        const announceActivity = createAnnounceActivity(
-                            user,
-                            originalPost.apId!,
-                            nodeDomain,
-                            repost.id
-                        );
-
-                        const privateKey = user.privateKeyEncrypted;
-                        if (privateKey) {
-                            const keyId = `https://${nodeDomain}/users/${user.handle}#main-key`;
-                            const result = await deliverToFollowers(announceActivity, followerInboxes, privateKey, keyId);
-                            console.log(`[Federation] Announce for ${originalPost.apId} delivered to ${result.delivered}/${followerInboxes.length} inboxes`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[Federation] Error federating repost:', err);
-                }
-            })();
+            // Non-swarm posts with apId are legacy - no federation needed
         }
 
         return NextResponse.json({ success: true, repost, reposted: true });

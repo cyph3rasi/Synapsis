@@ -2,8 +2,7 @@
  * Swarm Interactions
  * 
  * Handles direct node-to-node interactions in the swarm network.
- * This is the "Swarm-first" approach - we try direct swarm communication
- * first, and fall back to ActivityPub for non-Synapsis nodes.
+ * All interactions are delivered directly via the swarm protocol.
  * 
  * Supported interactions:
  * - Likes: Direct like delivery between swarm nodes

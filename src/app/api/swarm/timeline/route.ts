@@ -60,10 +60,11 @@ export async function GET(request: NextRequest) {
 
     // Use query builder for better conditional logic
     // Only return posts from local users (not remote placeholder users)
+    // Local posts may have apId if they've been federated, so we check nodeId instead
     let whereCondition = and(
       isNull(posts.replyToId), // Not a reply
       eq(posts.isRemoved, false), // Not removed
-      isNull(posts.apId) // Not a federated/swarm post (local posts only)
+      isNull(users.nodeId) // Local user (not from another swarm node)
     );
 
     if (cursor) {
@@ -77,7 +78,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recent public posts (not replies, local users only, not removed)
-    // Filter out remote placeholder users by checking handle doesn't contain @
     const recentPosts = await db
       .select({
         id: posts.id,
@@ -100,9 +100,11 @@ export async function GET(request: NextRequest) {
       })
       .from(posts)
       .innerJoin(users, eq(posts.userId, users.id))
-      .where(and(whereCondition, sql`${users.handle} NOT LIKE '%@%'`))
+      .where(whereCondition)
       .orderBy(desc(posts.createdAt))
       .limit(limit);
+
+    console.log(`[Swarm Timeline API] Found ${recentPosts.length} posts for ${nodeDomain}`);
 
     // Fetch media for each post
     const swarmPosts: SwarmPost[] = [];

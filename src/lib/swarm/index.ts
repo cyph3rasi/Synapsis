@@ -7,7 +7,7 @@
  * 1. Seed nodes (like node.synapsis.social) provide initial bootstrap
  * 2. Gossip protocol spreads node/handle information epidemically
  * 3. Any node can discover the full network without central authority
- * 4. Direct node-to-node interactions (likes, follows, etc.) bypass ActivityPub
+ * 4. Direct node-to-node interactions (likes, follows, etc.) for instant delivery
  * 
  * Usage:
  * - On node startup: call announceToSeeds() to register with the network

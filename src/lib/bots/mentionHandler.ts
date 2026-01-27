@@ -549,7 +549,7 @@ export async function processAllMentions(botId: string): Promise<MentionResponse
 
 /**
  * Store a detected mention in the database.
- * Used when mentions are detected from external sources (e.g., ActivityPub).
+ * Used when mentions are detected from external sources (e.g., swarm nodes).
  * 
  * @param data - Mention data to store
  * @returns Created mention

@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
-import { eq, desc, and, lt } from 'drizzle-orm';
+import { eq, desc, and, lt, isNull } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 import { decryptMessage } from '@/lib/swarm/chat-crypto';
 
@@ -53,10 +53,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Build query with cursor-based pagination
-    let whereCondition = eq(chatMessages.conversationId, conversationId);
-    if (cursor) {
-      whereCondition = and(whereCondition, lt(chatMessages.createdAt, new Date(cursor)));
-    }
+    const baseCondition = eq(chatMessages.conversationId, conversationId);
+    const whereCondition = cursor
+      ? and(baseCondition, lt(chatMessages.createdAt, new Date(cursor)))!
+      : baseCondition;
 
     // Get messages
     const messages = await db.query.chatMessages.findMany({
@@ -124,7 +124,7 @@ export async function PATCH(request: NextRequest) {
       .where(
         and(
           eq(chatMessages.conversationId, conversationId),
-          eq(chatMessages.readAt, null)
+          isNull(chatMessages.readAt)
         )
       );
 

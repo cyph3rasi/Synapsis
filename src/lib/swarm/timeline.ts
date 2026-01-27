@@ -190,11 +190,9 @@ export async function fetchSwarmTimeline(
       : result.posts.filter(p => !p.isNsfw && !p.nodeIsNsfw);
 
     // Log filtering details for debugging
-    if (!includeNsfw && result.posts.length > 0) {
-      const nsfwPosts = result.posts.filter(p => p.isNsfw);
-      const nodeNsfwPosts = result.posts.filter(p => p.nodeIsNsfw);
-      console.log(`[Swarm Timeline] ${result.domain}: ${result.posts.length} posts, ${nsfwPosts.length} marked NSFW, ${nodeNsfwPosts.length} from NSFW node, ${filteredPosts.length} after filter`);
-    }
+    const nsfwPosts = result.posts.filter(p => p.isNsfw);
+    const nodeNsfwPosts = result.posts.filter(p => p.nodeIsNsfw);
+    console.log(`[Swarm Timeline] ${result.domain}: ${result.posts.length} posts fetched, ${nsfwPosts.length} marked NSFW, ${nodeNsfwPosts.length} from NSFW node, ${filteredPosts.length} after filter (includeNsfw: ${includeNsfw})`);
 
     sources.push({
       domain: result.domain,

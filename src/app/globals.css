@@ -259,6 +259,11 @@ a.btn-primary:visited {
   border-right: 1px solid var(--border);
 }
 
+.layout.hide-right-sidebar .main {
+  flex: 0 1 920px !important;
+  max-width: 920px !important;
+}
+
 .aside {
   width: 320px;
   flex-shrink: 0;
@@ -276,12 +281,12 @@ a.btn-primary:visited {
   border-bottom: none;
 }
 
-.thread-container > .post {
+.thread-container>.post {
   border-bottom: none;
   padding-bottom: 0;
 }
 
-.thread-container > .post .post-actions {
+.thread-container>.post .post-actions {
   display: none;
 }
 
@@ -309,7 +314,7 @@ a.btn-primary:visited {
   margin-bottom: 4px;
 }
 
-.post.thread-parent + .post {
+.post.thread-parent+.post {
   padding-top: 8px;
 }
 
@@ -584,11 +589,11 @@ a.btn-primary:visited {
   display: none;
 }
 
-.compose-nsfw-toggle input:checked + svg {
+.compose-nsfw-toggle input:checked+svg {
   color: var(--warning);
 }
 
-.compose-nsfw-toggle input:checked ~ span {
+.compose-nsfw-toggle input:checked~span {
   color: var(--warning);
   font-weight: 500;
 }
@@ -1808,4 +1813,15 @@ a.btn-primary:visited {
   width: 2.5em;
   margin: 0 0.05em 0 0.1em;
   vertical-align: -0.5em;
+}
+
+/* Hide right sidebar layout adjustment */
+.layout.hide-right-sidebar {
+  max-width: 1600px;
+  padding: 0 24px;
+}
+
+.layout.hide-right-sidebar .main {
+  max-width: none;
+  border-right: none;
 }

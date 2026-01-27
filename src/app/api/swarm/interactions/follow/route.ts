@@ -3,8 +3,8 @@
  * 
  * POST: Receive a follow from another swarm node
  * 
- * This enables swarm-native follows between Synapsis nodes,
- * bypassing ActivityPub for faster, more direct connections.
+ * This enables swarm-native follows between Synapsis nodes
+ * with instant delivery and real-time updates.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

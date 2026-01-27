@@ -3,8 +3,8 @@
  * 
  * POST: Receive posts from users on other swarm nodes that local users follow
  * 
- * This is the swarm equivalent of ActivityPub inbox - when a user on another
- * Synapsis node creates a post, it gets pushed here for their followers.
+ * When a user on another Synapsis node creates a post, it gets pushed here
+ * for their followers on this node.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

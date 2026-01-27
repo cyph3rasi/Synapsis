@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, media, remotePosts } from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
-import { fetchRemotePost } from '@/lib/activitypub/fetchRemotePost';
 
 export async function GET(
     request: Request,
@@ -219,12 +218,8 @@ export async function GET(
                     isReposted: false,
                 };
             } else {
-                const postUrl = `https://${nodeDomain}/posts/${id}`;
-                const result = await fetchRemotePost(postUrl, nodeDomain);
-
-                if (result.post) {
-                    mainPost = result.post;
-                }
+                // Remote posts are no longer supported outside of swarm
+                return NextResponse.json({ error: 'Post not found' }, { status: 404 });
             }
         }
 

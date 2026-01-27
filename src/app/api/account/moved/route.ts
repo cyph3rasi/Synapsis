@@ -2,15 +2,13 @@
  * Account Moved Notification API
  * 
  * Called by the new node to notify the old node that an account has migrated.
- * The old node then marks the account as moved and broadcasts Move activity to followers.
+ * The old node then marks the account as moved.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, follows } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
-import { createMoveActivity } from '@/lib/activitypub/activities';
-import { signRequest } from '@/lib/activitypub/signatures';
 
 interface MoveNotification {
     oldHandle: string;
@@ -75,37 +73,12 @@ export async function POST(req: NextRequest) {
             },
         });
 
-        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
-        const oldActorUrl = `https://${nodeDomain}/users/${user.handle}`;
-
-        // Create Move activity with DID extension
-        const moveActivity = createMoveActivity(
-            user,
-            oldActorUrl,
-            newActorUrl,
-            nodeDomain
-        );
-
-        // Broadcast Move activity to all followers
-        // In a production system, this would be queued
-        let notifiedCount = 0;
-        for (const follow of userFollowers) {
-            try {
-                // For local Synapsis followers, we could update directly
-                // For remote followers, we'd send the Move activity
-                // For now, we'll just count them
-                notifiedCount++;
-            } catch (error) {
-                console.error('Failed to notify follower:', error);
-            }
-        }
-
-        console.log(`Account ${oldHandle} marked as moved to ${newActorUrl}. Notified ${notifiedCount} followers.`);
+        console.log(`Account ${oldHandle} marked as moved to ${newActorUrl}. ${userFollowers.length} followers.`);
 
         return NextResponse.json({
             success: true,
             message: 'Account marked as moved',
-            followersNotified: notifiedCount,
+            followersNotified: userFollowers.length,
         });
 
     } catch (error) {

@@ -828,7 +828,7 @@ async function createPostInDatabase(
 
 /**
  * Federate a post to remote followers.
- * Uses the bot's own user account for federation.
+ * Uses swarm protocol for delivery to other Synapsis nodes.
  * This is a non-blocking operation that runs in the background.
  * 
  * @param post - The post to federate
@@ -861,46 +861,25 @@ async function federatePost(
         return;
       }
 
-      // Import federation modules
-      const { createCreateActivity } = await import('@/lib/activitypub/activities');
-      const { getFollowerInboxes, deliverToFollowers } = await import('@/lib/activitypub/outbox');
-
       const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
-      // Get follower inboxes for the bot's user account
-      const followerInboxes = await getFollowerInboxes(bot.userId);
-      if (followerInboxes.length === 0) {
-        console.log('[Bot Federation] No remote followers to notify');
-        return;
-      }
+      // Use swarm delivery for bot posts
+      const { deliverPostToSwarmFollowers } = await import('@/lib/swarm/interactions');
 
-      // Create ActivityPub Create activity using bot's user account
-      const createActivity = createCreateActivity(post, botUser, nodeDomain);
+      const swarmResult = await deliverPostToSwarmFollowers(
+        bot.userId,
+        post,
+        {
+          handle: botUser.handle,
+          displayName: botUser.displayName,
+          avatarUrl: botUser.avatarUrl,
+          isNsfw: botUser.isNsfw,
+        },
+        [], // No media for now
+        nodeDomain
+      );
 
-      // Get private key for signing from bot's user account
-      const privateKey = botUser.privateKeyEncrypted;
-      if (!privateKey) {
-        console.error('[Bot Federation] Bot user has no private key for signing');
-        await logActivity(
-          botId,
-          'error',
-          {
-            type: 'federation',
-            postId: post.id,
-            error: 'No private key for signing',
-          },
-          false,
-          'No private key for signing'
-        );
-        return;
-      }
-
-      const keyId = `https://${nodeDomain}/users/${botUser.handle}#main-key`;
-
-      // Deliver to followers
-      const result = await deliverToFollowers(createActivity, followerInboxes, privateKey, keyId);
-
-      console.log(`[Bot Federation] Post ${post.id} delivered to ${result.delivered}/${followerInboxes.length} inboxes (${result.failed} failed)`);
+      console.log(`[Bot Swarm] Post ${post.id} delivered to ${swarmResult.delivered} swarm nodes (${swarmResult.failed} failed)`);
 
       // Log federation activity
       await logActivity(
@@ -908,16 +887,15 @@ async function federatePost(
         'post_created',
         {
           postId: post.id,
-          federation: {
-            delivered: result.delivered,
-            failed: result.failed,
-            total: followerInboxes.length,
+          swarm: {
+            delivered: swarmResult.delivered,
+            failed: swarmResult.failed,
           },
         },
         true
       );
     } catch (error) {
-      console.error('[Bot Federation] Error federating post:', error);
+      console.error('[Bot Swarm] Error delivering post:', error);
 
       await logActivity(
         botId,

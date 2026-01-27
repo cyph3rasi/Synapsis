@@ -40,7 +40,7 @@ export const users = pgTable('users', {
   bio: text('bio'),
   avatarUrl: text('avatar_url'),
   headerUrl: text('header_url'),
-  privateKeyEncrypted: text('private_key_encrypted'), // For ActivityPub signing
+  privateKeyEncrypted: text('private_key_encrypted'), // For cryptographic signing
   publicKey: text('public_key').notNull(),
   nodeId: uuid('node_id').references(() => nodes.id),
   // Bot-related fields
@@ -123,8 +123,8 @@ export const posts = pgTable('posts', {
   removedAt: timestamp('removed_at'),
   removedBy: uuid('removed_by').references(() => users.id),
   removedReason: text('removed_reason'),
-  // ActivityPub
-  apId: text('ap_id').unique(), // https://node.com/posts/uuid
+  // Post identifiers
+  apId: text('ap_id').unique(), // Unique post ID (legacy field, used for swarm posts too)
   apUrl: text('ap_url'), // Public URL for the post
   // Link Preview
   linkPreviewUrl: text('link_preview_url'),
@@ -209,8 +209,8 @@ export const follows = pgTable('follows', {
   id: uuid('id').primaryKey().defaultRandom(),
   followerId: uuid('follower_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   followingId: uuid('following_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  // ActivityPub
-  apId: text('ap_id').unique(), // Activity ID
+  // Follow identifiers
+  apId: text('ap_id').unique(), // Activity ID (legacy field)
   pending: boolean('pending').default(false), // For follow requests
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -262,7 +262,7 @@ export const remoteFollowers = pgTable('remote_followers', {
   actorUrl: text('actor_url').notNull(), // Remote actor URL
   inboxUrl: text('inbox_url').notNull(), // Remote user's inbox
   sharedInboxUrl: text('shared_inbox_url'), // Optional shared inbox
-  handle: text('handle'), // Remote user's handle (e.g., user@mastodon.social)
+  handle: text('handle'), // Remote user's handle (e.g., user@other-node.com)
   activityId: text('activity_id'), // The Follow activity ID
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -277,8 +277,8 @@ export const remoteFollowers = pgTable('remote_followers', {
 
 export const remotePosts = pgTable('remote_posts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  apId: text('ap_id').notNull().unique(), // ActivityPub ID (URL) of the post
-  authorHandle: text('author_handle').notNull(), // e.g., user@mastodon.social
+  apId: text('ap_id').notNull().unique(), // Unique post ID (swarm:// or https://)
+  authorHandle: text('author_handle').notNull(), // e.g., user@other-node.com
   authorActorUrl: text('author_actor_url').notNull(), // Remote actor URL
   authorDisplayName: text('author_display_name'),
   authorAvatarUrl: text('author_avatar_url'),

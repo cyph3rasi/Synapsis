@@ -2,12 +2,10 @@
  * Remote Follows Sync
  * 
  * Periodically syncs posts from remote users that local users follow.
- * This ensures the home timeline shows fresh posts from followed remote users.
+ * Swarm-only implementation.
  */
 
 import { db, remoteFollows } from '@/db';
-import { resolveRemoteUser } from '@/lib/activitypub/fetch';
-import { cacheRemoteUserPosts } from '@/lib/activitypub/cache';
 import { cacheSwarmUserPosts, isSwarmNode } from '@/lib/swarm/interactions';
 
 // Track last sync time per remote handle to avoid over-fetching
@@ -23,6 +21,7 @@ interface SyncResult {
 
 /**
  * Sync posts from all remote users that any local user follows
+ * Now only syncs from swarm nodes
  */
 export async function syncRemoteFollowsPosts(origin: string): Promise<SyncResult> {
   const result: SyncResult = { synced: 0, skipped: 0, errors: 0, details: [] };
@@ -60,22 +59,16 @@ export async function syncRemoteFollowsPosts(origin: string): Promise<SyncResult
         const handle = targetHandle.slice(0, atIndex);
         const domain = targetHandle.slice(atIndex + 1);
 
-        // Check if this is a swarm node
+        // Only sync from swarm nodes
         const isSwarm = await isSwarmNode(domain);
-
-        let cached = 0;
-        if (isSwarm) {
-          // Use swarm sync for swarm nodes
-          const swarmResult = await cacheSwarmUserPosts(handle, domain, targetHandle, 20);
-          cached = swarmResult.cached;
-        } else {
-          // Use ActivityPub sync for federated nodes
-          const remoteProfile = await resolveRemoteUser(handle, domain);
-          if (remoteProfile?.outbox) {
-            const apResult = await cacheRemoteUserPosts(remoteProfile, targetHandle, origin, 20);
-            cached = apResult.cached;
-          }
+        if (!isSwarm) {
+          result.skipped++;
+          continue;
         }
+
+        // Use swarm sync
+        const swarmResult = await cacheSwarmUserPosts(handle, domain, targetHandle, 20);
+        const cached = swarmResult.cached;
 
         lastSyncTimes.set(targetHandle, now);
         

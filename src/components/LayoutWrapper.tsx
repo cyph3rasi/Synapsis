@@ -15,6 +15,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         pathname === '/register' ||
         pathname?.startsWith('/install');
 
+    // Hide right sidebar on chat page for more space
+    const hideRightSidebar = pathname?.startsWith('/chat');
+
     if (loading) {
         return (
             <div style={{
@@ -47,12 +50,12 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="layout">
+        <div className={`layout ${hideRightSidebar ? 'hide-right-sidebar' : ''}`}>
             <Sidebar />
             <main className="main">
                 {children}
             </main>
-            <RightSidebar />
+            {!hideRightSidebar && <RightSidebar />}
         </div>
     );
 }

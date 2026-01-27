@@ -2,7 +2,7 @@
  * Bot Manager Service
  * 
  * Core orchestrator for bot lifecycle, configuration, and operations.
- * Handles bot CRUD operations, user linking, and ActivityPub key generation.
+ * Handles bot CRUD operations, user linking, and cryptographic key generation.
  * 
  * Bots are first-class users with their own profiles, handles, and posts.
  * Each bot has an owner (human user) who manages it.
@@ -12,7 +12,7 @@
 
 import { db, bots, users, botContentSources, botContentItems, botMentions, botActivityLogs, botRateLimits, follows } from '@/db';
 import { eq, and, count } from 'drizzle-orm';
-import { generateKeyPair } from '@/lib/activitypub/signatures';
+import { generateKeyPair } from '@/lib/crypto/keys';
 import { 
   encryptApiKey, 
   decryptApiKey,
@@ -333,7 +333,7 @@ export async function createBot(ownerId: string, config: BotCreateInput): Promis
     throw new BotHandleTakenError(config.handle);
   }
   
-  // Generate ActivityPub keys for the bot's user account
+  // Generate cryptographic keys for the bot's user account
   const { publicKey, privateKey } = await generateKeyPair();
   
   // Encrypt the API key and private key

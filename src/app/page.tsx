@@ -211,8 +211,20 @@ export default function Home() {
         </div>
       ) : posts.length === 0 ? (
         <div style={{ padding: '48px', textAlign: 'center', color: 'var(--foreground-tertiary)' }}>
-          <p>No posts yet</p>
-          <p style={{ fontSize: '13px', marginTop: '8px' }}>Be the first to post something!</p>
+          {feedType === 'curated' ? (
+            <>
+              <p>No posts from the swarm yet</p>
+              <p style={{ fontSize: '13px', marginTop: '8px' }}>
+                The curated feed shows posts from other nodes in the Synapsis network. 
+                Check back later as nodes are discovered, or switch to Latest to see posts from people you follow.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>No posts yet</p>
+              <p style={{ fontSize: '13px', marginTop: '8px' }}>Be the first to post something!</p>
+            </>
+          )}
         </div>
       ) : (
         <>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, users, posts, likes } from '@/db';
 import { ilike, or, desc, and, notInArray, eq, inArray } from 'drizzle-orm';
-import { resolveRemoteUser } from '@/lib/activitypub/fetch';
+import { fetchSwarmUserProfile, isSwarmNode } from '@/lib/swarm/interactions';
 
 type SearchUser = {
     id: string;
@@ -12,23 +12,6 @@ type SearchUser = {
     profileUrl?: string | null;
     isRemote?: boolean;
     isBot?: boolean;
-};
-
-const decodeEntities = (value: string) =>
-    value
-        .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-        .replace(/&#(\\d+);/g, (_, num) => String.fromCharCode(Number(num)))
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'");
-
-const sanitizeText = (value?: string | null) => {
-    if (!value) return null;
-    const withoutTags = value.replace(/<[^>]*>/g, ' ');
-    const decoded = decodeEntities(withoutTags);
-    return decoded.replace(/\\s+/g, ' ').trim() || null;
 };
 
 const parseRemoteHandleQuery = (query: string): { handle: string; domain: string } | null => {
@@ -45,30 +28,6 @@ const parseRemoteHandleQuery = (query: string): { handle: string; domain: string
     if (!handle || !domain) return null;
     if (!domain.includes('.') && !domain.includes(':')) return null;
     return { handle: handle.toLowerCase(), domain: domain.toLowerCase() };
-};
-
-const buildRemoteUser = (
-    profile: Awaited<ReturnType<typeof resolveRemoteUser>>,
-    handle: string,
-    domain: string,
-): SearchUser | null => {
-    if (!profile) return null;
-    const displayName = sanitizeText(profile.name) || sanitizeText(profile.preferredUsername) || null;
-    const username = profile.preferredUsername || handle;
-    if (!username) return null;
-    const fullHandle = `${username}@${domain}`.replace(/^@/, '');
-    const iconUrl = typeof profile.icon === 'string' ? profile.icon : profile.icon?.url;
-    const profileUrl = typeof profile.url === 'string' ? profile.url : profile.id;
-
-    return {
-        id: profile.id || profileUrl || `remote:${fullHandle}`,
-        handle: fullHandle,
-        displayName,
-        avatarUrl: iconUrl ?? null,
-        bio: sanitizeText(profile.summary),
-        profileUrl: profileUrl ?? null,
-        isRemote: true,
-    };
 };
 
 export async function GET(request: Request) {
@@ -122,14 +81,34 @@ export async function GET(request: Request) {
             searchUsers = localUsers.filter(u => !u.handle.includes('@'));
         }
 
-        // Federated user lookup (exact handle@domain queries)
+        // Swarm user lookup (exact handle@domain queries)
         if ((type === 'all' || type === 'users') && searchUsers.length < limit) {
             const parsedRemote = parseRemoteHandleQuery(query);
             if (parsedRemote) {
-                const remoteProfile = await resolveRemoteUser(parsedRemote.handle, parsedRemote.domain);
-                const remoteUser = buildRemoteUser(remoteProfile, parsedRemote.handle, parsedRemote.domain);
-                if (remoteUser && !searchUsers.some((user) => user.handle.toLowerCase() === remoteUser.handle.toLowerCase())) {
-                    searchUsers = [remoteUser, ...searchUsers].slice(0, limit);
+                // Only lookup on swarm nodes
+                const isSwarm = await isSwarmNode(parsedRemote.domain);
+                if (isSwarm) {
+                    try {
+                        const profileData = await fetchSwarmUserProfile(parsedRemote.handle, parsedRemote.domain, 0);
+                        if (profileData?.profile) {
+                            const fullHandle = `${parsedRemote.handle}@${parsedRemote.domain}`;
+                            const remoteUser: SearchUser = {
+                                id: `swarm:${parsedRemote.domain}:${parsedRemote.handle}`,
+                                handle: fullHandle,
+                                displayName: profileData.profile.displayName || parsedRemote.handle,
+                                avatarUrl: profileData.profile.avatarUrl || null,
+                                bio: profileData.profile.bio || null,
+                                profileUrl: `https://${parsedRemote.domain}/@${parsedRemote.handle}`,
+                                isRemote: true,
+                                isBot: profileData.profile.isBot,
+                            };
+                            if (!searchUsers.some((user) => user.handle.toLowerCase() === remoteUser.handle.toLowerCase())) {
+                                searchUsers = [remoteUser, ...searchUsers].slice(0, limit);
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`[Search] Error fetching swarm user ${parsedRemote.handle}@${parsedRemote.domain}:`, error);
+                    }
                 }
             }
         }

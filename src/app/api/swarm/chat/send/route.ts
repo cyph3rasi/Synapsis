@@ -18,18 +18,35 @@ const sendMessageSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  console.log('[Chat Send] Starting request processing');
   try {
     if (!db) {
+      console.error('[Chat Send] Database connection missing');
       return NextResponse.json({ error: 'Database not available' }, { status: 503 });
     }
 
     const session = await getSession();
     if (!session?.user) {
+      console.warn('[Chat Send] Unauthorized attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    console.log('[Chat Send] User authenticated:', session.user.id);
 
-    const body = await request.json();
-    const data = sendMessageSchema.parse(body);
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error('[Chat Send] Failed to parse JSON body');
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
+    const parseResult = sendMessageSchema.safeParse(body);
+    if (!parseResult.success) {
+      console.error('[Chat Send] Schema validation failed:', parseResult.error);
+      return NextResponse.json({ error: 'Invalid input', details: parseResult.error.issues }, { status: 400 });
+    }
+    const data = parseResult.data;
+    console.log('[Chat Send] Input validated. Recipient:', data.recipientHandle);
 
     // Get sender info
     const sender = await db.query.users.findFirst({
@@ -37,13 +54,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!sender) {
+      console.error('[Chat Send] Sender not found in DB:', session.user.id);
       return NextResponse.json({ error: 'Sender not found' }, { status: 404 });
     }
+    console.log('[Chat Send] Sender retrieved:', sender.handle);
 
     // Parse recipient handle (could be local or remote)
     const recipientHandle = data.recipientHandle.toLowerCase();
     const isRemote = recipientHandle.includes('@');
-    
+
     let recipientUser: typeof users.$inferSelect | undefined;
     let recipientPublicKey: string;
     let recipientNodeDomain: string | null = null;
@@ -52,6 +71,7 @@ export async function POST(request: NextRequest) {
       // Remote user - need to fetch their public key
       const [handle, domain] = recipientHandle.split('@');
       recipientNodeDomain = domain;
+      console.log('[Chat Send] Processing remote recipient:', handle, '@', domain);
 
       // Try to find cached remote user
       recipientUser = await db.query.users.findFirst({
@@ -61,10 +81,12 @@ export async function POST(request: NextRequest) {
       if (!recipientUser) {
         // Fetch from remote node
         try {
+          console.log('[Chat Send] Fetching remote user from node:', domain);
           const protocol = domain.includes('localhost') ? 'http' : 'https';
           const response = await fetch(`${protocol}://${domain}/api/users/${handle}`);
-          
+
           if (!response.ok) {
+            console.error('[Chat Send] Remote user fetch failed. Status:', response.status);
             return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
           }
 
@@ -80,24 +102,29 @@ export async function POST(request: NextRequest) {
             publicKey: recipientPublicKey,
           }).returning();
           recipientUser = newUser;
+          console.log('[Chat Send] Remote user cached');
         } catch (error) {
-          console.error('Failed to fetch remote user:', error);
+          console.error('[Chat Send] Failed to fetch remote user:', error);
           return NextResponse.json({ error: 'Failed to reach recipient node' }, { status: 503 });
         }
       } else {
         recipientPublicKey = recipientUser.publicKey;
+        console.log('[Chat Send] Remote user found in cache');
       }
     } else {
       // Local user
+      console.log('[Chat Send] Processing local recipient');
       recipientUser = await db.query.users.findFirst({
         where: eq(users.handle, recipientHandle),
       });
 
       if (!recipientUser) {
+        console.warn('[Chat Send] Local recipient not found:', recipientHandle);
         return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
       }
 
       if (recipientUser.isSuspended) {
+        console.warn('[Chat Send] Local recipient suspended:', recipientHandle);
         return NextResponse.json({ error: 'Recipient not available' }, { status: 404 });
       }
 
@@ -105,7 +132,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt the message with recipient's public key
-    const encryptedContent = encryptMessage(data.content, recipientPublicKey);
+    console.log('[Chat Send] Encrypting message...');
+    let encryptedContent: string;
+    try {
+      encryptedContent = encryptMessage(data.content, recipientPublicKey);
+    } catch (encError) {
+      console.error('[Chat Send] Encryption failed:', encError);
+      return NextResponse.json({ error: 'Encryption failed' }, { status: 500 });
+    }
 
     // Get or create conversation
     let conversation = await db.query.chatConversations.findFirst({
@@ -116,6 +150,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!conversation) {
+      console.log('[Chat Send] Creating new conversation');
       const [newConversation] = await db.insert(chatConversations).values({
         participant1Id: sender.id,
         participant2Handle: recipientHandle,
@@ -130,6 +165,7 @@ export async function POST(request: NextRequest) {
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
     const swarmMessageId = `swarm:${nodeDomain}:${messageId}`;
 
+    console.log('[Chat Send] Inserting message into DB');
     const [newMessage] = await db.insert(chatMessages).values({
       conversationId: conversation.id,
       senderHandle: sender.handle,
@@ -153,6 +189,11 @@ export async function POST(request: NextRequest) {
 
     // If remote, send to their node
     if (isRemote && recipientNodeDomain) {
+      // ... (remote logic remains similar but add logs)
+      console.log('[Chat Send] Dispatching to remote node:', recipientNodeDomain);
+      // ... existing remote send logic ...
+      // For brevity in this tool call, I'm keeping the original logic mostly intact but wrapped/logged.
+      // Re-implementing the block:
       try {
         const payload: SwarmChatMessagePayload = {
           messageId,
@@ -177,22 +218,27 @@ export async function POST(request: NextRequest) {
           await db.update(chatMessages)
             .set({ deliveredAt: new Date() })
             .where(eq(chatMessages.id, newMessage.id));
+          console.log('[Chat Send] Remote delivery confirmed');
+        } else {
+          console.warn('[Chat Send] Remote delivery failed. Status:', response.status);
         }
       } catch (error) {
-        console.error('Failed to send message to remote node:', error);
+        console.error('[Chat Send] Failed to send message to remote node:', error);
         // Message is still stored locally, will show as undelivered
       }
     }
 
+    console.log('[Chat Send] Success');
     return NextResponse.json({
       success: true,
       message: newMessage,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 });
+      // Should be caught by safeParse above, but just in case
+      return NextResponse.json({ error: 'Invalid input', details: error.issues }, { status: 400 });
     }
-    console.error('Send message error:', error);
+    console.error('[Chat Send] Unhandled error:', error);
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
 }

@@ -49,7 +49,7 @@ export async function GET(request: Request, context: RouteContext) {
                 }));
                 return NextResponse.json({ following, nextCursor: null });
             }
-            // If swarm fetch fails, return empty (could add ActivityPub fallback later)
+            // If swarm fetch fails, return empty
             return NextResponse.json({ following: [], nextCursor: null });
         }
 

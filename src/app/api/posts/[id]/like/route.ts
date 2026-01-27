@@ -179,26 +179,7 @@ export async function POST(request: Request, context: RouteContext) {
                 })();
             }
         } else if (post.apId) {
-            // FALLBACK: Use ActivityPub for non-swarm posts
-            (async () => {
-                try {
-                    const { createLikeActivity } = await import('@/lib/activitypub/activities');
-                    const { deliverActivity } = await import('@/lib/activitypub/outbox');
-
-                    // Get the post author's actor URL
-                    const postWithAuthor = await db.query.posts.findFirst({
-                        where: eq(posts.id, postId),
-                        with: { author: true },
-                    });
-
-                    if (!postWithAuthor?.author) return;
-
-                    const author = postWithAuthor.author as { handle: string };
-                    console.log(`[Federation] Like activity for post ${post.apId} from @${user.handle}`);
-                } catch (err) {
-                    console.error('[Federation] Error federating like:', err);
-                }
-            })();
+            // Non-swarm posts with apId are legacy - no federation needed
         }
 
         return NextResponse.json({ success: true, liked: true });

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts, notifications } from '@/db';
+import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { eq, desc, and, inArray, isNull, isNotNull, notInArray, or, lt } from 'drizzle-orm';
+import { eq, desc, and, inArray, isNull, isNotNull, or, lt } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -252,29 +252,8 @@ export async function POST(request: Request) {
                 if (swarmResult.delivered > 0) {
                     console.log(`[Swarm] Post ${post.id} delivered to ${swarmResult.delivered} swarm nodes (${swarmResult.failed} failed)`);
                 }
-
-                // FALLBACK: Deliver to ActivityPub followers
-                const { createCreateActivity } = await import('@/lib/activitypub/activities');
-                const { getFollowerInboxes, deliverToFollowers } = await import('@/lib/activitypub/outbox');
-
-                const followerInboxes = await getFollowerInboxes(user.id);
-                if (followerInboxes.length === 0) {
-                    return; // No remote followers to notify
-                }
-
-                const createActivity = createCreateActivity(post, user, nodeDomain);
-
-                const privateKey = user.privateKeyEncrypted;
-                if (!privateKey) {
-                    console.error('[Federation] User has no private key for signing');
-                    return;
-                }
-
-                const keyId = `https://${nodeDomain}/users/${user.handle}#main-key`;
-                const result = await deliverToFollowers(createActivity, followerInboxes, privateKey, keyId);
-                console.log(`[Federation] Post ${post.id} delivered to ${result.delivered}/${followerInboxes.length} inboxes (${result.failed} failed)`);
             } catch (err) {
-                console.error('[Federation] Error federating post:', err);
+                console.error('[Swarm] Error delivering post:', err);
             }
         })();
 
@@ -397,7 +376,7 @@ export async function GET(request: Request) {
         );
 
         if (type === 'local') {
-            // Local node posts only - no fediverse content
+            // Local node posts only
             let whereCondition = baseFilter;
 
             // Apply cursor-based pagination
@@ -506,7 +485,7 @@ export async function GET(request: Request) {
                 limit,
             });
         } else if (type === 'curated') {
-            // Curated feed - swarm posts only (no fediverse)
+            // Curated feed - swarm posts only
             let viewer = null;
             let includeNsfw = false;
             try {
@@ -522,6 +501,12 @@ export async function GET(request: Request) {
             // Fetch swarm posts with user's NSFW preference
             const { fetchSwarmTimeline } = await import('@/lib/swarm/timeline');
             const swarmResult = await fetchSwarmTimeline(10, 30, { includeNsfw });
+
+            console.log('[Curated Feed] Swarm result:', {
+                postsCount: swarmResult.posts.length,
+                sources: swarmResult.sources,
+                includeNsfw,
+            });
 
             // Transform swarm posts to match local post format
             const swarmPosts = swarmResult.posts.map(sp => ({
@@ -620,6 +605,13 @@ export async function GET(request: Request) {
                 })
                 .slice(0, limit);
 
+            console.log('[Curated Feed] After ranking:', {
+                swarmPostsCount: swarmPosts.length,
+                afterMuteFilter: swarmPosts.filter((post: any) => !mutedIds.has(post.author.id) && !blockedIds.has(post.author.id)).length,
+                rankedPostsCount: rankedPosts.length,
+                limit,
+            });
+
             feedPosts = rankedPosts;
         } else {
             // Home timeline - need auth
@@ -671,7 +663,6 @@ export async function GET(request: Request) {
                 let liveRemotePosts: any[] = [];
                 if (followedRemoteUsers.length > 0) {
                     const { fetchSwarmUserProfile, isSwarmNode } = await import('@/lib/swarm/interactions');
-                    const { resolveRemoteUser } = await import('@/lib/activitypub/fetch');
 
                     // Wrap each fetch with a timeout to prevent slow nodes from blocking
                     const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T | null> => {
@@ -689,58 +680,44 @@ export async function GET(request: Request) {
                             const handle = follow.targetHandle.slice(0, atIndex);
                             const domain = follow.targetHandle.slice(atIndex + 1);
 
-                            // Check if swarm node - use swarm API (faster)
+                            // Only fetch from swarm nodes
                             const isSwarm = await isSwarmNode(domain);
+                            if (!isSwarm) return [];
 
-                            if (isSwarm) {
-                                const profileData = await withTimeout(
-                                    fetchSwarmUserProfile(handle, domain, limit),
-                                    5000 // 5s timeout per node
-                                );
-                                if (!profileData?.posts) return [];
+                            const profileData = await withTimeout(
+                                fetchSwarmUserProfile(handle, domain, limit),
+                                5000 // 5s timeout per node
+                            );
+                            if (!profileData?.posts) return [];
 
-                                return profileData.posts.map(post => ({
-                                    id: `swarm:${domain}:${post.id}`,
-                                    content: post.content,
-                                    createdAt: new Date(post.createdAt),
-                                    likesCount: post.likesCount || 0,
-                                    repostsCount: post.repostsCount || 0,
-                                    repliesCount: post.repliesCount || 0,
+                            return profileData.posts.map(post => ({
+                                id: `swarm:${domain}:${post.id}`,
+                                content: post.content,
+                                createdAt: new Date(post.createdAt),
+                                likesCount: post.likesCount || 0,
+                                repostsCount: post.repostsCount || 0,
+                                repliesCount: post.repliesCount || 0,
+                                isRemote: true,
+                                isNsfw: post.isNsfw,
+                                linkPreviewUrl: post.linkPreviewUrl,
+                                linkPreviewTitle: post.linkPreviewTitle,
+                                linkPreviewDescription: post.linkPreviewDescription,
+                                linkPreviewImage: post.linkPreviewImage,
+                                author: {
+                                    id: `swarm:${domain}:${handle}`,
+                                    handle: follow.targetHandle,
+                                    displayName: follow.displayName || profileData.profile?.displayName || handle,
+                                    avatarUrl: follow.avatarUrl || profileData.profile?.avatarUrl,
                                     isRemote: true,
-                                    isNsfw: post.isNsfw,
-                                    linkPreviewUrl: post.linkPreviewUrl,
-                                    linkPreviewTitle: post.linkPreviewTitle,
-                                    linkPreviewDescription: post.linkPreviewDescription,
-                                    linkPreviewImage: post.linkPreviewImage,
-                                    author: {
-                                        id: `swarm:${domain}:${handle}`,
-                                        handle: follow.targetHandle,
-                                        displayName: follow.displayName || profileData.profile?.displayName || handle,
-                                        avatarUrl: follow.avatarUrl || profileData.profile?.avatarUrl,
-                                        isRemote: true,
-                                        isBot: profileData.profile?.isBot,
-                                    },
-                                    media: post.media?.map((m: any, idx: number) => ({
-                                        id: `swarm:${domain}:${post.id}:media:${idx}`,
-                                        url: m.url,
-                                        altText: m.altText || null,
-                                    })) || [],
-                                    replyTo: null,
-                                }));
-                            } else {
-                                // ActivityPub - fetch from outbox
-                                const remoteProfile = await resolveRemoteUser(handle, domain);
-                                if (!remoteProfile?.outbox) return [];
-
-                                // For AP, fall back to cached posts (live outbox fetch is slower)
-                                const cachedPosts = await db.query.remotePosts.findMany({
-                                    where: eq(remotePosts.authorHandle, follow.targetHandle),
-                                    orderBy: [desc(remotePosts.publishedAt)],
-                                    limit: limit,
-                                });
-
-                                return transformRemotePosts(cachedPosts);
-                            }
+                                    isBot: profileData.profile?.isBot,
+                                },
+                                media: post.media?.map((m: any, idx: number) => ({
+                                    id: `swarm:${domain}:${post.id}:media:${idx}`,
+                                    url: m.url,
+                                    altText: m.altText || null,
+                                })) || [],
+                                replyTo: null,
+                            }));
                         } catch (error) {
                             console.error(`[Home] Error fetching posts from ${follow.targetHandle}:`, error);
                             return [];

@@ -9,7 +9,7 @@ A real-time, end-to-end encrypted chat system built exclusively for the Synapsis
 - **Real-Time Delivery**: Messages delivered instantly via swarm inbox
 - **Read Receipts**: See when messages are delivered and read
 - **Typing Indicators**: Know when someone is typing (coming soon)
-- **No ActivityPub Limitations**: Built specifically for swarm, not constrained by AP spec
+- **Native Swarm Protocol**: Built specifically for the swarm network
 
 ## Architecture
 
@@ -141,14 +141,14 @@ Test the chat system:
 4. Send a message
 5. Check the other account's `/chat` page
 
-## Differences from ActivityPub DMs
+## Why Swarm Chat?
 
-Traditional ActivityPub direct messages are just posts with limited visibility. Swarm Chat is superior:
+Swarm Chat was built from the ground up for the Synapsis network:
 
-- **True E2E Encryption**: Not possible with ActivityPub
+- **True E2E Encryption**: Messages encrypted with recipient's public key
 - **Real-Time**: Direct delivery, no polling required
 - **Proper Chat UX**: Conversations, read receipts, typing indicators
-- **Lightweight**: No heavyweight ActivityPub overhead
+- **Lightweight**: Simple JSON protocol
 - **Swarm-Native**: Built for the swarm, not retrofitted
 
 ## Contributing

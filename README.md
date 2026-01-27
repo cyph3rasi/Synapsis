@@ -1,26 +1,28 @@
 # Synapsis
 
-Synapsis is an open-source, federated social network built to serve as global communication infrastructure. It is designed to be lightweight, easy to deploy, and interoperable with the broader Fediverse.
+Synapsis is an open-source, federated social network built to serve as global communication infrastructure. It is designed to be lightweight, easy to deploy, and built on the Synapsis Swarm network.
 
 ## Features
 
-- **Federation Ready**: Built with ActivityPub compatibility for cross-platform communication.
+- **Swarm Network**: Native peer-to-peer network for Synapsis nodes with gossip protocol.
+- **Swarm Chat**: End-to-end encrypted chat system built for the swarm.
 - **Decentralized Identity (DIDs)**: Portable identity system that you truly own.
+- **AI Bots**: Create and manage AI-powered bot accounts with custom personalities.
 - **Modern UI**: Clean, responsive interface inspired by Vercel's design system.
 - **Rich Media**: Support for image uploads and media galleries.
 - **Moderation**: Built-in admin dashboard for user management and content moderation.
 - **Setup Wizard**: User-friendly `/install` flow to get your node running in minutes.
-- **Curated Feeds**: Smart feed algorithms to highlight engaging content.
+- **Curated Feeds**: Smart feed algorithms to highlight engaging content across the swarm.
 
 ---
 
 ## 📖 User Guide
 
-New to Synapsis or the Fediverse? Visit the **[/guide](/guide)** page in the app for a comprehensive walkthrough on:
+New to Synapsis? Visit the **[/guide](/guide)** page in the app for a comprehensive walkthrough on:
 
-- What the Fediverse is and how it works
-- How Synapsis differs from platforms like Mastodon
-- How to follow users on other servers
+- How the Swarm network works
+- How Synapsis differs from traditional social networks
+- How to follow users on other nodes
 - How others can follow you
 - Understanding Decentralized Identifiers (DIDs) and portable identity
 
@@ -28,7 +30,7 @@ New to Synapsis or the Fediverse? Visit the **[/guide](/guide)** page in the app
 
 ## Architecture & Concepts
 
-Synapsis differs from traditional social networks by prioritizing **sovereign identity** and **federated interoperability**.
+Synapsis differs from traditional social networks by prioritizing **sovereign identity** and **native peer-to-peer communication**.
 
 ### 🔐 Decentralized Identity (DIDs)
 
@@ -43,29 +45,36 @@ Unlike centralized platforms where your identity is a row in a database owned by
 **Why this matters:**
 - **Ownership**: Your identity is cryptographically yours, not controlled by a company.
 - **Authenticity**: Every post is signed with your private key, proving it came from you.
-- **Future Portability**: The foundation for moving your account between nodes without losing followers.
+- **True Portability**: Move your account between nodes without losing followers.
 
-### 🌐 Federation via ActivityPub
+### 🌐 The Swarm Network
 
-Synapsis is designed as a network of independent **Nodes** that communicate using the ActivityPub protocol.
+Synapsis operates on the **Swarm** — a native peer-to-peer network designed specifically for Synapsis nodes:
 
-- **Sovereign Data**: Communities run their own Synapsis nodes with their own rules.
-- **Interconnectivity**: A user on *Node A* can follow and interact with a user on *Node B*.
-- **Fediverse Compatibility**: Synapsis can communicate with Mastodon, Pleroma, Misskey, and other ActivityPub platforms.
+- **Gossip Protocol**: Nodes discover each other automatically and exchange information.
+- **Swarm Timeline**: Aggregated feed of posts from across all Synapsis nodes.
+- **Swarm Chat**: End-to-end encrypted direct messaging between users on any Synapsis node.
+- **Handle Registry**: Distributed directory of user handles across the swarm.
+- **Instant Interactions**: Likes, reposts, follows, and mentions delivered in real-time.
 
-**How it works:**
-1. **WebFinger**: When you search for `@user@other-server.com`, WebFinger discovers their profile.
-2. **Follow Request**: Synapsis sends an ActivityPub `Follow` activity to the remote server.
-3. **Content Delivery**: When they post, it's delivered to your inbox via ActivityPub.
+**Swarm Features:**
+- Real-time post delivery across the network
+- Encrypted chat with read receipts
+- Automatic node discovery and health monitoring
+- Distributed user directory
+- Cross-node interactions (likes, reposts, follows)
 
-### 🆚 Synapsis vs. Mastodon
+### 🆚 Synapsis vs. Traditional Federation
 
-| Feature | Mastodon | Synapsis |
-|---------|----------|----------|
+| Feature | Traditional Federation | Synapsis |
+|---------|------------------------|----------|
 | **Identity** | Server-bound (`@user@server`) | DID-based (cryptographic, portable) |
-| **Account Migration** | Limited (followers don't auto-migrate) | **Supported**: Full DID-based migration with auto-follow |
+| **Account Migration** | Limited (followers don't auto-migrate) | **Full**: DID-based migration with auto-follow |
 | **Cryptographic Signing** | HTTP Signatures only | Full post signing with user keys |
-| **Protocol** | ActivityPub | ActivityPub + DID layer |
+| **Direct Messages** | Posts with limited visibility | True E2E encrypted chat |
+| **Network Discovery** | Manual server discovery | Automatic gossip protocol |
+| **AI Bots** | Not supported | Native bot framework with LLM integration |
+| **Interactions** | Queue-based, delayed | Instant delivery via Swarm |
 
 ---
 
@@ -76,6 +85,27 @@ Synapsis is designed as a network of independent **Nodes** that communicate usin
 - **Styling**: Tailwind CSS v4 & custom Vercel-like design system
 - **Authentication**: Auth.js (NextAuth)
 - **Type Safety**: TypeScript
+
+---
+
+## Recent Updates
+
+### Swarm Chat (Latest)
+- End-to-end encrypted messaging between Synapsis users
+- Real-time delivery across nodes
+- Read receipts and delivery status
+- No legacy protocol limitations - built for the swarm
+- See [SWARM_CHAT.md](SWARM_CHAT.md) for details
+
+### Bug Fixes
+- Fixed remote users appearing in local user lists
+- Fixed duplicate posts in swarm feeds
+- Improved swarm timeline filtering to only show local posts
+
+### Swarm Network Improvements
+- Enhanced gossip protocol for node discovery
+- Improved handle registry synchronization
+- Better error handling for cross-node communication
 
 ---
 
