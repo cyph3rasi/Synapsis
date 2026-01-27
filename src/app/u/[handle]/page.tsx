@@ -637,18 +637,6 @@ export default function ProfilePage() {
 
                         <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
                             <button
-                                onClick={() => setActiveTab('following')}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'var(--foreground)',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                <strong>{user.followingCount}</strong>{' '}
-                                <span style={{ color: 'var(--foreground-tertiary)' }}>Following</span>
-                            </button>
-                            <button
                                 onClick={() => setActiveTab('followers')}
                                 style={{
                                     background: 'none',
@@ -659,6 +647,18 @@ export default function ProfilePage() {
                             >
                                 <strong>{user.followersCount}</strong>{' '}
                                 <span style={{ color: 'var(--foreground-tertiary)' }}>Followers</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('following')}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--foreground)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <strong>{user.followingCount}</strong>{' '}
+                                <span style={{ color: 'var(--foreground-tertiary)' }}>Following</span>
                             </button>
                         </div>
                     </div>

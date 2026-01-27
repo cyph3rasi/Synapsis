@@ -10,7 +10,7 @@ interface Admin {
 }
 
 export function RightSidebar() {
-    const fallbackDescription = process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.';
+    const fallbackDescription = process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A swarm social network node.';
     const [nodeInfo, setNodeInfo] = useState({
         name: process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node',
         description: fallbackDescription,

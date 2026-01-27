@@ -61,6 +61,28 @@ export default function ChatPage() {
     const [encryptionChecked, setEncryptionChecked] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+
+    // Check if user is scrolled to bottom
+    const checkIfAtBottom = () => {
+        if (!messagesContainerRef.current) return true;
+        const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+        const threshold = 100; // pixels from bottom
+        return scrollHeight - scrollTop - clientHeight < threshold;
+    };
+
+    // Handle scroll to track if user is at bottom
+    const handleScroll = () => {
+        setIsAtBottom(checkIfAtBottom());
+    };
+
+    // Scroll to bottom manually
+    const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
 
     // Wait for encryption to be ready before showing UI
     useEffect(() => {
@@ -106,12 +128,12 @@ export default function ChatPage() {
         }
     }, [selectedConversation, hasKeys]);
 
-    // Auto-scroll to bottom of messages
+    // Auto-scroll to bottom of messages only if user was already at bottom
     useEffect(() => {
-        if (messagesEndRef.current) {
+        if (messagesEndRef.current && isAtBottom) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages]);
+    }, [messages, isAtBottom]);
 
     const fetchRecipientKey = async (handle: string) => {
         try {
@@ -439,9 +461,9 @@ export default function ChatPage() {
     // Thread View
     if (selectedConversation) {
         return (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: '600px', margin: '0 auto' }}>
                 {/* Header */}
-                <div className="post" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--background)', borderBottom: '1px solid var(--border)' }}>
+                <div className="post" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--background)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button
                             onClick={() => setSelectedConversation(null)}
@@ -479,7 +501,17 @@ export default function ChatPage() {
                 </div>
 
                 {/* Messages */}
-                <div style={{ padding: '16px', minHeight: 'calc(100vh - 250px)' }}>
+                <div 
+                    ref={messagesContainerRef}
+                    onScroll={handleScroll}
+                    style={{ 
+                        padding: '16px', 
+                        flex: 1,
+                        overflowY: 'auto',
+                        paddingBottom: '16px',
+                        position: 'relative'
+                    }}
+                >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         {messages.map(msg => (
                             <div key={msg.id} style={{
@@ -524,10 +556,44 @@ export default function ChatPage() {
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
+
+                    {/* Scroll to bottom button */}
+                    {!isAtBottom && (
+                        <button
+                            onClick={scrollToBottom}
+                            style={{
+                                position: 'absolute',
+                                bottom: '16px',
+                                right: '24px',
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '50%',
+                                background: 'var(--accent)',
+                                color: '#000',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                zIndex: 5
+                            }}
+                            aria-label="Scroll to bottom"
+                        >
+                            ↓
+                        </button>
+                    )}
                 </div>
 
                 {/* Input */}
-                <div className="compose">
+                <div 
+                    className="compose" 
+                    style={{
+                        borderTop: '1px solid var(--border)',
+                        background: 'var(--background)',
+                        flexShrink: 0
+                    }}
+                >
                     <form onSubmit={sendMessage} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <input
                             type="text"
@@ -546,7 +612,7 @@ export default function ChatPage() {
                         </button>
                     </form>
                 </div>
-            </>
+            </div>
         );
     }
 

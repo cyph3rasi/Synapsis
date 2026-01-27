@@ -34,7 +34,7 @@ export async function GET() {
         if (!node) {
             return NextResponse.json({
                 name: process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node',
-                description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.',
+                description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A swarm social network node.',
                 accentColor: process.env.NEXT_PUBLIC_ACCENT_COLOR || '#FFFFFF',
                 domain,
                 admins,
@@ -52,7 +52,7 @@ export async function GET() {
         console.error('Node info error:', error);
         return NextResponse.json({
             name: process.env.NEXT_PUBLIC_NODE_NAME || 'Synapsis Node',
-            description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A federated social network node.',
+            description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A swarm social network node.',
             admins: [],
         });
     }

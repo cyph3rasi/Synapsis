@@ -27,7 +27,7 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Post | null>(null);
-  const [feedType, setFeedType] = useState<'latest' | 'curated'>('latest');
+  const [feedType, setFeedType] = useState<'following' | 'curated'>('following');
   const [feedMeta, setFeedMeta] = useState<{
     algorithm: string;
     windowHours: number;
@@ -49,7 +49,7 @@ export default function Home() {
     }
   }, [user, router]);
 
-  const loadFeed = async (type: 'latest' | 'curated', cursor?: string | null) => {
+  const loadFeed = async (type: 'following' | 'curated', cursor?: string | null) => {
     if (cursor) {
       setLoadingMore(true);
     } else {
@@ -175,10 +175,10 @@ export default function Home() {
           <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Home</h1>
           <div className="feed-toggle">
             <button
-              className={`feed-toggle-btn ${feedType === 'latest' ? 'active' : ''}`}
-              onClick={() => setFeedType('latest')}
+              className={`feed-toggle-btn ${feedType === 'following' ? 'active' : ''}`}
+              onClick={() => setFeedType('following')}
             >
-              Latest
+              Following
             </button>
             <button
               className={`feed-toggle-btn ${feedType === 'curated' ? 'active' : ''}`}
@@ -195,6 +195,15 @@ export default function Home() {
         replyingTo={replyingTo}
         onCancelReply={() => setReplyingTo(null)}
       />
+
+      {feedType === 'following' && (
+        <div className="feed-meta card">
+          <div className="feed-meta-title">Following feed</div>
+          <div className="feed-meta-body">
+            This feed shows posts from accounts you follow in chronological order, with the most recent posts appearing first.
+          </div>
+        </div>
+      )}
 
       {feedType === 'curated' && feedMeta && (
         <div className="feed-meta card">
@@ -216,7 +225,7 @@ export default function Home() {
               <p>No posts from the swarm yet</p>
               <p style={{ fontSize: '13px', marginTop: '8px' }}>
                 The curated feed shows posts from other nodes in the Synapsis network. 
-                Check back later as nodes are discovered, or switch to Latest to see posts from people you follow.
+                Check back later as nodes are discovered, or switch to Following to see posts from people you follow.
               </p>
             </>
           ) : (
