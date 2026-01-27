@@ -30,6 +30,10 @@ export function useChatEncryption() {
 
   // Check for existing keys on mount
   useEffect(() => {
+    // Only run in browser
+    if (typeof window === 'undefined') {
+      return;
+    }
     checkKeys();
   }, []);
 
@@ -91,6 +95,9 @@ export function useChatEncryption() {
 
   // Generate new keys and register with server (encrypted backup)
   const generateAndRegisterKeys = useCallback(async (password: string) => {
+    if (typeof window === 'undefined') {
+      throw new Error('Key generation can only be performed in the browser');
+    }
     setIsRegistering(true);
     try {
       // Generate ECDH key pair using Web Crypto API
@@ -106,8 +113,17 @@ export function useChatEncryption() {
       const publicKey = bufferToBase64(publicKeyBuffer);
       const privateKey = bufferToBase64(privateKeyBuffer);
 
+      console.log('[GenerateKeys] Generated keys:', {
+        publicKeyLength: publicKey.length,
+        privateKeyLength: privateKey.length,
+        publicKeyBytes: publicKeyBuffer.byteLength,
+        privateKeyBytes: privateKeyBuffer.byteLength
+      });
+
       // Encrypt private key with password for server backup
       const encryptedPrivateKey = await encryptPrivateKeyWithPassword(privateKey, password);
+
+      console.log('[GenerateKeys] Encrypted private key length:', encryptedPrivateKey.length);
 
       // Register public key + encrypted private key backup with server FIRST
       const response = await fetch('/api/chat/keys', {
@@ -147,6 +163,9 @@ export function useChatEncryption() {
     message: string,
     recipientPublicKey: string
   ): Promise<string> => {
+    if (typeof window === 'undefined') {
+      throw new Error('Encryption can only be performed in the browser');
+    }
     if (!keys?.privateKey) {
       throw new Error('No chat keys available');
     }
@@ -178,17 +197,21 @@ export function useChatEncryption() {
     encryptedMessage: string,
     senderPublicKey: string
   ): Promise<string> => {
+    // Early browser check before any operations
+    if (typeof window === 'undefined') {
+      return '[Decryption only available in browser]';
+    }
+    
     try {
       if (!keys?.privateKey) {
         console.error('[Decrypt] No private key available');
-        throw new Error('No chat keys available');
+        return '[No decryption key available]';
       }
-
-      console.log('[Decrypt] Starting decryption', {
-        hasPrivateKey: !!keys.privateKey,
-        hasSenderPublicKey: !!senderPublicKey,
-        encryptedLength: encryptedMessage.length
-      });
+      
+      if (!senderPublicKey) {
+        console.error('[Decrypt] No sender public key provided');
+        return '[Sender key missing]';
+      }
 
       const myPrivateKey = await importPrivateKey(keys.privateKey);
       const theirPublicKey = await importPublicKey(senderPublicKey);
@@ -203,11 +226,6 @@ export function useChatEncryption() {
       const iv = combined.slice(0, 12);
       const ciphertext = combined.slice(12);
 
-      console.log('[Decrypt] Decrypting with shared key', {
-        ivLength: iv.byteLength,
-        ciphertextLength: ciphertext.byteLength
-      });
-
       const decrypted = await window.crypto.subtle.decrypt(
         { name: 'AES-GCM', iv },
         sharedKey,
@@ -215,13 +233,22 @@ export function useChatEncryption() {
       );
 
       const decoder = new TextDecoder();
-      const result = decoder.decode(decrypted);
-      console.log('[Decrypt] Success:', result.substring(0, 50));
-      return result;
+      return decoder.decode(decrypted);
     } catch (error) {
-      console.error('[Decrypt] Failed:', error);
-      // Return a safe placeholder that won't crash the UI
-      return '[Message cannot be decrypted]';
+      console.warn('[Decrypt] Failed:', error instanceof Error ? error.message : error);
+      // Return a descriptive placeholder based on the error
+      if (error instanceof Error) {
+        if (error.message.includes('public key') || error.message.includes('import key')) {
+          return '[Incompatible encryption format]';
+        }
+        if (error.message.includes('private key')) {
+          return '[Invalid private key]';
+        }
+        if (error.message.includes('base64') || error.message.includes('decode')) {
+          return '[Corrupted message data]';
+        }
+      }
+      return '[Cannot decrypt message]';
     }
   }, [keys]);
 
@@ -251,6 +278,10 @@ export function useChatEncryption() {
 // ============================================
 
 async function encryptPrivateKeyWithPassword(privateKey: string, password: string): Promise<string> {
+  if (typeof window === 'undefined') {
+    throw new Error('Encryption can only be performed in the browser');
+  }
+  
   const encoder = new TextEncoder();
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -293,6 +324,10 @@ async function encryptPrivateKeyWithPassword(privateKey: string, password: strin
 }
 
 async function decryptPrivateKeyWithPassword(encryptedData: string, password: string): Promise<string> {
+  if (typeof window === 'undefined') {
+    throw new Error('Decryption can only be performed in the browser');
+  }
+  
   const { salt, iv, ciphertext } = JSON.parse(encryptedData);
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -334,17 +369,58 @@ async function decryptPrivateKeyWithPassword(encryptedData: string, password: st
 // ============================================
 
 async function importPublicKey(publicKeyBase64: string): Promise<CryptoKey> {
-  const keyBuffer = base64ToBuffer(publicKeyBase64);
-  return window.crypto.subtle.importKey(
-    'spki',
-    keyBuffer,
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    []
-  );
+  if (typeof window === 'undefined') {
+    throw new Error('Crypto operations can only be performed in the browser');
+  }
+  
+  // Validate the key format
+  if (!publicKeyBase64 || typeof publicKeyBase64 !== 'string') {
+    throw new Error('Invalid public key: must be a non-empty string');
+  }
+  
+  try {
+    const keyBuffer = base64ToBuffer(publicKeyBase64);
+    
+    // Try SPKI format first (standard format, typically ~91 bytes for P-256)
+    try {
+      return await window.crypto.subtle.importKey(
+        'spki',
+        keyBuffer,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,
+        []
+      );
+    } catch (spkiError) {
+      // Try raw format (65 bytes for uncompressed P-256 public key)
+      // Raw format is: 0x04 + X coordinate (32 bytes) + Y coordinate (32 bytes)
+      if (keyBuffer.byteLength === 65) {
+        try {
+          return await window.crypto.subtle.importKey(
+            'raw',
+            keyBuffer,
+            { name: 'ECDH', namedCurve: 'P-256' },
+            false,
+            []
+          );
+        } catch (rawError) {
+          // Both formats failed
+        }
+      }
+      
+      // If neither worked, throw a descriptive error
+      throw new Error(`Cannot import key (${keyBuffer.byteLength} bytes): incompatible format`);
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.warn('[ImportPublicKey] Failed:', errorMsg);
+    throw new Error(`Failed to import public key: ${errorMsg}`);
+  }
 }
 
 async function importPrivateKey(privateKeyBase64: string): Promise<CryptoKey> {
+  if (typeof window === 'undefined') {
+    throw new Error('Crypto operations can only be performed in the browser');
+  }
   const keyBuffer = base64ToBuffer(privateKeyBase64);
   return window.crypto.subtle.importKey(
     'pkcs8',
@@ -359,6 +435,10 @@ async function deriveSharedKey(
   myPrivateKey: CryptoKey,
   theirPublicKey: CryptoKey
 ): Promise<CryptoKey> {
+  if (typeof window === 'undefined') {
+    throw new Error('Key derivation can only be performed in the browser');
+  }
+  
   return window.crypto.subtle.deriveKey(
     { name: 'ECDH', public: theirPublicKey },
     myPrivateKey,
@@ -373,6 +453,11 @@ async function deriveSharedKey(
 // ============================================
 
 function bufferToBase64(buffer: ArrayBuffer): string {
+  // btoa is available in both browser and Node 16+, but let's be safe
+  if (typeof btoa === 'undefined') {
+    throw new Error('Base64 encoding not available in this environment');
+  }
+  
   const bytes = new Uint8Array(buffer);
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
@@ -382,7 +467,7 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 function base64ToBuffer(base64: string): ArrayBuffer {
-  // Gracefull handle null/undefined
+  // Gracefully handle null/undefined
   if (!base64) return new ArrayBuffer(0);
 
   // Check for JSON (legacy format)
@@ -401,6 +486,11 @@ function base64ToBuffer(base64: string): ArrayBuffer {
     .replace(/_/g, '/');
 
   try {
+    // atob is available in both browser and Node 16+, but let's be safe
+    if (typeof atob === 'undefined') {
+      throw new Error('Base64 decoding not available in this environment');
+    }
+    
     const binary = atob(cleaned);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -409,8 +499,6 @@ function base64ToBuffer(base64: string): ArrayBuffer {
     return bytes.buffer;
   } catch (e) {
     console.error('[base64ToBuffer] Failed to decode base64:', e);
-    // Return empty buffer or throw specific error?
-    // Throwing allows decryptMessage to catch and return placeholder
     throw new Error(`Failed to decode base64: ${e instanceof Error ? e.message : String(e)}`);
   }
 }

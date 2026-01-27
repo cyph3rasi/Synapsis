@@ -53,9 +53,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'chatPublicKey required' }, { status: 400 });
     }
 
-    // Validate it looks like a base64 SPKI key
-    if (chatPublicKey.length < 50 || chatPublicKey.length > 500) {
-      return NextResponse.json({ error: 'Invalid public key format' }, { status: 400 });
+    // Validate it looks like a base64 SPKI key (should be ~120 chars for P-256)
+    if (chatPublicKey.length < 100 || chatPublicKey.length > 200) {
+      console.error('[Chat Keys API] Invalid public key length:', chatPublicKey.length);
+      return NextResponse.json({ 
+        error: `Invalid public key format: expected ~120 characters, got ${chatPublicKey.length}` 
+      }, { status: 400 });
+    }
+
+    // Additional validation: try to decode as base64
+    try {
+      const decoded = Buffer.from(chatPublicKey, 'base64');
+      if (decoded.length < 80 || decoded.length > 100) {
+        console.error('[Chat Keys API] Invalid decoded key size:', decoded.length);
+        return NextResponse.json({ 
+          error: `Invalid public key: decoded size ${decoded.length} bytes (expected ~91 bytes for P-256)` 
+        }, { status: 400 });
+      }
+    } catch (e) {
+      console.error('[Chat Keys API] Failed to decode public key as base64:', e);
+      return NextResponse.json({ error: 'Public key is not valid base64' }, { status: 400 });
     }
 
     // chatPrivateKeyEncrypted should be a JSON string with encrypted data

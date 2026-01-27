@@ -15,6 +15,7 @@ export function Sidebar() {
     const router = useRouter();
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadChatCount, setUnreadChatCount] = useState(0);
     const [loggingOut, setLoggingOut] = useState(false);
 
     useEffect(() => {
@@ -44,6 +45,25 @@ export function Sidebar() {
         fetchUnread();
         // Poll every 30 seconds
         const interval = setInterval(fetchUnread, 30000);
+        return () => clearInterval(interval);
+    }, [user]);
+
+    // Fetch unread chat count
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchUnreadChats = () => {
+            fetch('/api/chat/unread')
+                .then(res => res.json())
+                .then(data => {
+                    setUnreadChatCount(data.unreadCount || 0);
+                })
+                .catch(() => { });
+        };
+
+        fetchUnreadChats();
+        // Poll every 10 seconds
+        const interval = setInterval(fetchUnreadChats, 10000);
         return () => clearInterval(interval);
     }, [user]);
 
@@ -84,33 +104,38 @@ export function Sidebar() {
                     <span>Explore</span>
                 </Link>
                 {user && (
-                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`} style={{ position: 'relative' }}>
+                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`}>
                         <BellIcon />
-                        <span>Notifications</span>
-                        {unreadCount > 0 && (
-                            <span style={{
-                                position: 'absolute',
-                                top: '8px',
-                                left: '24px',
-                                width: '8px',
-                                height: '8px',
-                                background: 'var(--error)',
-                                borderRadius: '50%',
-                            }} />
-                        )}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            Notifications
+                            {unreadCount > 0 && (
+                                <span style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    background: 'var(--error)',
+                                    borderRadius: '50%',
+                                }} />
+                            )}
+                        </span>
                     </Link>
                 )}
                 {user && (
-                    <button
-                        onClick={() => window.dispatchEvent(new Event('open-chat-widget'))}
-                        className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}
-                        style={{ background: 'transparent', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
-                    >
+                    <Link href="/chat" className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
-                        <span>Chat</span>
-                    </button>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            Chat
+                            {unreadChatCount > 0 && (
+                                <span style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    background: 'var(--error)',
+                                    borderRadius: '50%',
+                                }} />
+                            )}
+                        </span>
+                    </Link>
                 )}
                 {user && (
                     <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>

@@ -6,7 +6,7 @@ import { z } from 'zod';
 const loginSchema = z.object({
     email: z.string().email(),
     password: z.string(),
-    turnstileToken: z.string().optional(),
+    turnstileToken: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         const data = loginSchema.parse(body);
 
-        // Verify Turnstile token if provided
+        // Verify Turnstile token only if it's provided (meaning Turnstile is enabled)
         if (data.turnstileToken) {
             const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
             const isValid = await verifyTurnstileToken(data.turnstileToken, ip);

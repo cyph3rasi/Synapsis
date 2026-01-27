@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
         participant1Id: sender.id,
         participant2Handle: recipientHandle,
         lastMessageAt: new Date(),
-        lastMessagePreview: '🔒 Encrypted message',
+        lastMessagePreview: 'New message',
       }).returning();
       conversation = newConversation;
     }
@@ -227,10 +227,67 @@ export async function POST(request: NextRequest) {
     await db.update(chatConversations)
       .set({
         lastMessageAt: new Date(),
-        lastMessagePreview: '🔒 Encrypted message',
+        lastMessagePreview: 'New message',
         updatedAt: new Date(),
       })
       .where(eq(chatConversations.id, conversation.id));
+
+    // For LOCAL recipients, create/update their conversation too
+    if (!isRemote && recipientUser) {
+      try {
+        console.log('[Chat Send] Creating reciprocal conversation for local recipient:', recipientUser.handle);
+        
+        // Check if recipient has a conversation with sender
+        let recipientConversation = await db.query.chatConversations.findFirst({
+          where: and(
+            eq(chatConversations.participant1Id, recipientUser.id),
+            eq(chatConversations.participant2Handle, sender.handle)
+          ),
+        });
+
+        if (!recipientConversation) {
+          // Create conversation for recipient
+          const [newRecipientConv] = await db.insert(chatConversations).values({
+            participant1Id: recipientUser.id,
+            participant2Handle: sender.handle,
+            lastMessageAt: new Date(),
+            lastMessagePreview: 'New message',
+          }).returning();
+          recipientConversation = newRecipientConv;
+          console.log('[Chat Send] Created new conversation for recipient');
+        } else {
+          // Update existing conversation
+          await db.update(chatConversations)
+            .set({
+              lastMessageAt: new Date(),
+              lastMessagePreview: 'New message',
+              updatedAt: new Date(),
+            })
+            .where(eq(chatConversations.id, recipientConversation.id));
+          console.log('[Chat Send] Updated existing conversation for recipient');
+        }
+
+        // Insert message into recipient's conversation
+        await db.insert(chatMessages).values({
+          conversationId: recipientConversation.id,
+          senderHandle: sender.handle,
+          senderDisplayName: sender.displayName,
+          senderAvatarUrl: sender.avatarUrl,
+          senderNodeDomain: null,
+          encryptedContent,
+          senderEncryptedContent,
+          senderChatPublicKey: data.senderPublicKey || sender.chatPublicKey,
+          swarmMessageId: `${swarmMessageId}-recipient`, // Make it unique for recipient's copy
+          deliveredAt: new Date(),
+          readAt: null,
+        });
+        
+        console.log('[Chat Send] Reciprocal message created for local recipient');
+      } catch (recipError) {
+        console.error('[Chat Send] Failed to create reciprocal conversation:', recipError);
+        // Don't fail the whole request - sender's message was still saved
+      }
+    }
 
     // If remote, send to their node
     if (isRemote && recipientNodeDomain) {

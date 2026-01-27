@@ -225,9 +225,21 @@ export default function LoginPage() {
 
         try {
             const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            
+            // Only include turnstileToken if Turnstile is enabled (site key exists)
             const body = mode === 'login'
-                ? { email, password, turnstileToken }
-                : { email, password, handle, displayName, turnstileToken };
+                ? { 
+                    email, 
+                    password, 
+                    ...(nodeInfo.turnstileSiteKey ? { turnstileToken } : {})
+                  }
+                : { 
+                    email, 
+                    password, 
+                    handle, 
+                    displayName,
+                    ...(nodeInfo.turnstileSiteKey ? { turnstileToken } : {})
+                  };
 
             const res = await fetch(endpoint, {
                 method: 'POST',

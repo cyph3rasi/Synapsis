@@ -4,7 +4,6 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { ChatWidget } from './ChatWidget';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const { loading } = useAuth();
@@ -17,7 +16,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         pathname?.startsWith('/install');
 
     // Hide right sidebar on chat page for more space
-    const hideRightSidebar = pathname?.startsWith('/chat');
+    const hideRightSidebar = false;
 
     if (loading) {
         return (
@@ -57,7 +56,6 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 {children}
             </main>
             {!hideRightSidebar && <RightSidebar />}
-            <ChatWidget />
         </div>
     );
 }

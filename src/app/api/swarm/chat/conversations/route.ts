@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
             handle: cachedUser.handle,
             displayName: cachedUser.displayName || cachedUser.handle,
             avatarUrl: cachedUser.avatarUrl,
-            chatPublicKey: cachedUser.publicKey, // This is the chat public key
+            chatPublicKey: cachedUser.chatPublicKey, // ECDH key for E2E chat
           };
         }
 
