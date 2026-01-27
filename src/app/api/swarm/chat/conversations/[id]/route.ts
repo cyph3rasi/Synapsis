@@ -43,8 +43,57 @@ export async function DELETE(
       // Delete the entire conversation and all messages (cascade will handle messages)
       await db.delete(chatConversations).where(eq(chatConversations.id, id));
       
-      // TODO: Send a federation message to the other party to delete their copy
-      // This would require implementing a swarm protocol for conversation deletion
+      // Send deletion request to the other party
+      const participant2Handle = conversation.participant2Handle;
+      const isRemote = participant2Handle.includes('@');
+      
+      if (isRemote) {
+        // Extract domain from handle (format: handle@domain)
+        const domain = participant2Handle.split('@')[1];
+        const handle = participant2Handle.split('@')[0];
+        
+        try {
+          const protocol = domain.includes('localhost') ? 'http' : 'https';
+          const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
+          
+          await fetch(`${protocol}://${domain}/api/swarm/chat/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              senderHandle: session.user.handle,
+              senderNodeDomain: nodeDomain,
+              recipientHandle: handle,
+              conversationId: id,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+          
+          console.log(`[Chat Delete] Sent deletion request to ${domain}`);
+        } catch (error) {
+          console.error('[Chat Delete] Failed to notify remote node:', error);
+          // Continue anyway - local deletion succeeded
+        }
+      } else {
+        // Local user - find and delete their conversation too
+        const recipientUser = await db.query.users.findFirst({
+          where: eq(db.users.handle, participant2Handle),
+        });
+        
+        if (recipientUser) {
+          // Find their conversation with us
+          const recipientConversation = await db.query.chatConversations.findFirst({
+            where: and(
+              eq(chatConversations.participant1Id, recipientUser.id),
+              eq(chatConversations.participant2Handle, session.user.handle)
+            ),
+          });
+          
+          if (recipientConversation) {
+            await db.delete(chatConversations).where(eq(chatConversations.id, recipientConversation.id));
+            console.log(`[Chat Delete] Deleted conversation for local user ${participant2Handle}`);
+          }
+        }
+      }
       
       return NextResponse.json({ 
         success: true, 
