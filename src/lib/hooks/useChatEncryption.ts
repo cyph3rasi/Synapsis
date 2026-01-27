@@ -37,7 +37,7 @@ export function useChatEncryption() {
     // First check localStorage
     const publicKey = localStorage.getItem(PUBLIC_KEY_STORAGE);
     const privateKey = localStorage.getItem(PRIVATE_KEY_STORAGE);
-    
+
     if (publicKey && privateKey) {
       setKeys({ publicKey, privateKey });
       setIsReady(true);
@@ -50,7 +50,7 @@ export function useChatEncryption() {
       if (res.ok) {
         const data: ServerKeyData = await res.json();
         setServerKeyData(data);
-        
+
         if (data.hasKeys && data.chatPrivateKeyEncrypted) {
           // Keys exist on server but not locally - need password to restore
           setNeedsPasswordToRestore(true);
@@ -59,7 +59,7 @@ export function useChatEncryption() {
     } catch (error) {
       console.error('Failed to check server keys:', error);
     }
-    
+
     setIsReady(true);
   };
 
@@ -109,27 +109,34 @@ export function useChatEncryption() {
       // Encrypt private key with password for server backup
       const encryptedPrivateKey = await encryptPrivateKeyWithPassword(privateKey, password);
 
-      // Store private key locally (NEVER sent unencrypted to server)
-      localStorage.setItem(PRIVATE_KEY_STORAGE, privateKey);
-      localStorage.setItem(PUBLIC_KEY_STORAGE, publicKey);
-
-      // Register public key + encrypted private key backup with server
+      // Register public key + encrypted private key backup with server FIRST
       const response = await fetch('/api/chat/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           chatPublicKey: publicKey,
           chatPrivateKeyEncrypted: encryptedPrivateKey,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to register chat keys');
+        const error = await response.json();
+        console.error('[GenerateKeys] Server registration failed:', error);
+        throw new Error(error.error || 'Failed to register chat keys');
       }
+
+      // Only save to localStorage AFTER server confirms
+      localStorage.setItem(PRIVATE_KEY_STORAGE, privateKey);
+      localStorage.setItem(PUBLIC_KEY_STORAGE, publicKey);
 
       setKeys({ publicKey, privateKey });
       setNeedsPasswordToRestore(false);
+
+      console.log('[GenerateKeys] Keys generated and registered successfully');
       return { publicKey, privateKey };
+    } catch (error) {
+      console.error('[GenerateKeys] Failed:', error);
+      throw error;
     } finally {
       setIsRegistering(false);
     }
@@ -171,40 +178,51 @@ export function useChatEncryption() {
     encryptedMessage: string,
     senderPublicKey: string
   ): Promise<string> => {
-    if (!keys?.privateKey) {
-      console.error('[Decrypt] No private key available');
-      throw new Error('No chat keys available');
+    try {
+      if (!keys?.privateKey) {
+        console.error('[Decrypt] No private key available');
+        throw new Error('No chat keys available');
+      }
+
+      console.log('[Decrypt] Starting decryption', {
+        hasPrivateKey: !!keys.privateKey,
+        hasSenderPublicKey: !!senderPublicKey,
+        encryptedLength: encryptedMessage.length
+      });
+
+      const myPrivateKey = await importPrivateKey(keys.privateKey);
+      const theirPublicKey = await importPublicKey(senderPublicKey);
+      const sharedKey = await deriveSharedKey(myPrivateKey, theirPublicKey);
+
+      const combined = base64ToBuffer(encryptedMessage);
+
+      if (combined.byteLength < 12) {
+        throw new Error('Message too short (invalid ciphertext)');
+      }
+
+      const iv = combined.slice(0, 12);
+      const ciphertext = combined.slice(12);
+
+      console.log('[Decrypt] Decrypting with shared key', {
+        ivLength: iv.byteLength,
+        ciphertextLength: ciphertext.byteLength
+      });
+
+      const decrypted = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        sharedKey,
+        ciphertext
+      );
+
+      const decoder = new TextDecoder();
+      const result = decoder.decode(decrypted);
+      console.log('[Decrypt] Success:', result.substring(0, 50));
+      return result;
+    } catch (error) {
+      console.error('[Decrypt] Failed:', error);
+      // Return a safe placeholder that won't crash the UI
+      return '[Message cannot be decrypted]';
     }
-
-    console.log('[Decrypt] Starting decryption', {
-      hasPrivateKey: !!keys.privateKey,
-      hasSenderPublicKey: !!senderPublicKey,
-      encryptedLength: encryptedMessage.length
-    });
-
-    const myPrivateKey = await importPrivateKey(keys.privateKey);
-    const theirPublicKey = await importPublicKey(senderPublicKey);
-    const sharedKey = await deriveSharedKey(myPrivateKey, theirPublicKey);
-
-    const combined = base64ToBuffer(encryptedMessage);
-    const iv = combined.slice(0, 12);
-    const ciphertext = combined.slice(12);
-
-    console.log('[Decrypt] Decrypting with shared key', {
-      ivLength: iv.byteLength,
-      ciphertextLength: ciphertext.byteLength
-    });
-
-    const decrypted = await window.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      sharedKey,
-      ciphertext
-    );
-
-    const decoder = new TextDecoder();
-    const result = decoder.decode(decrypted);
-    console.log('[Decrypt] Success:', result.substring(0, 50));
-    return result;
   }, [keys]);
 
   // Clear keys (on logout)
@@ -236,7 +254,7 @@ async function encryptPrivateKeyWithPassword(privateKey: string, password: strin
   const encoder = new TextEncoder();
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  
+
   // Derive key from password using PBKDF2
   const passwordKey = await window.crypto.subtle.importKey(
     'raw',
@@ -245,7 +263,7 @@ async function encryptPrivateKeyWithPassword(privateKey: string, password: strin
     false,
     ['deriveKey']
   );
-  
+
   const aesKey = await window.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -258,14 +276,14 @@ async function encryptPrivateKeyWithPassword(privateKey: string, password: strin
     false,
     ['encrypt']
   );
-  
+
   // Encrypt the private key
   const ciphertext = await window.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     aesKey,
     encoder.encode(privateKey)
   );
-  
+
   // Return as JSON with all components
   return JSON.stringify({
     salt: bufferToBase64(salt.buffer),
@@ -278,7 +296,7 @@ async function decryptPrivateKeyWithPassword(encryptedData: string, password: st
   const { salt, iv, ciphertext } = JSON.parse(encryptedData);
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-  
+
   // Derive key from password
   const passwordKey = await window.crypto.subtle.importKey(
     'raw',
@@ -287,7 +305,7 @@ async function decryptPrivateKeyWithPassword(encryptedData: string, password: st
     false,
     ['deriveKey']
   );
-  
+
   const aesKey = await window.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
@@ -300,14 +318,14 @@ async function decryptPrivateKeyWithPassword(encryptedData: string, password: st
     false,
     ['decrypt']
   );
-  
+
   // Decrypt
   const decrypted = await window.crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: base64ToBuffer(iv) },
     aesKey,
     base64ToBuffer(ciphertext)
   );
-  
+
   return decoder.decode(decrypted);
 }
 
@@ -364,10 +382,35 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 function base64ToBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  // Gracefull handle null/undefined
+  if (!base64) return new ArrayBuffer(0);
+
+  // Check for JSON (legacy format)
+  if (base64.trim().startsWith('{')) {
+    console.warn('[base64ToBuffer] Detected JSON instead of Base64, returning empty buffer');
+    throw new Error('Invalid message format: JSON detected');
   }
-  return bytes.buffer;
+
+  // Clean the string: 
+  // 1. Remove newlines/tabs (formatting)
+  // 2. Replace spaces with '+' (common URL decoding error where + becomes space)
+  // 3. Handle URL-safe chars (- -> +, _ -> /)
+  const cleaned = base64.replace(/[\n\r\t]/g, '')
+    .replace(/ /g, '+')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  try {
+    const binary = atob(cleaned);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (e) {
+    console.error('[base64ToBuffer] Failed to decode base64:', e);
+    // Return empty buffer or throw specific error?
+    // Throwing allows decryptMessage to catch and return placeholder
+    throw new Error(`Failed to decode base64: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }

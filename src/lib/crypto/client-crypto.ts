@@ -147,22 +147,32 @@ export async function decryptMessage(
   myPrivateKeyBase64: string,
   theirPublicKeyBase64: string
 ): Promise<string> {
-  const myPrivateKey = await importPrivateKey(myPrivateKeyBase64);
-  const theirPublicKey = await importPublicKey(theirPublicKeyBase64);
-  const sharedKey = await deriveSharedKey(myPrivateKey, theirPublicKey);
+  try {
+    const myPrivateKey = await importPrivateKey(myPrivateKeyBase64);
+    const theirPublicKey = await importPublicKey(theirPublicKeyBase64);
+    const sharedKey = await deriveSharedKey(myPrivateKey, theirPublicKey);
 
-  const combined = base64ToBuffer(encryptedMessage);
-  const iv = combined.slice(0, 12);
-  const ciphertext = combined.slice(12);
+    const combined = base64ToBuffer(encryptedMessage);
 
-  const decrypted = await window.crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    sharedKey,
-    ciphertext
-  );
+    if (combined.byteLength < 12) {
+      throw new Error('Message too short');
+    }
 
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      sharedKey,
+      ciphertext
+    );
+
+    const decoder = new TextDecoder();
+    return decoder.decode(decrypted);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    return '[Message cannot be decrypted]';
+  }
 }
 
 // Utility functions
@@ -176,10 +186,33 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 function base64ToBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  // Gracefull handle null/undefined
+  if (!base64) return new ArrayBuffer(0);
+
+  // Check for JSON (legacy format)
+  if (base64.trim().startsWith('{')) {
+    console.warn('[base64ToBuffer] Detected JSON instead of Base64, returning empty buffer');
+    throw new Error('Invalid message format: JSON detected');
   }
-  return bytes.buffer;
+
+  // Clean the string: 
+  // 1. Remove newlines/tabs (formatting)
+  // 2. Replace spaces with '+' (common URL decoding error where + becomes space)
+  // 3. Handle URL-safe chars (- -> +, _ -> /)
+  const cleaned = base64.replace(/[\n\r\t]/g, '')
+    .replace(/ /g, '+')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  try {
+    const binary = atob(cleaned);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (e) {
+    console.error('[base64ToBuffer] Failed to decode base64:', e);
+    throw new Error(`Failed to decode base64: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }

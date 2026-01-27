@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { ChatWidget } from './ChatWidget';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     const { loading } = useAuth();
@@ -50,12 +51,13 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className={`layout ${hideRightSidebar ? 'hide-right-sidebar' : ''}`}>
+        <div className="layout">
             <Sidebar />
             <main className="main">
                 {children}
             </main>
             {!hideRightSidebar && <RightSidebar />}
+            <ChatWidget />
         </div>
     );
 }

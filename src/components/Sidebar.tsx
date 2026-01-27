@@ -31,14 +31,14 @@ export function Sidebar() {
     // Fetch unread notification count
     useEffect(() => {
         if (!user) return;
-        
+
         const fetchUnread = () => {
             fetch('/api/notifications?unread=true&limit=50')
                 .then(res => res.json())
                 .then(data => {
                     setUnreadCount(data.notifications?.length || 0);
                 })
-                .catch(() => {});
+                .catch(() => { });
         };
 
         fetchUnread();
@@ -52,7 +52,7 @@ export function Sidebar() {
 
     const handleLogout = async () => {
         if (loggingOut) return;
-        
+
         setLoggingOut(true);
         try {
             await fetch('/api/auth/logout', { method: 'POST' });
@@ -101,12 +101,16 @@ export function Sidebar() {
                     </Link>
                 )}
                 {user && (
-                    <Link href="/chat" className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}>
+                    <button
+                        onClick={() => window.dispatchEvent(new Event('open-chat-widget'))}
+                        className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}
+                        style={{ background: 'transparent', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+                    >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
                         <span>Chat</span>
-                    </Link>
+                    </button>
                 )}
                 {user && (
                     <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>
@@ -163,8 +167,8 @@ export function Sidebar() {
                         onClick={handleLogout}
                         disabled={loggingOut}
                         className="btn btn-ghost"
-                        style={{ 
-                            width: '100%', 
+                        style={{
+                            width: '100%',
                             justifyContent: 'flex-start',
                             gap: '12px',
                             padding: '10px 12px',

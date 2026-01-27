@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid input', details: parseResult.error.issues }, { status: 400 });
     }
     const data = parseResult.data;
-    console.log('[Chat Send] Input validated. Recipient:', data.recipientHandle);
+    console.log('[Chat Send] Input validated. Recipient:', data.recipientHandle, 'Has senderPublicKey:', !!data.senderPublicKey);
 
     // Get sender info
     const sender = await db.query.users.findFirst({
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
     const swarmMessageId = `swarm:${nodeDomain}:${messageId}`;
 
-    console.log('[Chat Send] Inserting message into DB');
+    console.log('[Chat Send] Inserting message into DB, senderPublicKey from client:', !!data.senderPublicKey, 'from DB:', !!sender.chatPublicKey);
     const [newMessage] = await db.insert(chatMessages).values({
       conversationId: conversation.id,
       senderHandle: sender.handle,
@@ -216,7 +216,8 @@ export async function POST(request: NextRequest) {
       senderNodeDomain: null, // Local sender
       encryptedContent,
       senderEncryptedContent,
-      senderChatPublicKey: data.senderPublicKey || sender.chatPublicKey, // For E2E decryption
+      // Use client-provided key first, fall back to database
+      senderChatPublicKey: data.senderPublicKey || sender.chatPublicKey,
       swarmMessageId,
       deliveredAt: isRemote ? null : new Date(), // Delivered immediately if local
       readAt: null,
