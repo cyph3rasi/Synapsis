@@ -257,17 +257,17 @@ async function deliverSwarmInteraction(
   payload: unknown
 ): Promise<SwarmInteractionResponse> {
   try {
-    const baseUrl = targetDomain.startsWith('http') 
-      ? targetDomain 
+    const baseUrl = targetDomain.startsWith('http')
+      ? targetDomain
       : targetDomain.startsWith('localhost') || targetDomain.startsWith('127.0.0.1')
         ? `http://${targetDomain}`
         : `https://${targetDomain}`;
-    
+
     const url = `${baseUrl}${endpoint}`;
-    
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -277,9 +277,9 @@ async function deliverSwarmInteraction(
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       return {
@@ -287,7 +287,7 @@ async function deliverSwarmInteraction(
         error: `HTTP ${response.status}: ${errorText}`,
       };
     }
-    
+
     const data = await response.json();
     return {
       success: true,
@@ -318,7 +318,9 @@ export interface SwarmUserProfile {
   postsCount: number;
   createdAt: string;
   isBot?: boolean;
+  botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
+  chatPublicKey?: string;
 }
 
 export interface SwarmUserPost {
@@ -357,23 +359,23 @@ export async function fetchSwarmUserProfile(
       : domain.startsWith('localhost') || domain.startsWith('127.0.0.1')
         ? `http://${domain}`
         : `https://${domain}`;
-    
+
     const url = `${baseUrl}/api/swarm/users/${handle}?limit=${postsLimit}`;
-    
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    
+
     const response = await fetch(url, {
       headers: { 'Accept': 'application/json' },
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (!response.ok) {
       return null;
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error(`[Swarm] Failed to fetch profile for ${handle}@${domain}:`, error);
@@ -393,7 +395,7 @@ export async function cacheSwarmUserPosts(
 ): Promise<{ cached: number; skipped: number }> {
   try {
     const profileData = await fetchSwarmUserProfile(handle, domain, limit);
-    
+
     if (!profileData || !profileData.posts) {
       return { cached: 0, skipped: 0 };
     }
@@ -464,23 +466,23 @@ export async function fetchSwarmPost(
       : domain.startsWith('localhost') || domain.startsWith('127.0.0.1')
         ? `http://${domain}`
         : `https://${domain}`;
-    
+
     const url = `${baseUrl}/api/swarm/posts/${postId}`;
-    
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    
+
     const response = await fetch(url, {
       headers: { 'Accept': 'application/json' },
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (!response.ok) {
       return null;
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error(`[Swarm] Failed to fetch post ${postId} from ${domain}:`, error);
@@ -500,7 +502,7 @@ export function extractMentions(content: string): { handle: string; domain: stri
   // Match @handle or @handle@domain patterns
   const mentionRegex = /@([a-zA-Z0-9_]+)(?:@([a-zA-Z0-9.-]+))?/g;
   const mentions: { handle: string; domain: string | null }[] = [];
-  
+
   let match;
   while ((match = mentionRegex.exec(content)) !== null) {
     mentions.push({
@@ -508,7 +510,7 @@ export function extractMentions(content: string): { handle: string; domain: stri
       domain: match[2]?.toLowerCase() || null,
     });
   }
-  
+
   return mentions;
 }
 
@@ -528,15 +530,15 @@ export async function deliverSwarmMentions(
   const mentions = extractMentions(content);
   let delivered = 0;
   let failed = 0;
-  
+
   for (const mention of mentions) {
     // Skip local mentions (no domain)
     if (!mention.domain) continue;
-    
+
     // Check if it's a swarm node
     const isSwarm = await isSwarmNode(mention.domain);
     if (!isSwarm) continue;
-    
+
     // Deliver the mention
     const result = await deliverSwarmMention(mention.domain, {
       mentionedHandle: mention.handle,
@@ -551,14 +553,14 @@ export async function deliverSwarmMentions(
         timestamp: new Date().toISOString(),
       },
     });
-    
+
     if (result.success) {
       delivered++;
     } else {
       failed++;
     }
   }
-  
+
   return { delivered, failed };
 }
 
@@ -619,7 +621,7 @@ export async function getSwarmFollowerDomains(userId: string): Promise<string[]>
 
     // Filter for swarm followers (actorUrl starts with swarm://)
     const swarmFollowers = followers.filter(f => f.actorUrl.startsWith('swarm://'));
-    
+
     // Extract unique domains
     const domains = swarmFollowers.map(f => {
       const match = f.actorUrl.match(/^swarm:\/\/([^\/]+)/);
@@ -660,7 +662,7 @@ export async function deliverPostToSwarmFollowers(
   nodeDomain: string
 ): Promise<{ delivered: number; failed: number }> {
   const swarmDomains = await getSwarmFollowerDomains(userId);
-  
+
   if (swarmDomains.length === 0) {
     return { delivered: 0, failed: 0 };
   }

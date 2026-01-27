@@ -22,6 +22,7 @@ export interface SwarmUserProfile {
   isBot?: boolean;
   botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
+  chatPublicKey?: string;
 }
 
 export interface SwarmUserPost {
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       isBot: user.isBot || undefined,
       botOwnerHandle: user.isBot && user.botOwner ? user.botOwner.handle : undefined,
       nodeDomain,
+      chatPublicKey: user.chatPublicKey || undefined,
     };
 
     // Get user's recent posts
@@ -120,7 +122,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // Fetch media for each post
     const swarmPosts: SwarmUserPost[] = [];
-    
+
     for (const post of userPosts) {
       const postMedia = await db
         .select({ url: media.url, mimeType: media.mimeType, altText: media.altText })

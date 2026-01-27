@@ -35,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
 
         // If user exists but is a remote placeholder (handle contains @), fetch fresh data from remote
         const isRemotePlaceholder = user && cleanHandle.includes('@');
-        
+
         if (!user || isRemotePlaceholder) {
             if (remoteHandle && remoteDomain) {
                 // Only fetch from swarm nodes
@@ -44,7 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
                     const profileData = await fetchSwarmUserProfile(remoteHandle, remoteDomain, 0);
                     if (profileData?.profile) {
                         const profile = profileData.profile;
-                        
+
                         return NextResponse.json({
                             user: {
                                 id: `swarm:${remoteDomain}:${profile.handle}`,
@@ -62,11 +62,12 @@ export async function GET(request: Request, context: RouteContext) {
                                 isSwarm: true,
                                 nodeDomain: remoteDomain,
                                 isBot: profile.isBot || false,
+                                chatPublicKey: profile.chatPublicKey,
                             }
                         });
                     }
                 }
-                
+
                 // Non-swarm nodes are no longer supported
                 return NextResponse.json({ error: 'User not found. Only Synapsis swarm nodes are supported.' }, { status: 404 });
             }
@@ -97,7 +98,7 @@ export async function GET(request: Request, context: RouteContext) {
             publicKey: user.publicKey, // RSA key for signing
             chatPublicKey: user.chatPublicKey, // ECDH key for E2E chat
         };
-        
+
         // If this is a bot, include owner info
         if (user.isBot && user.botOwnerId) {
             const owner = await db.query.users.findFirst({
@@ -112,7 +113,7 @@ export async function GET(request: Request, context: RouteContext) {
                 };
             }
         }
-        
+
         return NextResponse.json({ user: userResponse });
     } catch (error) {
         console.error('Get user error:', error);
