@@ -11,7 +11,7 @@ import { getSession } from '@/lib/auth';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!db) {
@@ -23,13 +23,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const deleteFor = searchParams.get('deleteFor'); // 'self' or 'both'
 
     // Verify the conversation belongs to this user
     const conversation = await db.query.chatConversations.findFirst({
       where: and(
-        eq(chatConversations.id, params.id),
+        eq(chatConversations.id, id),
         eq(chatConversations.participant1Id, session.user.id)
       ),
     });
@@ -40,7 +41,7 @@ export async function DELETE(
 
     if (deleteFor === 'both') {
       // Delete the entire conversation and all messages (cascade will handle messages)
-      await db.delete(chatConversations).where(eq(chatConversations.id, params.id));
+      await db.delete(chatConversations).where(eq(chatConversations.id, id));
       
       // TODO: Send a federation message to the other party to delete their copy
       // This would require implementing a swarm protocol for conversation deletion
@@ -52,7 +53,7 @@ export async function DELETE(
     } else {
       // Delete for self only - just delete the conversation record
       // The other party will still have their copy
-      await db.delete(chatConversations).where(eq(chatConversations.id, params.id));
+      await db.delete(chatConversations).where(eq(chatConversations.id, id));
       
       return NextResponse.json({ 
         success: true, 
