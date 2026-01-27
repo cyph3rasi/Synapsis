@@ -59,7 +59,59 @@ export default function ChatPage() {
 
   const fetchRecipientKey = async (handle: string) => { try { const res = await fetch(`/api/users/${encodeURIComponent(handle)}`); const data = await res.json(); setRecipientPublicKey(data.user?.chatPublicKey || null); } catch { setRecipientPublicKey(null); } };
   const loadConversations = async () => { try { const res = await fetch('/api/swarm/chat/conversations'); const data = await res.json(); setConversations(data.conversations || []); } catch { } finally { setLoading(false); } };
-  const loadMessages = async (conversationId: string) => { try { const res = await fetch(`/api/swarm/chat/messages?conversationId=${conversationId}`); const data = await res.json(); const decrypted = await Promise.all((data.messages || []).map(async (msg: Message) => { try { const chatPartnerKey = selectedConversation?.participant2?.chatPublicKey || recipientPublicKey; const key = msg.isSentByMe ? chatPartnerKey : (msg.senderPublicKey || chatPartnerKey); if (key && msg.encryptedContent) return { ...msg, decryptedContent: await decryptMessage(msg.encryptedContent, key) }; } catch { } return { ...msg, decryptedContent: '[Unable to decrypt]' }; })); setMessages(decrypted); } catch { } };
+  const loadMessages = async (conversationId: string) => { 
+    try { 
+      // Ensure we have the recipient's key before trying to decrypt
+      let chatPartnerKey = selectedConversation?.participant2?.chatPublicKey || recipientPublicKey;
+      
+      // If we don't have the key yet, fetch it
+      if (!chatPartnerKey && selectedConversation?.participant2?.handle) {
+        try {
+          const userRes = await fetch(`/api/users/${encodeURIComponent(selectedConversation.participant2.handle)}`);
+          const userData = await userRes.json();
+          chatPartnerKey = userData.user?.chatPublicKey || null;
+          if (chatPartnerKey) setRecipientPublicKey(chatPartnerKey);
+        } catch {}
+      }
+      
+      const res = await fetch(`/api/swarm/chat/messages?conversationId=${conversationId}`); 
+      const data = await res.json(); 
+      
+      const decrypted = await Promise.all((data.messages || []).map(async (msg: Message) => { 
+        try { 
+          // Check if this is an E2E encrypted message (has senderPublicKey)
+          // or a legacy RSA message (no senderPublicKey)
+          const isE2E = !!msg.senderPublicKey;
+          
+          if (!isE2E) {
+            // Legacy RSA message - can't decrypt client-side
+            return { ...msg, decryptedContent: '[Legacy encrypted message]' };
+          }
+          
+          // ECDH: Both parties derive same shared secret
+          // For messages I sent: use recipient's public key (chatPartnerKey)
+          // For messages I received: use sender's public key
+          const otherPartyKey = msg.isSentByMe ? chatPartnerKey : msg.senderPublicKey;
+          
+          if (!otherPartyKey) {
+            console.warn('Missing key for decryption. isSentByMe:', msg.isSentByMe, 'chatPartnerKey:', !!chatPartnerKey);
+            return { ...msg, decryptedContent: '[Missing decryption key]' };
+          }
+          
+          if (msg.encryptedContent) {
+            const decrypted = await decryptMessage(msg.encryptedContent, otherPartyKey);
+            return { ...msg, decryptedContent: decrypted };
+          }
+        } catch (err) { 
+          console.error('Decrypt error:', err, 'msg:', msg.id, 'isSentByMe:', msg.isSentByMe);
+        } 
+        return { ...msg, decryptedContent: '[Unable to decrypt]' }; 
+      })); 
+      setMessages(decrypted); 
+    } catch (err) { 
+      console.error('Load messages error:', err);
+    } 
+  };
   const markAsRead = async (conversationId: string) => { try { await fetch('/api/swarm/chat/messages', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversationId }) }); setConversations(prev => prev.map(c => c.id === conversationId ? { ...c, unreadCount: 0 } : c)); } catch { } };
   const sendMessage = async (e: React.FormEvent) => { e.preventDefault(); if (!newMessage.trim() || !selectedConversation || !recipientPublicKey) return; setSending(true); try { const encrypted = await encryptMessage(newMessage, recipientPublicKey); const res = await fetch('/api/swarm/chat/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientHandle: selectedConversation.participant2.handle, encryptedContent: encrypted, senderPublicKey: keys?.publicKey }) }); if (res.ok) { setMessages(prev => [...prev, { id: crypto.randomUUID(), senderHandle: user?.handle || '', encryptedContent: encrypted, decryptedContent: newMessage, isSentByMe: true, createdAt: new Date().toISOString() }]); setNewMessage(''); loadConversations(); } } catch { } finally { setSending(false); } };
   const startNewChat = async (e: React.FormEvent) => { e.preventDefault(); if (!newChatHandle.trim()) return; setSending(true); try { const cleanHandle = newChatHandle.replace(/^@/, ''); const res = await fetch(`/api/users/${encodeURIComponent(cleanHandle)}`); const data = await res.json(); if (!data.user?.chatPublicKey) { alert('This user has not enabled encrypted chat yet.'); return; } const encrypted = await encryptMessage('Hey! 👋', data.user.chatPublicKey); const sendRes = await fetch('/api/swarm/chat/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientHandle: cleanHandle, encryptedContent: encrypted, senderPublicKey: keys?.publicKey }) }); if (sendRes.ok) { setShowNewChat(false); setNewChatHandle(''); loadConversations(); } } catch { } finally { setSending(false); } };
