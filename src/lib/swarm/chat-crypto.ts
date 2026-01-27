@@ -1,27 +1,58 @@
 /**
  * Swarm Chat Cryptography
  * 
- * End-to-end encryption for chat messages using public key cryptography.
+ * End-to-end encryption for chat messages using hybrid encryption:
+ * - AES-256-GCM for message encryption (fast, no size limit)
+ * - RSA-OAEP for encrypting the AES key (secure key exchange)
  */
 
 import crypto from 'crypto';
 
+interface EncryptedPayload {
+  encryptedKey: string;  // RSA-encrypted AES key (base64)
+  iv: string;            // AES initialization vector (base64)
+  ciphertext: string;    // AES-encrypted message (base64)
+  authTag: string;       // GCM authentication tag (base64)
+}
+
 /**
- * Encrypt a message using the recipient's public key
+ * Encrypt a message using hybrid encryption (AES + RSA)
  */
 export function encryptMessage(message: string, recipientPublicKey: string): string {
   try {
-    // Use RSA-OAEP for encryption
-    const encrypted = crypto.publicEncrypt(
+    // Generate a random AES-256 key
+    const aesKey = crypto.randomBytes(32);
+    
+    // Generate a random IV for AES-GCM
+    const iv = crypto.randomBytes(12);
+    
+    // Encrypt the message with AES-256-GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(message, 'utf8'),
+      cipher.final()
+    ]);
+    const authTag = cipher.getAuthTag();
+    
+    // Encrypt the AES key with RSA-OAEP
+    const encryptedKey = crypto.publicEncrypt(
       {
         key: recipientPublicKey,
         padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
         oaepHash: 'sha256',
       },
-      Buffer.from(message, 'utf8')
+      aesKey
     );
     
-    return encrypted.toString('base64');
+    // Package everything together
+    const payload: EncryptedPayload = {
+      encryptedKey: encryptedKey.toString('base64'),
+      iv: iv.toString('base64'),
+      ciphertext: encrypted.toString('base64'),
+      authTag: authTag.toString('base64'),
+    };
+    
+    return JSON.stringify(payload);
   } catch (error) {
     console.error('Failed to encrypt message:', error);
     throw new Error('Encryption failed');
@@ -29,18 +60,35 @@ export function encryptMessage(message: string, recipientPublicKey: string): str
 }
 
 /**
- * Decrypt a message using the recipient's private key
+ * Decrypt a message using hybrid encryption (AES + RSA)
  */
 export function decryptMessage(encryptedMessage: string, privateKey: string): string {
   try {
-    const decrypted = crypto.privateDecrypt(
+    // Parse the encrypted payload
+    const payload: EncryptedPayload = JSON.parse(encryptedMessage);
+    
+    // Decrypt the AES key with RSA
+    const aesKey = crypto.privateDecrypt(
       {
         key: privateKey,
         padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
         oaepHash: 'sha256',
       },
-      Buffer.from(encryptedMessage, 'base64')
+      Buffer.from(payload.encryptedKey, 'base64')
     );
+    
+    // Decrypt the message with AES-256-GCM
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      aesKey,
+      Buffer.from(payload.iv, 'base64')
+    );
+    decipher.setAuthTag(Buffer.from(payload.authTag, 'base64'));
+    
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(payload.ciphertext, 'base64')),
+      decipher.final()
+    ]);
     
     return decrypted.toString('utf8');
   } catch (error) {
