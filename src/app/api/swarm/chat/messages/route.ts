@@ -71,11 +71,30 @@ export async function GET(request: NextRequest) {
     
     console.log('[Messages API] Fetching recipient key for:', recipientHandle);
     
-    // Fetch recipient's chat public key
-    const recipientUser = await db.query.users.findFirst({
-      where: eq(users.handle, recipientHandle),
-    });
-    recipientPublicKey = recipientUser?.chatPublicKey || null;
+    // Check if this is a remote user (has @domain)
+    const isRemote = recipientHandle.includes('@');
+    
+    if (isRemote) {
+      // Remote user - fetch from their node
+      const [handle, domain] = recipientHandle.split('@');
+      try {
+        const protocol = domain.includes('localhost') ? 'http' : 'https';
+        const response = await fetch(`${protocol}://${domain}/api/users/${handle}`);
+        if (response.ok) {
+          const data = await response.json();
+          recipientPublicKey = data.user?.chatPublicKey || null;
+          console.log('[Messages API] Fetched remote recipient key:', !!recipientPublicKey);
+        }
+      } catch (error) {
+        console.error('[Messages API] Failed to fetch remote recipient key:', error);
+      }
+    } else {
+      // Local user
+      const recipientUser = await db.query.users.findFirst({
+        where: eq(users.handle, recipientHandle),
+      });
+      recipientPublicKey = recipientUser?.chatPublicKey || null;
+    }
     
     console.log('[Messages API] Recipient public key found:', !!recipientPublicKey);
 
