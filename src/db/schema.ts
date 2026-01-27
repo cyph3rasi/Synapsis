@@ -42,6 +42,9 @@ export const users = pgTable('users', {
   headerUrl: text('header_url'),
   privateKeyEncrypted: text('private_key_encrypted'), // For cryptographic signing
   publicKey: text('public_key').notNull(),
+  // E2E Chat keys (ECDH) - separate from signing keys
+  chatPublicKey: text('chat_public_key'), // ECDH public key for chat encryption
+  chatPrivateKeyEncrypted: text('chat_private_key_encrypted'), // Encrypted with user's password
   nodeId: uuid('node_id').references(() => nodes.id),
   // Bot-related fields
   isBot: boolean('is_bot').default(false).notNull(),
@@ -908,6 +911,7 @@ export const chatConversationsRelations = relations(chatConversations, ({ one, m
 /**
  * Individual chat messages within conversations.
  * Messages are encrypted end-to-end using recipient's public key.
+ * Sender also gets a copy encrypted with their own public key.
  */
 export const chatMessages = pgTable('chat_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -921,8 +925,12 @@ export const chatMessages = pgTable('chat_messages', {
   senderAvatarUrl: text('sender_avatar_url'),
   senderNodeDomain: text('sender_node_domain'), // null if local
   
-  // Message content (encrypted for recipient)
+  // Message content (encrypted for recipient with their public key)
   encryptedContent: text('encrypted_content').notNull(),
+  // Sender's copy (encrypted with sender's public key so they can read their own messages)
+  senderEncryptedContent: text('sender_encrypted_content'),
+  // Sender's ECDH public key (for E2E decryption by recipient)
+  senderChatPublicKey: text('sender_chat_public_key'),
   
   // Swarm sync info
   swarmMessageId: text('swarm_message_id').unique(), // Format: swarm:domain:uuid

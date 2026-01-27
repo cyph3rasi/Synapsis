@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { generateKeyPair } from '@/lib/crypto/keys';
+import { encryptPrivateKey, serializeEncryptedKey } from '@/lib/crypto/private-key';
 import { cookies } from 'next/headers';
 import { upsertHandleEntries } from '@/lib/federation/handles';
 
@@ -149,6 +150,9 @@ export async function registerUser(
     // Generate cryptographic keys
     const { publicKey, privateKey } = await generateKeyPair();
 
+    // Encrypt the private key with user's password before storing
+    const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
+
     // Create the user
     const did = generateDID();
     const passwordHash = await hashPassword(password);
@@ -160,7 +164,7 @@ export async function registerUser(
         passwordHash,
         displayName: displayName || handle,
         publicKey,
-        privateKeyEncrypted: privateKey, // TODO: Encrypt with user's password
+        privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey),
     }).returning();
 
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
@@ -195,5 +199,31 @@ export async function authenticateUser(
         throw new Error('Invalid email or password');
     }
 
+    // Check if private key needs to be encrypted (migration from plaintext)
+    if (user.privateKeyEncrypted && !isEncryptedPrivateKeyStored(user.privateKeyEncrypted)) {
+        // Private key is stored in plaintext - encrypt it now
+        console.log(`[Auth] Encrypting private key for user ${user.handle}`);
+        const encryptedPrivateKey = encryptPrivateKey(user.privateKeyEncrypted, password);
+        await db.update(users)
+            .set({ privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey) })
+            .where(eq(users.id, user.id));
+    }
+
     return user;
+}
+
+/**
+ * Check if stored private key is encrypted (vs plaintext PEM)
+ */
+function isEncryptedPrivateKeyStored(value: string): boolean {
+    if (!value) return false;
+    // Plaintext PEM keys start with -----BEGIN
+    if (value.startsWith('-----BEGIN')) return false;
+    // Try to parse as JSON
+    try {
+        const parsed = JSON.parse(value);
+        return parsed.encrypted && parsed.salt && parsed.iv;
+    } catch {
+        return false;
+    }
 }

@@ -71,10 +71,23 @@ export async function GET(request: NextRequest) {
     const messagesWithDecryption = messages.map((msg) => {
       const isSentByMe = msg.senderHandle === session.user.handle;
       
+      // Return the appropriate encrypted content:
+      // - For sent messages: use senderEncryptedContent (encrypted with sender's key)
+      // - For received messages: use encryptedContent (encrypted with recipient's key)
+      const encryptedForViewer = isSentByMe 
+        ? (msg.senderEncryptedContent || msg.encryptedContent)
+        : msg.encryptedContent;
+      
       return {
-        ...msg,
-        // Only include encrypted content - client will decrypt
-        content: undefined, // Remove plaintext
+        id: msg.id,
+        senderHandle: msg.senderHandle,
+        senderDisplayName: msg.senderDisplayName,
+        senderAvatarUrl: msg.senderAvatarUrl,
+        senderPublicKey: msg.senderChatPublicKey, // For E2E decryption
+        encryptedContent: encryptedForViewer,
+        deliveredAt: msg.deliveredAt,
+        readAt: msg.readAt,
+        createdAt: msg.createdAt,
         isSentByMe,
       };
     });

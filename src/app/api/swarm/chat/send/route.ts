@@ -14,7 +14,13 @@ import type { SwarmChatMessagePayload } from '@/lib/swarm/chat-types';
 
 const sendMessageSchema = z.object({
   recipientHandle: z.string(),
-  content: z.string().min(1).max(5000),
+  // For E2E encryption: client sends pre-encrypted content
+  encryptedContent: z.string().optional(),
+  senderPublicKey: z.string().optional(), // ECDH public key for decryption
+  // Legacy: server-side encryption (will be removed)
+  content: z.string().min(1).max(5000).optional(),
+}).refine(data => data.encryptedContent || data.content, {
+  message: 'Either encryptedContent or content is required',
 });
 
 export async function POST(request: NextRequest) {
@@ -152,14 +158,29 @@ export async function POST(request: NextRequest) {
       recipientPublicKey = recipientUser.publicKey;
     }
 
-    // Encrypt the message with recipient's public key
-    console.log('[Chat Send] Encrypting message...');
+    // Handle encryption - either client-side (E2E) or server-side (legacy)
     let encryptedContent: string;
-    try {
-      encryptedContent = encryptMessage(data.content, recipientPublicKey);
-    } catch (encError) {
-      console.error('[Chat Send] Encryption failed:', encError);
-      return NextResponse.json({ error: 'Encryption failed' }, { status: 500 });
+    let senderEncryptedContent: string | null = null;
+    
+    if (data.encryptedContent) {
+      // E2E mode: client already encrypted the message
+      // Server cannot read the content - this is true E2E encryption
+      console.log('[Chat Send] Using client-side E2E encryption');
+      encryptedContent = data.encryptedContent;
+      // Store sender's public key so recipient can decrypt
+      // Note: senderEncryptedContent not needed in E2E mode - client stores locally
+    } else if (data.content) {
+      // Legacy mode: server-side encryption (for backwards compatibility)
+      console.log('[Chat Send] Using server-side encryption (legacy)');
+      try {
+        encryptedContent = encryptMessage(data.content, recipientPublicKey);
+        senderEncryptedContent = encryptMessage(data.content, sender.publicKey);
+      } catch (encError) {
+        console.error('[Chat Send] Encryption failed:', encError);
+        return NextResponse.json({ error: 'Encryption failed' }, { status: 500 });
+      }
+    } else {
+      return NextResponse.json({ error: 'No message content provided' }, { status: 400 });
     }
 
     // Get or create conversation
@@ -176,7 +197,7 @@ export async function POST(request: NextRequest) {
         participant1Id: sender.id,
         participant2Handle: recipientHandle,
         lastMessageAt: new Date(),
-        lastMessagePreview: data.content.substring(0, 100),
+        lastMessagePreview: '🔒 Encrypted message',
       }).returning();
       conversation = newConversation;
     }
@@ -194,6 +215,8 @@ export async function POST(request: NextRequest) {
       senderAvatarUrl: sender.avatarUrl,
       senderNodeDomain: null, // Local sender
       encryptedContent,
+      senderEncryptedContent,
+      senderChatPublicKey: data.senderPublicKey || sender.chatPublicKey, // For E2E decryption
       swarmMessageId,
       deliveredAt: isRemote ? null : new Date(), // Delivered immediately if local
       readAt: null,
@@ -203,7 +226,7 @@ export async function POST(request: NextRequest) {
     await db.update(chatConversations)
       .set({
         lastMessageAt: new Date(),
-        lastMessagePreview: data.content.substring(0, 100),
+        lastMessagePreview: '🔒 Encrypted message',
         updatedAt: new Date(),
       })
       .where(eq(chatConversations.id, conversation.id));
