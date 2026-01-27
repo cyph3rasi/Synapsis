@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useChatEncryption } from '@/lib/hooks/useChatEncryption';
-import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { useRouter } from 'next/navigation';
 
@@ -50,6 +50,9 @@ export default function ChatPage() {
     const [sending, setSending] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [recipientPublicKey, setRecipientPublicKey] = useState<string | null>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Password/Key State
     const [showPasswordInput, setShowPasswordInput] = useState(false);
@@ -324,6 +327,36 @@ export default function ChatPage() {
         }
     };
 
+    const handleDeleteConversation = async (deleteFor: 'self' | 'both') => {
+        if (!conversationToDelete) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/swarm/chat/conversations/${conversationToDelete.id}?deleteFor=${deleteFor}`, {
+                method: 'DELETE',
+            });
+            
+            if (res.ok) {
+                // Remove from local state
+                setConversations(prev => prev.filter(c => c.id !== conversationToDelete.id));
+                
+                // If we're viewing this conversation, go back to list
+                if (selectedConversation?.id === conversationToDelete.id) {
+                    setSelectedConversation(null);
+                }
+                
+                setShowDeleteModal(false);
+                setConversationToDelete(null);
+            } else {
+                alert('Failed to delete conversation');
+            }
+        } catch (err) {
+            console.error('Delete error:', err);
+            alert('Failed to delete conversation');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const filteredConversations = conversations.filter((conv) =>
         conv.participant2.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         conv.participant2.handle.toLowerCase().includes(searchQuery.toLowerCase())
@@ -497,6 +530,35 @@ export default function ChatPage() {
                                 {formatFullHandle(selectedConversation.participant2.handle)}
                             </div>
                         </div>
+                        <button
+                            onClick={() => {
+                                setConversationToDelete(selectedConversation);
+                                setShowDeleteModal(true);
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '8px',
+                                cursor: 'pointer',
+                                color: 'var(--foreground-tertiary)',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'var(--background-secondary)';
+                                e.currentTarget.style.color = 'var(--error)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'none';
+                                e.currentTarget.style.color = 'var(--foreground-tertiary)';
+                            }}
+                            title="Delete conversation"
+                        >
+                            <Trash2 size={18} />
+                        </button>
                     </div>
                 </div>
 
@@ -713,11 +775,19 @@ export default function ChatPage() {
                 filteredConversations.map(conv => (
                     <div
                         key={conv.id}
-                        onClick={() => setSelectedConversation(conv)}
                         className="post"
-                        style={{ cursor: 'pointer' }}
+                        style={{ 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '12px',
+                            position: 'relative'
+                        }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <div 
+                            onClick={() => setSelectedConversation(conv)}
+                            style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1, minWidth: 0 }}
+                        >
                             <div className="avatar">
                                 {conv.participant2.avatarUrl ? (
                                     <img src={conv.participant2.avatarUrl} alt="" />
@@ -758,8 +828,146 @@ export default function ChatPage() {
                                 </div>
                             </div>
                         </div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setConversationToDelete(conv);
+                                setShowDeleteModal(true);
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: '8px',
+                                cursor: 'pointer',
+                                color: 'var(--foreground-tertiary)',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s',
+                                flexShrink: 0
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'var(--background-secondary)';
+                                e.currentTarget.style.color = 'var(--error)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'none';
+                                e.currentTarget.style.color = 'var(--foreground-tertiary)';
+                            }}
+                            title="Delete conversation"
+                        >
+                            <Trash2 size={16} />
+                        </button>
                     </div>
                 ))
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && conversationToDelete && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0, 0, 0, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        padding: '16px'
+                    }}
+                    onClick={() => {
+                        if (!isDeleting) {
+                            setShowDeleteModal(false);
+                            setConversationToDelete(null);
+                        }
+                    }}
+                >
+                    <div
+                        className="card"
+                        style={{
+                            maxWidth: '400px',
+                            width: '100%',
+                            padding: '24px'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '50%',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                <Trash2 size={20} style={{ color: 'var(--error)' }} />
+                            </div>
+                            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
+                                Delete Conversation
+                            </h2>
+                        </div>
+
+                        <p style={{ color: 'var(--foreground-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
+                            Delete your conversation with <strong>{conversationToDelete.participant2.displayName}</strong>?
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <button
+                                onClick={() => handleDeleteConversation('self')}
+                                disabled={isDeleting}
+                                className="btn btn-ghost"
+                                style={{
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left',
+                                    padding: '12px 16px'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontWeight: 500 }}>Delete for me</div>
+                                    <div style={{ fontSize: '13px', color: 'var(--foreground-tertiary)', marginTop: '2px' }}>
+                                        Remove this conversation from your inbox only
+                                    </div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => handleDeleteConversation('both')}
+                                disabled={isDeleting}
+                                className="btn btn-ghost"
+                                style={{
+                                    justifyContent: 'flex-start',
+                                    textAlign: 'left',
+                                    padding: '12px 16px',
+                                    color: 'var(--error)'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontWeight: 500 }}>Delete for both</div>
+                                    <div style={{ fontSize: '13px', opacity: 0.7, marginTop: '2px' }}>
+                                        Remove this conversation for you and {conversationToDelete.participant2.displayName}
+                                    </div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    setShowDeleteModal(false);
+                                    setConversationToDelete(null);
+                                }}
+                                disabled={isDeleting}
+                                className="btn btn-primary"
+                                style={{ marginTop: '8px' }}
+                            >
+                                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : 'Cancel'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );
