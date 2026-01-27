@@ -49,11 +49,12 @@ export async function GET(request: NextRequest) {
         // Parse participant info
         const participant2Handle = conv.participant2Handle;
         const isRemote = participant2Handle.includes('@');
-        
+
         let participant2Info = {
           handle: participant2Handle,
           displayName: participant2Handle,
           avatarUrl: null as string | null,
+          chatPublicKey: null as string | null,
         };
 
         // Try to get cached user info
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
             handle: cachedUser.handle,
             displayName: cachedUser.displayName || cachedUser.handle,
             avatarUrl: cachedUser.avatarUrl,
+            chatPublicKey: cachedUser.publicKey, // This is the chat public key
           };
         }
 

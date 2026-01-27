@@ -260,8 +260,9 @@ a.btn-primary:visited {
 }
 
 .layout.hide-right-sidebar .main {
-  flex: 0 1 920px !important;
-  max-width: 920px !important;
+  flex: 1 !important;
+  max-width: 100% !important;
+  width: 100%;
 }
 
 .aside {

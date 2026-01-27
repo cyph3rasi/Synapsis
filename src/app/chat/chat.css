@@ -1,7 +1,12 @@
 /* Chat Page Styles */
 
 .chat-page {
-  height: calc(100vh - 60px);
+  height: 100vh;
+  /* Use dynamic viewport height for mobile browsers */
+  height: 100dvh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-container {

@@ -9,7 +9,12 @@ import './chat.css';
 
 interface Conversation {
   id: string;
-  participant2: { handle: string; displayName: string; avatarUrl: string | null; chatPublicKey: string | null; };
+  participant2: {
+    handle: string;
+    displayName: string;
+    avatarUrl: string | null;
+    chatPublicKey: string | null;
+  };
   lastMessageAt: string;
   lastMessagePreview: string;
   unreadCount: number;
