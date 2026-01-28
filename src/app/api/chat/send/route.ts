@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { chatInbox, chatConversations, users } from '@/db/schema';
+import { chatInbox, chatConversations, chatMessages, users } from '@/db/schema';
 import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { eq, and } from 'drizzle-orm';
 import { signedFetch } from '@/lib/api/signed-fetch';
@@ -102,7 +102,47 @@ export async function POST(request: NextRequest) {
             const remoteUrl = `https://${targetNodeDomain}/api/swarm/chat/inbox`;
             
             try {
-                console.log('[Chat Send] Forwarding to remote:', remoteUrl, 'Envelope:', JSON.stringify(body, null, 2));
+                console.log('[Chat Send] Forwarding to remote:', remoteUrl);
+                
+                // Get or create conversation for sender
+                let conversation = await db.query.chatConversations.findFirst({
+                    where: and(
+                        eq(chatConversations.participant1Id, user.id),
+                        eq(chatConversations.participant2Handle, recipientHandle || recipientDid)
+                    )
+                });
+
+                if (!conversation) {
+                    const [newConv] = await db.insert(chatConversations).values({
+                        participant1Id: user.id,
+                        participant2Handle: recipientHandle || recipientDid,
+                        lastMessageAt: new Date(),
+                        lastMessagePreview: '[Encrypted Message]'
+                    }).returning();
+                    conversation = newConv;
+                    console.log('[Chat Send] Created conversation:', conversation.id);
+                }
+
+                // Store message locally so sender can see it
+                const messageId = crypto.randomUUID();
+                const localDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
+                const swarmMessageId = `swarm:${localDomain}:${messageId}`;
+                
+                const [newMessage] = await db.insert(chatMessages).values({
+                    conversationId: conversation.id,
+                    senderHandle: user.handle,
+                    senderDisplayName: user.displayName,
+                    senderAvatarUrl: user.avatarUrl,
+                    senderNodeDomain: null, // Local sender
+                    encryptedContent: ciphertext,
+                    senderChatPublicKey: null, // V2 E2E - keys are in the envelope
+                    swarmMessageId,
+                    deliveredAt: null, // Will update when remote confirms
+                    readAt: null,
+                }).returning();
+                
+                console.log('[Chat Send] Stored local message:', newMessage.id);
+
                 const response = await fetch(remoteUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -140,26 +180,14 @@ export async function POST(request: NextRequest) {
                     }, { status: response.status });
                 }
 
-                // Create local conversation for sender if we have recipient handle
-                if (recipientHandle) {
-                    const existingConv = await db.query.chatConversations.findFirst({
-                        where: and(
-                            eq(chatConversations.participant1Id, user.id),
-                            eq(chatConversations.participant2Handle, recipientHandle)
-                        )
-                    });
-
-                    if (!existingConv) {
-                        await db.insert(chatConversations).values({
-                            participant1Id: user.id,
-                            participant2Handle: recipientHandle,
-                            lastMessageAt: new Date(),
-                            lastMessagePreview: '[Encrypted Message]'
-                        });
-                    }
-                }
+                // Mark message as delivered since remote accepted it
+                await db.update(chatMessages)
+                    .set({ deliveredAt: new Date() })
+                    .where(eq(chatMessages.id, newMessage.id));
                 
-                return NextResponse.json({ success: true, remote: true });
+                console.log('[Chat Send] Message marked as delivered');
+                
+                return NextResponse.json({ success: true, remote: true, messageId: newMessage.id });
 
             } catch (error: any) {
                 console.error('[Chat Send] Remote delivery error:', error);

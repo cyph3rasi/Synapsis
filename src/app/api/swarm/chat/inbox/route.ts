@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
       }
 
-      // Import chatInbox schema
-      const { chatInbox } = await import('@/db/schema');
+      // Import schemas
+      const { chatInbox, chatConversations, chatMessages } = await import('@/db/schema');
       
       // Store in V2 inbox
       await db.insert(chatInbox).values({
@@ -62,7 +62,54 @@ export async function POST(request: NextRequest) {
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       });
 
-      console.log(`[Swarm Chat V2] Received encrypted message for ${recipientDid}`);
+      // Also create conversation and message for recipient UI
+      // Extract sender info from envelope
+      const senderHandle = body.handle || body.did; // Fallback to DID if no handle
+      const senderFullHandle = `${senderHandle}@${body.did?.split(':')[2] || 'unknown'}`; // Extract domain from DID
+      
+      // Get or create conversation for recipient
+      let conversation = await db.query.chatConversations.findFirst({
+        where: and(
+          eq(chatConversations.participant1Id, recipient.id),
+          eq(chatConversations.participant2Handle, senderFullHandle)
+        )
+      });
+
+      if (!conversation) {
+        const [newConv] = await db.insert(chatConversations).values({
+          participant1Id: recipient.id,
+          participant2Handle: senderFullHandle,
+          lastMessageAt: new Date(),
+          lastMessagePreview: '[Encrypted message]'
+        }).returning();
+        conversation = newConv;
+        console.log(`[Swarm Chat V2] Created conversation for recipient:`, conversation.id);
+      } else {
+        // Update last message time
+        await db.update(chatConversations)
+          .set({ 
+            lastMessageAt: new Date(),
+            lastMessagePreview: '[Encrypted message]'
+          })
+          .where(eq(chatConversations.id, conversation.id));
+      }
+
+      // Store message reference so it appears in UI
+      const messageId = crypto.randomUUID();
+      await db.insert(chatMessages).values({
+        conversationId: conversation.id,
+        senderHandle: senderFullHandle,
+        senderDisplayName: null, // Unknown until decrypted
+        senderAvatarUrl: null,
+        senderNodeDomain: body.did?.split(':')[2] || null,
+        encryptedContent: ciphertext,
+        senderChatPublicKey: null,
+        swarmMessageId: `swarm:v2:${messageId}`,
+        deliveredAt: new Date(),
+        readAt: null,
+      });
+
+      console.log(`[Swarm Chat V2] Received encrypted message for ${recipientDid}, conversation:`, conversation.id);
 
       return NextResponse.json({
         success: true,
