@@ -3,42 +3,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { useChatEncryption } from '@/lib/hooks/useChatEncryption';
-import { loadDeviceKeys } from '@/lib/crypto/chat-storage';
+import { useSodiumChat } from '@/lib/hooks/useSodiumChat';
 import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { useRouter, useSearchParams } from 'next/navigation';
-
-// Helper to decrypt self-encrypted message (copied from useChatEncryption)
-async function decryptForSelf(selfEncrypted: { ciphertext: string; iv: string }, identityKeyPair: CryptoKeyPair): Promise<string> {
-  // Export public key raw to use as key material (same as encryption)
-  const keyMaterial = await crypto.subtle.exportKey('raw', identityKeyPair.publicKey);
-  
-  // Derive AES key
-  const aesKey = await crypto.subtle.digest('SHA-256', keyMaterial);
-  
-  // Import as AES-GCM key
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    aesKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt']
-  );
-  
-  // Decode IV and ciphertext
-  const iv = Uint8Array.from(atob(selfEncrypted.iv), c => c.charCodeAt(0));
-  const ciphertext = Uint8Array.from(atob(selfEncrypted.ciphertext), c => c.charCodeAt(0));
-  
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    ciphertext
-  );
-  
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
-}
 
 interface Conversation {
     id: string;
@@ -69,14 +37,12 @@ interface Message {
 }
 
 export default function ChatPage() {
-    const { user, setShowUnlockPrompt } = useAuth();
+    const { user, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
     const router = useRouter();
-    // V2 Hook Destructuring
-    const { isReady, isLocked, status, ensureReady, sendMessage, decryptMessage } = useChatEncryption();
+    // Libsodium E2EE Hook
+    const { isReady, status, sendMessage, decryptMessage } = useSodiumChat();
     const searchParams = useSearchParams();
     const composeHandle = searchParams.get('compose');
-
-
 
     // Chat Data State
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -88,15 +54,71 @@ export default function ChatPage() {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [loadingMessages, setLoadingMessages] = useState(false);
+
+    // Cache for decrypted messages to avoid re-decrypting on every poll
+    const decryptedCacheRef = useRef<Map<string, string>>(new Map());
+    // Track which messages we've attempted to decrypt (even if they failed)
+    const attemptedDecryptionRef = useRef<Set<string>>(new Set());
+    // Track the current conversation ID to prevent race conditions
+    const currentConversationIdRef = useRef<string | null>(null);
+
+    // Load conversations
+    useEffect(() => {
+        if (user && isReady) {
+            loadConversations(true); // Initial load with spinner
+
+            // Poll for new conversations every 5 seconds (no spinner)
+            const pollInterval = setInterval(() => {
+                loadConversations(false);
+            }, 5000);
+
+            return () => clearInterval(pollInterval);
+        }
+    }, [user, isReady]);
 
     // Handle Compose Intent
     useEffect(() => {
-        if (composeHandle && isReady && !selectedConversation && !showNewChat) {
-            setNewChatHandle(composeHandle);
-            setShowNewChat(true);
-            // We could auto-submit here if we refactored startNewChat to be separate from event hnadler
+        if (composeHandle && isReady && !selectedConversation && conversations.length >= 0) {
+            // Check if we already have a conversation with this user
+            const existing = conversations.find(c =>
+                c.participant2.handle.toLowerCase() === composeHandle.toLowerCase()
+            );
+
+            if (existing) {
+                setSelectedConversation(existing);
+                // Clear the query param so refresh doesn't keep resetting state
+                router.replace('/chat', { scroll: false });
+            } else if (!loading) {
+                // Fetch user details to create a draft conversation
+                const fetchUserAndInitDraft = async () => {
+                    try {
+                        const res = await fetch(`/api/users/${encodeURIComponent(composeHandle)}`);
+                        const data = await res.json();
+                        if (data.user) {
+                            const draftConv: Conversation = {
+                                id: 'new',
+                                participant2: {
+                                    handle: data.user.handle,
+                                    displayName: data.user.displayName || data.user.handle,
+                                    avatarUrl: data.user.avatarUrl,
+                                    did: data.user.did
+                                },
+                                lastMessageAt: new Date().toISOString(),
+                                lastMessagePreview: 'New Conversation',
+                                unreadCount: 0
+                            };
+                            setSelectedConversation(draftConv);
+                            router.replace('/chat', { scroll: false });
+                        }
+                    } catch (e) {
+                        console.error("Failed to load user for compose", e);
+                    }
+                };
+                fetchUserAndInitDraft();
+            }
         }
-    }, [composeHandle, isReady, selectedConversation, showNewChat]);
+    }, [composeHandle, isReady, selectedConversation, conversations, loading, router]);
 
 
     // Legacy / V2 Hybrid State
@@ -135,33 +157,39 @@ export default function ChatPage() {
         }
     }, [user, router]);
 
-    // Load conversations
-    useEffect(() => {
-        if (user && isReady) {
-            // ... existing loadConversations code ...
-            loadConversations(true); // Initial load with spinner
-
-            // Poll for new conversations every 5 seconds (no spinner)
-            const pollInterval = setInterval(() => {
-                loadConversations(false);
-            }, 5000);
-
-            return () => clearInterval(pollInterval);
-        }
-    }, [user, isReady]);
-
     // Load messages when conversation is selected
     useEffect(() => {
         if (selectedConversation && isReady) {
+            // Update current conversation ref
+            currentConversationIdRef.current = selectedConversation.id;
+
+            // Clear messages immediately to prevent flash
+            setMessages([]);
+
+            if (selectedConversation.id === 'new') {
+                setLoadingMessages(false);
+                return; // Don't load messages for new/draft conversation
+            }
+
+            setLoadingMessages(true);
+
             loadMessages(selectedConversation.id);
             markAsRead(selectedConversation.id);
 
             // Poll for new messages every 3 seconds
             const pollInterval = setInterval(() => {
-                loadMessages(selectedConversation.id);
+                // Only load if still the same conversation
+                if (currentConversationIdRef.current === selectedConversation.id && selectedConversation.id !== 'new') {
+                    loadMessages(selectedConversation.id);
+                }
             }, 3000);
 
             return () => clearInterval(pollInterval);
+        } else if (!selectedConversation) {
+            // Clear messages when no conversation selected
+            currentConversationIdRef.current = null;
+            setMessages([]);
+            setLoadingMessages(false);
         }
     }, [selectedConversation, isReady]);
 
@@ -192,97 +220,77 @@ export default function ChatPage() {
 
             const decrypted = await Promise.all((data.messages || []).map(async (msg: any) => {
                 try {
-                    console.log('[Chat UI] Processing message:', {
-                        id: msg.id,
-                        isSentByMe: msg.isSentByMe,
-                        hasEncryptedContent: !!msg.encryptedContent,
-                        contentPreview: msg.encryptedContent?.substring(0, 100)
-                    });
+                    // Check cache first
+                    const cacheKey = `${msg.id}`;
+                    const cached = decryptedCacheRef.current.get(cacheKey);
+                    if (cached) {
+                        return { ...msg, decryptedContent: cached };
+                    }
 
-                    // Check if this is a V2 encrypted message (JSON envelope)
+                    // Check if already attempted
+                    if (attemptedDecryptionRef.current.has(cacheKey)) {
+                        const fallback = decryptedCacheRef.current.get(cacheKey) || '🔒 [Encrypted]';
+                        return { ...msg, decryptedContent: fallback };
+                    }
+
+                    // Mark as attempted
+                    attemptedDecryptionRef.current.add(cacheKey);
+
+                    // Parse libsodium message format
                     if (msg.encryptedContent && msg.encryptedContent.startsWith('{')) {
                         try {
-                            // First layer: { did, handle, ciphertext }
                             const envelope = JSON.parse(msg.encryptedContent);
-                            console.log('[Chat UI] Parsed envelope:', {
-                                hasDid: !!envelope.did,
-                                hasHandle: !!envelope.handle,
-                                hasCiphertext: !!envelope.ciphertext,
-                                ciphertextPreview: envelope.ciphertext?.substring(0, 100)
-                            });
 
-                            // Second layer: the actual payload with selfEncrypted
-                            let payload;
-                            if (envelope.ciphertext && typeof envelope.ciphertext === 'string' && envelope.ciphertext.startsWith('{')) {
-                                payload = JSON.parse(envelope.ciphertext);
-                                console.log('[Chat UI] Parsed V2 payload:', {
-                                    hasSelfEncrypted: !!payload.selfEncrypted,
-                                    hasCiphertext: !!payload.ciphertext,
-                                    recipientDeviceId: payload.recipientDeviceId,
-                                    senderDeviceId: payload.senderDeviceId
-                                });
-                            } else {
-                                // Old format or malformed
-                                payload = envelope;
-                            }
+                            // Libsodium format: {senderPublicKey, recipientDid, ciphertext, nonce}
+                            if (envelope.senderPublicKey && envelope.ciphertext && envelope.nonce) {
+                                // For decryption with crypto_box_open_easy:
+                                // - We need the OTHER party's public key
+                                // - We use OUR private key
 
-                            // For messages we sent, try to decrypt the selfEncrypted copy
-                            if (msg.isSentByMe && payload.selfEncrypted && user?.did) {
-                                console.log('[Chat UI] Attempting to decrypt self-encrypted message');
-                                try {
-                                    const localKeys = await loadDeviceKeys();
-                                    if (localKeys) {
-                                        const plaintext = await decryptForSelf(payload.selfEncrypted, localKeys.identity);
-                                        console.log('[Chat UI] Self-decrypt successful:', plaintext.substring(0, 50));
-                                        return { ...msg, decryptedContent: plaintext };
-                                    }
-                                } catch (e) {
-                                    console.error('[Chat UI] Self-decrypt failed:', e);
-                                }
-                            }
+                                // console.log('[Chat UI] Decrypting message:', {
+                                //     isSentByMe: msg.isSentByMe,
+                                //     recipientDid: envelope.recipientDid,
+                                //     senderPublicKey: envelope.senderPublicKey?.substring(0, 20) + '...'
+                                // });
 
-                            // For messages we received, decrypt normally
-                            if (!msg.isSentByMe) {
-                                console.log('[Chat UI] Attempting to decrypt received message');
-                                // Need to get the sender's DID
-                                let senderDid = msg.senderDid || envelope.did;
-                                
-                                if (!senderDid && msg.senderHandle) {
-                                    // Try to resolve DID from handle
+                                // If I sent this message, the "other party" is the recipient
+                                // If I received this message, the "other party" is the sender
+                                let otherPartyPublicKey = envelope.senderPublicKey;
+
+                                if (msg.isSentByMe && envelope.recipientDid) {
+                                    // I'm the sender, so I need the recipient's public key to decrypt my own message
                                     try {
-                                        const userRes = await fetch(`/api/users/${encodeURIComponent(msg.senderHandle)}`);
-                                        if (userRes.ok) {
-                                            const userData = await userRes.json();
-                                            senderDid = userData.user?.did;
+                                        const keyRes = await fetch(`/api/chat/keys?did=${encodeURIComponent(envelope.recipientDid)}`);
+                                        if (keyRes.ok) {
+                                            const keyData = await keyRes.json();
+                                            otherPartyPublicKey = keyData.publicKey;
+                                            // console.log('[Chat UI] Fetched recipient public key:', otherPartyPublicKey?.substring(0, 20) + '...');
                                         }
                                     } catch (e) {
-                                        console.error('[Chat UI] Failed to resolve sender DID:', e);
+                                        console.error('[Chat UI] Failed to fetch recipient key:', e);
                                     }
+                                } else {
+                                    // console.log('[Chat UI] Using sender public key from envelope');
                                 }
 
-                                if (senderDid) {
-                                    // Create the envelope structure that decryptMessage expects
-                                    const decryptEnvelope = {
-                                        did: senderDid,
-                                        data: {
-                                            ciphertext: envelope.ciphertext // Pass the inner payload JSON string
-                                        }
-                                    };
-                                    const dec = await decryptMessage(decryptEnvelope);
-                                    console.log('[Chat UI] Received decrypt result:', dec.substring(0, 50));
-                                    if (!dec.startsWith('[')) {
-                                        return { ...msg, decryptedContent: dec };
-                                    }
-                                }
+                                const plaintext = await decryptMessage(
+                                    envelope.ciphertext,
+                                    envelope.nonce,
+                                    otherPartyPublicKey
+                                );
+
+                                decryptedCacheRef.current.set(cacheKey, plaintext);
+                                return { ...msg, decryptedContent: plaintext };
                             }
                         } catch (e) {
-                            console.error('[Chat UI] V2 decryption failed:', e);
+                            console.error('[Chat UI] Libsodium decryption failed:', e);
                         }
                     }
 
-                    // Fallback: show encrypted indicator
-                    console.log('[Chat UI] Could not decrypt message, showing encrypted');
-                    return { ...msg, decryptedContent: '[Encrypted]' };
+                    // Fallback
+                    const fallback = '🔒 [Encrypted - refresh page]';
+                    decryptedCacheRef.current.set(cacheKey, fallback);
+                    return { ...msg, decryptedContent: fallback };
                 } catch (err) {
                     console.error('[Chat UI] Message processing error:', err);
                     return { ...msg, decryptedContent: '[Error]' };
@@ -290,8 +298,8 @@ export default function ChatPage() {
             }));
 
             setMessages(decrypted);
-        } catch (err) { 
-            console.error('[Chat UI] Load messages error:', err); 
+        } catch (err) {
+            console.error('[Chat UI] Load messages error:', err);
         }
     };
 
@@ -311,36 +319,42 @@ export default function ChatPage() {
         if (!newMessage.trim() || !selectedConversation) return;
         setSending(true);
         try {
-            // Need Recipient DID.
-            // conversation.participant2 might have valid handle.
-            // We resolve DID first.
+            // Get recipient DID
             let did = selectedConversation.participant2.did;
-            // We need to support nodeDomain for existing chats too.
-            // But Conversation interface might lack it.
-            // We can try to resolve it from handle if needed, or if we stored it?
-            // "participant2" comes from API.
-            // Let's assume we re-fetch to be safe if it's remote?
-            // Or just check handle structure?
-            let nodeDomain = undefined;
-            if (selectedConversation.participant2.handle.includes('@')) {
-                const parts = selectedConversation.participant2.handle.split('@');
-                if (parts.length === 2) nodeDomain = parts[1];
-            }
 
             if (!did) {
                 const res = await fetch(`/api/users/${encodeURIComponent(selectedConversation.participant2.handle)}`);
                 const data = await res.json();
                 did = data.user?.did;
-                nodeDomain = data.user?.nodeDomain || nodeDomain; // API is authoritative
                 if (!did) throw new Error('User not found');
             }
 
-            await sendMessage(did, newMessage, nodeDomain, selectedConversation.participant2.handle);
+            // Send using Signal Protocol
+            await sendMessage(did, newMessage, selectedConversation.participant2.handle);
 
-            // Legacy UI expects message reload.
             setNewMessage('');
-            await loadMessages(selectedConversation.id);
-            loadConversations(false);
+
+            // If this was a new conversation, we need to refresh the conversation list and select the real one
+            if (selectedConversation.id === 'new') {
+                // Refresh conversations to get the new ID
+                const res = await fetch('/api/swarm/chat/conversations');
+                const data = await res.json();
+                const updatedConversations = data.conversations || [];
+                setConversations(updatedConversations);
+
+                // Find the real conversation
+                const realConv = updatedConversations.find((c: Conversation) =>
+                    c.participant2.handle === selectedConversation.participant2.handle
+                );
+
+                if (realConv) {
+                    setSelectedConversation(realConv);
+                    loadMessages(realConv.id);
+                }
+            } else {
+                await loadMessages(selectedConversation.id);
+                loadConversations(false);
+            }
         } catch (err: any) {
             console.error('[Send] Error:', err);
             alert(`Failed: ${err.message}`);
@@ -354,36 +368,66 @@ export default function ChatPage() {
         if (!newChatHandle.trim()) return;
         setSending(true);
         try {
-            const cleanHandle = newChatHandle.replace(/^@/, '');
+            let cleanHandle = newChatHandle.replace(/^@/, '');
+
+            // If the handle includes a domain, check if it's our local domain
+            if (cleanHandle.includes('@')) {
+                const [handle, domain] = cleanHandle.split('@');
+                const localDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || window.location.host;
+
+                // If it's our local domain, strip it for the API call
+                if (domain === localDomain) {
+                    cleanHandle = handle;
+                }
+            }
+
             const res = await fetch(`/api/users/${encodeURIComponent(cleanHandle)}`);
             const data = await res.json();
+
             if (!data.user?.did) {
-                alert('User not found or V2 not enabled.');
+                alert('User not found or Olm encryption not enabled.');
                 setSending(false);
                 return;
             }
 
-            console.log('[Chat UI] Starting chat with:', data.user);
+            // Previously we auto-sent "👋" here.
+            // Now we just setup the draft conversation.
 
-            // Send "Hello" to init session
-            await sendMessage(data.user.did, '👋', data.user.nodeDomain, data.user.handle);
+            // Check if existing conversation
+            const existing = conversations.find(c =>
+                c.participant2.handle.toLowerCase() === data.user.handle.toLowerCase()
+            );
 
-            console.log('[Chat UI] Message sent, reloading conversations');
+            if (existing) {
+                setSelectedConversation(existing);
+            } else {
+                // Setup draft
+                const draftConv: Conversation = {
+                    id: 'new',
+                    participant2: {
+                        handle: data.user.handle,
+                        displayName: data.user.displayName || data.user.handle,
+                        avatarUrl: data.user.avatarUrl,
+                        did: data.user.did
+                    },
+                    lastMessageAt: new Date().toISOString(),
+                    lastMessagePreview: 'New Conversation',
+                    unreadCount: 0
+                };
+                setSelectedConversation(draftConv);
+            }
 
             setShowNewChat(false);
             setNewChatHandle('');
-            await loadConversations(false);
-            // Select the new conversation (we might need to find it)
-            // For now just reload list.
         } catch (e: any) {
             console.error('[Chat UI] Start chat failed:', e);
-            if (e.message.includes('Recipient keys not found')) {
+            if (e.message.includes('Recipient keys not found') || e.message.includes('Failed to fetch recipient keys')) {
                 alert('This user has not set up secure chat yet. They need to log in to enable end-to-end encryption.');
             } else {
                 alert('Failed to start chat: ' + e.message);
             }
-        } finally { 
-            setSending(false); 
+        } finally {
+            setSending(false);
         }
     };
 
@@ -410,6 +454,7 @@ export default function ChatPage() {
         }
     };
 
+
     const filteredConversations = conversations.filter((conv) =>
         conv.participant2.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         conv.participant2.handle.toLowerCase().includes(searchQuery.toLowerCase())
@@ -417,16 +462,21 @@ export default function ChatPage() {
 
     if (user === null) return null;
 
-    // Locked State
-    if (isLocked) {
+    // Identity Locked State
+    if (!isIdentityUnlocked) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', padding: '16px', textAlign: 'center' }}>
-                <Lock size={48} style={{ color: 'var(--accent)', marginBottom: '16px' }} />
-                <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>Chat Locked</h2>
-                <p style={{ color: 'var(--foreground-secondary)', maxWidth: '300px', marginBottom: '24px' }}>
-                    Your end-to-end encrypted identity is locked. Please unlock it to view your messages.
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '24px' }}>
+                <Lock size={48} style={{ color: 'rgb(251, 191, 36)' }} />
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Identity Locked</h2>
+                <p style={{ color: 'var(--foreground-secondary)', maxWidth: '400px', textAlign: 'center' }}>
+                    End-to-end encrypted chat requires your identity to be unlocked. Your private keys are needed to encrypt and decrypt messages.
                 </p>
-                <button onClick={() => setShowUnlockPrompt(true)} className="btn btn-primary">
+                <button
+                    onClick={() => setShowUnlockPrompt(true)}
+                    className="btn btn-primary"
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                    <Shield size={16} />
                     Unlock Identity
                 </button>
             </div>
@@ -440,24 +490,23 @@ export default function ChatPage() {
                 <Shield size={48} style={{ color: 'var(--destructive)' }} />
                 <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Connection Failed</h2>
                 <p style={{ color: 'var(--foreground-secondary)', maxWidth: '300px', textAlign: 'center' }}>
-                    Unable to initialize secure chat. This might be a network issue or missing keys.
+                    Unable to initialize secure chat. Please refresh the page to try again.
                 </p>
                 <button
-                    onClick={() => ensureReady('RETRY', user?.id || 'retry')}
+                    onClick={() => window.location.reload()}
                     className="btn btn-primary"
                 >
-                    Retry Connection
+                    Refresh Page
                 </button>
             </div>
         );
     }
 
     // Loading State
-    if ((!isReady && status !== 'error') || status === 'initializing' || status === 'generating_keys') {
+    if (!isReady || status === 'initializing') {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
                 <Loader2 className="animate-spin" size={32} />
-                <p style={{ marginTop: 16 }}>Initializing Secure Encrypted Chat...</p>
             </div>
         );
     }
@@ -673,7 +722,10 @@ export default function ChatPage() {
                     <div
                         key={conv.id}
                         className="post"
-                        onClick={() => setSelectedConversation(conv)}
+                        onClick={() => {
+                            setMessages([]);
+                            setSelectedConversation(conv);
+                        }}
                         style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '12px' }}
                     >
                         <div className="avatar">

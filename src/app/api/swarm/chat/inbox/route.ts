@@ -64,8 +64,13 @@ export async function POST(request: NextRequest) {
 
       // Also create conversation and message for recipient UI
       // Extract sender info from envelope
-      const senderHandle = body.handle || body.did; // Fallback to DID if no handle
-      const senderFullHandle = `${senderHandle}@${body.did?.split(':')[2] || 'unknown'}`; // Extract domain from DID
+      const senderHandle = body.handle || 'unknown';
+      const senderNodeDomain = body.data?.senderNodeDomain || 'unknown';
+      const senderFullHandle = senderNodeDomain !== 'unknown' 
+        ? `${senderHandle}@${senderNodeDomain}` 
+        : senderHandle;
+      
+      console.log('[Swarm Chat V2] Sender info:', { senderHandle, senderNodeDomain, senderFullHandle });
       
       // Get or create conversation for recipient
       let conversation = await db.query.chatConversations.findFirst({
@@ -108,7 +113,7 @@ export async function POST(request: NextRequest) {
         senderHandle: senderFullHandle,
         senderDisplayName: null, // Unknown until decrypted
         senderAvatarUrl: null,
-        senderNodeDomain: body.did?.split(':')[2] || null,
+        senderNodeDomain: senderNodeDomain !== 'unknown' ? senderNodeDomain : null,
         encryptedContent: JSON.stringify(envelopeData), // Full envelope for decryption
         senderChatPublicKey: null,
         swarmMessageId: `swarm:v2:${messageId}`,

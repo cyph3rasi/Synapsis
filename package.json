@@ -22,6 +22,7 @@
     "crypto-js": "^4.2.0",
     "drizzle-orm": "^0.44.1",
     "jose": "^6.0.11",
+    "libsodium-wrappers-sumo": "^0.8.2",
     "lucide-react": "^0.562.0",
     "next": "16.1.4",
     "next-auth": "^5.0.0-beta.25",

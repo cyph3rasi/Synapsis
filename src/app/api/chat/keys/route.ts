@@ -1,79 +1,120 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { chatDeviceBundles, chatOneTimeKeys } from '@/db/schema';
-import { requireSignedAction } from '@/lib/auth/verify-signature';
+import { chatDeviceBundles } from '@/db/schema';
+import { requireAuth } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 
 /**
+ * GET /api/chat/keys?did=<did>
+ * Fetch public key for a user
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const did = searchParams.get('did');
+
+    if (!did) {
+      return NextResponse.json({ error: 'Missing did parameter' }, { status: 400 });
+    }
+
+    console.log('[Chat Keys GET] Looking for DID:', did);
+
+    const bundle = await db.query.chatDeviceBundles.findFirst({
+      where: eq(chatDeviceBundles.did, did),
+    });
+
+    console.log('[Chat Keys GET] Found bundle:', bundle ? 'YES' : 'NO');
+    if (bundle) {
+      console.log('[Chat Keys GET] Bundle data:', {
+        userId: bundle.userId,
+        did: bundle.did,
+        deviceId: bundle.deviceId,
+        hasIdentityKey: !!bundle.identityKey,
+      });
+    }
+
+    if (!bundle) {
+      return NextResponse.json({ error: 'No keys found' }, { status: 404 });
+    }
+
+    // For libsodium, we just need the public key
+    return NextResponse.json({
+      publicKey: bundle.identityKey, // Reusing identityKey field for libsodium public key
+    });
+  } catch (error: any) {
+    console.error('[Chat Keys] Failed to fetch keys:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
  * POST /api/chat/keys
- * Publish a new Device Bundle and OTKs.
+ * Publish public key
  * 
- * Payload: SignedAction < { 
- *   deviceId: string, 
- *   identityKey: string,
- *   signedPreKey: { id, key, sig },
- *   signature: string, (The ECDSA signature of the bundle itself)
- *   oneTimeKeys: { id, key }[]
- * } >
+ * Body: {
+ *   publicKey: string (base64)
+ * }
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireAuth();
+    
+    console.log('[Chat Keys POST] User:', user.handle, 'DID:', user.did, 'UserID:', user.id);
+
     const body = await request.json();
+    const { publicKey } = body;
 
-    // 1. Verify User Identity (ECDSA Root)
-    // The wrapper itself is a SignedAction with action="chat.keys.publish"
-    // This proves the user (DID) is authorizing this device registration.
-    const user = await requireSignedAction(body);
+    console.log('[Chat Keys POST] Received publicKey:', publicKey ? publicKey.substring(0, 20) + '...' : 'MISSING');
 
-    const { deviceId, identityKey, signedPreKey, signature, oneTimeKeys } = body.data;
+    if (!publicKey) {
+      return NextResponse.json({ error: 'Missing publicKey' }, { status: 400 });
+    }
 
-    // 2. Validate Bundle Signature (The bundle.signature must cover the fields)
-    // Actually, requireSignedAction already verified the payload signature.
-    // The "signature" field inside data is redundant if the whole thing is signed by DID?
-    // Or is "signature" the signature of the bundle bytes? 
-    // In our design, the SignedAction *is* the signature.
-    // So "signature" inside might be the "Self-Signature" of the X25519 Identity Key signing the structure?
-    // No, standard Signal: The Bundle is signed by Identity Key.
-    // Here, Identity Key is ECDSA. The SignedAction covers it.
-    // So we just trust the SignedAction.
-
-    // 3. Upsert Bundle
-    await db.transaction(async (tx) => {
-      // Upsert device bundle
-      await tx.delete(chatDeviceBundles).where(
-        and(
-          eq(chatDeviceBundles.userId, user.id),
-          eq(chatDeviceBundles.deviceId, deviceId)
-        )
-      );
-
-      const [bundle] = await tx.insert(chatDeviceBundles).values({
-        userId: user.id,
-        did: user.did,
-        deviceId,
-        identityKey,
-        signedPreKey: JSON.stringify(signedPreKey),
-        signature, // We store the action signature or the explicit inner signature provided
-      }).returning();
-
-      // 4. Insert OTKs
-      if (oneTimeKeys && oneTimeKeys.length > 0) {
-        await tx.insert(chatOneTimeKeys).values(
-          oneTimeKeys.map((k: any) => ({
-            userId: user.id,
-            bundleId: bundle.id,
-            keyId: k.id,
-            publicKey: k.key
-          }))
-        ).onConflictDoNothing();
-      }
+    // Check if bundle exists
+    const existing = await db.query.chatDeviceBundles.findFirst({
+      where: and(
+        eq(chatDeviceBundles.userId, user.id),
+        eq(chatDeviceBundles.deviceId, '1')
+      )
     });
 
-    return NextResponse.json({ success: true, count: oneTimeKeys?.length || 0 });
+    console.log('[Chat Keys POST] Existing bundle found:', existing ? 'YES' : 'NO');
 
+    if (existing) {
+      // Update existing bundle
+      console.log('[Chat Keys POST] Updating existing bundle...');
+      await db.update(chatDeviceBundles)
+        .set({
+          identityKey: publicKey,
+          did: user.did, // Update DID too in case it changed
+          lastSeenAt: new Date(),
+        })
+        .where(
+          and(
+            eq(chatDeviceBundles.userId, user.id),
+            eq(chatDeviceBundles.deviceId, '1')
+          )
+        );
+      console.log('[Chat Keys POST] Updated existing key');
+    } else {
+      // Insert new bundle
+      console.log('[Chat Keys POST] Inserting new bundle...');
+      await db.insert(chatDeviceBundles).values({
+        userId: user.id,
+        did: user.did,
+        deviceId: '1',
+        identityKey: publicKey,
+        signedPreKey: 'libsodium', // Placeholder
+        registrationId: 1,
+        signature: 'libsodium',
+      });
+      console.log('[Chat Keys POST] Inserted new key');
+    }
+
+    console.log('[Chat Keys POST] Key published successfully for', user.handle);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Failed to publish keys:', error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error('[Chat Keys] Failed to publish key:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

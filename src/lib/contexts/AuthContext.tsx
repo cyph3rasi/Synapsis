@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useUserIdentity } from '@/lib/hooks/useUserIdentity';
-import { useChatEncryption } from '@/lib/hooks/useChatEncryption';
 
 export interface User {
     id: string;
@@ -68,9 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    // Integrate chat encryption hook
-    const { ensureReady } = useChatEncryption();
-
     const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
 
     /**
@@ -83,15 +79,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw new Error('No encrypted private key available');
         }
 
-        await unlockIdentityHook(targetUser.privateKeyEncrypted, password);
+        await unlockIdentityHook(
+            targetUser.privateKeyEncrypted, 
+            password,
+            targetUser.did,
+            targetUser.handle,
+            targetUser.publicKey
+        );
 
-        // Initialize Chat Keys (Async, don't block UI but start it)
-        if (targetUser.id) {
-            ensureReady(password, targetUser.id).catch(err => {
-                console.error('Failed to initialize chat keys:', err);
-            });
-        }
-
+        // Signal Protocol will auto-initialize when the chat page is opened
+        
         setShowUnlockPrompt(false); // Close prompt on success
     };
 

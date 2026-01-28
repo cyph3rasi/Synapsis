@@ -33,7 +33,7 @@ const parseRemoteHandleQuery = (query: string): { handle: string; domain: string
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const query = searchParams.get('q') || '';
+        let query = searchParams.get('q') || '';
         const type = searchParams.get('type') || 'all'; // all, users, posts
         const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
 
@@ -50,7 +50,22 @@ export async function GET(request: Request) {
             });
         }
 
-        const searchPattern = `%${query}%`;
+        // Normalize query for local user search
+        // Strip leading @ and local domain if present
+        let localSearchQuery = query.trim();
+        if (localSearchQuery.startsWith('@')) {
+            localSearchQuery = localSearchQuery.slice(1);
+        }
+        // Remove local domain if searching like "admin2@dev.syn.quest"
+        const localDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || process.env.NODE_DOMAIN;
+        if (localDomain && localSearchQuery.includes('@')) {
+            const parts = localSearchQuery.split('@');
+            if (parts[1] === localDomain) {
+                localSearchQuery = parts[0];
+            }
+        }
+
+        const searchPattern = `%${localSearchQuery}%`;
         let searchUsers: SearchUser[] = [];
         let searchPosts: typeof posts.$inferSelect[] = [];
 

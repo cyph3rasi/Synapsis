@@ -10,33 +10,24 @@ export async function GET(
 ) {
     const { did } = await params;
 
-    // 1. Fetch all devices for this DID
-    const bundles = await db.query.chatDeviceBundles.findMany({
+    // Fetch device bundle for this DID
+    const bundle = await db.query.chatDeviceBundles.findFirst({
         where: eq(chatDeviceBundles.did, did),
-        with: {
-            oneTimeKeys: {
-                limit: 5, // Return a few keys; client picks one
-                // Ideally we pick non-conflicted ones or random ones
-            }
-        }
     });
 
-    if (!bundles || bundles.length === 0) {
-        return NextResponse.json([], { status: 404 });
+    if (!bundle) {
+        return NextResponse.json({ error: 'No keys found' }, { status: 404 });
     }
 
-    // 2. Format Response
-    const response = bundles.map(b => ({
-        did: b.did,
-        deviceId: b.deviceId,
-        identityKey: b.identityKey, // Base64 X25519
-        signedPreKey: JSON.parse(b.signedPreKey),
-        oneTimeKeys: b.oneTimeKeys.map(k => ({
-            id: k.keyId,
-            key: k.publicKey
-        })),
-        signature: b.signature // ECDSA signature of this bundle
-    }));
+    const signedPreKey = JSON.parse(bundle.signedPreKey);
+    const kyberPreKey = bundle.kyberPreKey ? JSON.parse(bundle.kyberPreKey) : null;
+
+    // Format Response for Olm
+    const response = {
+        identityKey: bundle.identityKey, // curve25519
+        signingKey: signedPreKey.signingKey, // ed25519
+        oneTimeKeys: kyberPreKey?.oneTimeKeys || [],
+    };
 
     return NextResponse.json(response, {
         headers: {
