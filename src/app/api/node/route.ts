@@ -9,9 +9,20 @@ export async function GET() {
         if (!db) return NextResponse.json({});
 
         const domain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
-        const node = await db.query.nodes.findFirst({
+
+        // 1. Try exact match
+        let node = await db.query.nodes.findFirst({
             where: eq(nodes.domain, domain),
         });
+
+        // 2. Fallback: If not found, check if there is exactly ONE node in the system.
+        // This handles upgrades where the env var domain might differ from the DB domain (e.g. localhost vs production).
+        if (!node) {
+            const allNodes = await db.query.nodes.findMany({ limit: 2 });
+            if (allNodes.length === 1) {
+                node = allNodes[0];
+            }
+        }
 
         // Ensure we have a public key
         const publicKey = await getNodePublicKey();
@@ -47,8 +58,8 @@ export async function GET() {
             });
         }
 
-        return NextResponse.json({ 
-            ...node, 
+        return NextResponse.json({
+            ...node,
             publicKey, // Always include the public key
             admins,
             // Don't expose the secret keys

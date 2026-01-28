@@ -15,6 +15,14 @@ export async function PATCH(req: NextRequest) {
             where: eq(nodes.domain, domain),
         });
 
+        // 2. Fallback: If not found, check if there is exactly ONE node in the system.
+        if (!node) {
+            const allNodes = await db.query.nodes.findMany({ limit: 2 });
+            if (allNodes.length === 1) {
+                node = allNodes[0];
+            }
+        }
+
         if (!node) {
             [node] = await db.insert(nodes).values({
                 domain,
@@ -44,6 +52,8 @@ export async function PATCH(req: NextRequest) {
                     isNsfw: data.isNsfw ?? node.isNsfw,
                     turnstileSiteKey: data.turnstileSiteKey !== undefined ? data.turnstileSiteKey : node.turnstileSiteKey,
                     turnstileSecretKey: data.turnstileSecretKey !== undefined ? data.turnstileSecretKey : node.turnstileSecretKey,
+                    // Fix domain drift: ensure the DB matches the current environment
+                    domain: domain,
                     updatedAt: new Date(),
                 })
                 .where(eq(nodes.id, node.id))
