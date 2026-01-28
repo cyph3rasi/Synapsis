@@ -95,6 +95,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Store message reference so it appears in UI
+      // Store full envelope data as JSON so we can decrypt later
+      const envelopeData = {
+        did: body.did,
+        handle: body.handle,
+        ciphertext: body.data.ciphertext
+      };
+      
       const messageId = crypto.randomUUID();
       await db.insert(chatMessages).values({
         conversationId: conversation.id,
@@ -102,7 +109,7 @@ export async function POST(request: NextRequest) {
         senderDisplayName: null, // Unknown until decrypted
         senderAvatarUrl: null,
         senderNodeDomain: body.did?.split(':')[2] || null,
-        encryptedContent: ciphertext,
+        encryptedContent: JSON.stringify(envelopeData), // Full envelope for decryption
         senderChatPublicKey: null,
         swarmMessageId: `swarm:v2:${messageId}`,
         deliveredAt: new Date(),

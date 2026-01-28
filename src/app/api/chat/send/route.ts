@@ -128,13 +128,20 @@ export async function POST(request: NextRequest) {
                 const localDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
                 const swarmMessageId = `swarm:${localDomain}:${messageId}`;
                 
+                // Store full envelope data for decryption
+                const envelopeData = {
+                    did: user.did,
+                    handle: user.handle,
+                    ciphertext: ciphertext
+                };
+                
                 const [newMessage] = await db.insert(chatMessages).values({
                     conversationId: conversation.id,
                     senderHandle: user.handle,
                     senderDisplayName: user.displayName,
                     senderAvatarUrl: user.avatarUrl,
                     senderNodeDomain: null, // Local sender
-                    encryptedContent: ciphertext,
+                    encryptedContent: JSON.stringify(envelopeData), // Full envelope
                     senderChatPublicKey: null, // V2 E2E - keys are in the envelope
                     swarmMessageId,
                     deliveredAt: null, // Will update when remote confirms

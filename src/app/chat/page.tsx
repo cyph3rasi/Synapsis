@@ -207,19 +207,23 @@ export default function ChatPage() {
                         // return { ...msg, decryptedContent: '[Sent Message]' };
                     }
 
-                    // Attempt decrypt
-                    const envelopeMock = {
-                        did: msg.senderDid || 'unknown', // We need this!
-                        data: {
-                            ciphertext: msg.encryptedContent
-                        }
-                    };
-
-                    // If it's V2, this should work.
+                    // encryptedContent is now the full envelope JSON
                     if (msg.encryptedContent && msg.encryptedContent.startsWith('{')) {
-                        const dec = await decryptMessage(envelopeMock);
-                        if (!dec.startsWith('[')) {
-                            return { ...msg, decryptedContent: dec };
+                        try {
+                            const envelope = JSON.parse(msg.encryptedContent);
+                            // envelope contains { did, handle, ciphertext }
+                            const envelopeMock = {
+                                did: envelope.did,
+                                data: {
+                                    ciphertext: envelope.ciphertext
+                                }
+                            };
+                            const dec = await decryptMessage(envelopeMock);
+                            if (!dec.startsWith('[')) {
+                                return { ...msg, decryptedContent: dec };
+                            }
+                        } catch (e) {
+                            console.error('[Chat] Failed to parse envelope:', e);
                         }
                     }
 

@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
         // - Received messages: need sender's public key
         senderPublicKey: senderPubKey,
         isE2E: !!msg.senderChatPublicKey || (isSentByMe && !!recipientPublicKey),
-        encryptedContent: msg.encryptedContent,
+        encryptedContent: msg.encryptedContent, // This is now the full envelope JSON
         deliveredAt: msg.deliveredAt,
         readAt: msg.readAt,
         createdAt: msg.createdAt,
