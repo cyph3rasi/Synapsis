@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { TriangleAlert } from 'lucide-react';
 import { decryptPrivateKey } from '@/lib/crypto/private-key-client';
 import { keyStore, importPrivateKey } from '@/lib/crypto/user-signing';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 declare global {
     interface Window {
@@ -23,6 +25,7 @@ declare global {
 }
 
 export default function LoginPage() {
+    const router = useRouter();
     const [mode, setMode] = useState<'login' | 'register' | 'import'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -40,7 +43,8 @@ export default function LoginPage() {
     const turnstileRef = useRef<HTMLDivElement>(null);
     const turnstileWidgetId = useRef<string | null>(null);
 
-    // Import specific state
+    const { unlockIdentity, login } = useAuth();
+
     const [importFile, setImportFile] = useState<File | null>(null);
     const [importPassword, setImportPassword] = useState('');
     const [importHandle, setImportHandle] = useState('');
@@ -191,9 +195,9 @@ export default function LoginPage() {
             }
 
             setImportSuccess(data.message);
-            // Hard redirect to ensure cookie is picked up
+            // Soft navigation to preserve AuthContext/KeyStore state
             setTimeout(() => {
-                window.location.href = '/';
+                router.push('/');
             }, 2000);
 
         } catch (err) {
@@ -281,10 +285,27 @@ export default function LoginPage() {
                     // Don't block login/registration if decryption fails - user can unlock later
                     // The identity unlock prompt will be shown in the app
                 }
+            } else {
+                if (process.env.NODE_ENV === 'development') console.log('[Auth] No encrypted private key returned from server');
             }
 
-            // Hard redirect to ensure cookie is picked up
-            window.location.href = '/';
+            // Sync with global auth state if we have a key (or even if we don't, to trigger load)
+            // But unlockIdentity specifically needs the key. 
+            // If data.user.privateKeyEncrypted is present, we try to unlock globally.
+            if (data.user?.privateKeyEncrypted) {
+                try {
+                    // Update AuthContext first so it has the user and key
+                    login(data.user);
+
+                    // Now unlock (passing user explicitly to avoid async state delay)
+                    await unlockIdentity(password, data.user);
+                } catch (e) {
+                    console.error("Failed to auto-unlock identity:", e);
+                }
+            }
+
+            // Soft navigation to preserve AuthContext/KeyStore state
+            router.push('/');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
             // Reset Turnstile on error

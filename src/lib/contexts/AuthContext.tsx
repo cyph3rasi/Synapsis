@@ -22,7 +22,8 @@ interface AuthContextType {
     did: string | null;
     handle: string | null;
     checkAdmin: () => Promise<void>;
-    unlockIdentity: (password: string) => Promise<void>;
+    unlockIdentity: (password: string, explicitUser?: User) => Promise<void>;
+    login: (user: User) => void;
     logout: () => Promise<void>;
     showUnlockPrompt: boolean;
     setShowUnlockPrompt: (show: boolean) => void;
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
     handle: null,
     checkAdmin: async () => { },
     unlockIdentity: async () => { },
+    login: () => { },
     logout: async () => { },
     showUnlockPrompt: false,
     setShowUnlockPrompt: () => { },
@@ -74,21 +76,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     /**
      * Unlock the user's identity with their password
      */
-    const unlockIdentity = async (password: string) => {
-        if (!user?.privateKeyEncrypted) {
+    const unlockIdentity = async (password: string, explicitUser?: User) => {
+        const targetUser = explicitUser || user;
+
+        if (!targetUser?.privateKeyEncrypted) {
             throw new Error('No encrypted private key available');
         }
 
-        await unlockIdentityHook(user.privateKeyEncrypted, password);
+        await unlockIdentityHook(targetUser.privateKeyEncrypted, password);
 
         // Initialize Chat Keys (Async, don't block UI but start it)
-        if (user.id) {
-            ensureReady(password, user.id).catch(err => {
+        if (targetUser.id) {
+            ensureReady(password, targetUser.id).catch(err => {
                 console.error('Failed to initialize chat keys:', err);
             });
         }
 
         setShowUnlockPrompt(false); // Close prompt on success
+    };
+
+    /**
+     * Manually set the user state (called after successful login)
+     */
+    const login = (userData: User) => {
+        setUser(userData);
+        // We re-check admin status just in case
+        checkAdmin();
     };
 
     /**
@@ -159,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             handle: identity?.handle || null,
             checkAdmin,
             unlockIdentity,
+            login,
             logout,
             showUnlockPrompt,
             setShowUnlockPrompt,

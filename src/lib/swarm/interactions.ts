@@ -271,7 +271,7 @@ async function deliverSwarmInteraction(
     // SECURITY: Sign the payload with the node's private key
     const { signPayload, getNodePrivateKey } = await import('./signature');
     const privateKey = await getNodePrivateKey();
-    
+
     const signature = signPayload(payload, privateKey);
     const signedPayload = { ...payload as object, signature };
 
@@ -331,6 +331,7 @@ export interface SwarmUserProfile {
   botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
   chatPublicKey?: string;
+  did?: string;
 }
 
 export interface SwarmUserPost {

@@ -63,6 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
                                 nodeDomain: remoteDomain,
                                 isBot: profile.isBot || false,
                                 chatPublicKey: profile.chatPublicKey,
+                                did: profile.did,
                             }
                         });
                     }
