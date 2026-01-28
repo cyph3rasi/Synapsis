@@ -150,7 +150,7 @@ export default function ChatPage() {
                 if (!did) throw new Error('User not found');
             }
 
-            if (!user.did) throw new Error('User DID missing');
+            if (!user || !user.did) throw new Error('User identity not loaded or DID missing');
 
 
 
