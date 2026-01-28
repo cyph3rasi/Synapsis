@@ -59,209 +59,232 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
     };
 
     return (
-        <div
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(0, 0, 0, 0.8)',
-                display: 'flex',
-                alignItems: 'flex-end',
-                justifyContent: 'center',
-                zIndex: 99999,
-                padding: 0
-            }}
-            onClick={handleCancel}
-        >
-            <div
-                className="identity-unlock-sheet"
-                style={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    background: 'var(--background-secondary)',
-                    borderTopLeftRadius: '20px',
-                    borderTopRightRadius: '20px',
-                    padding: '24px',
-                    paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
-                    boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.5)',
-                    animation: 'slideUp 0.3s ease-out'
-                }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <style jsx>{`
-                    @keyframes slideUp {
-                        from {
-                            transform: translateY(100%);
-                        }
-                        to {
-                            transform: translateY(0);
-                        }
+        <>
+            <style jsx>{`
+                @keyframes slideUp {
+                    from {
+                        transform: translateY(100%);
                     }
-                `}</style>
+                    to {
+                        transform: translateY(0);
+                    }
+                }
 
-                {/* Drag indicator */}
-                <div style={{
-                    width: '40px',
-                    height: '4px',
-                    background: 'var(--border)',
-                    borderRadius: '2px',
-                    margin: '0 auto 20px'
-                }} />
+                .identity-unlock-container {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.8);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 99999;
+                    padding: 20px;
+                }
 
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                    <div style={{
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 16px'
-                    }}>
-                        <Lock size={28} style={{ color: 'var(--accent)' }} />
-                    </div>
-                    <h2 style={{ fontSize: '22px', fontWeight: 600, margin: '0 0 8px 0' }}>
-                        Identity Required
-                    </h2>
-                    <p style={{ color: 'var(--foreground-secondary)', margin: 0, lineHeight: 1.5, fontSize: '15px' }}>
-                        Enter your password to unlock your identity
-                    </p>
-                </div>
+                .identity-unlock-sheet {
+                    width: 100%;
+                    max-width: 400px;
+                    background: var(--background-secondary);
+                    border-radius: 12px;
+                    padding: 24px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+                }
 
-                {/* Form */}
-                <form onSubmit={handleSubmit}>
-                    <div style={{ marginBottom: '16px' }}>
-                        <label
-                            htmlFor="unlock-password"
-                            style={{
-                                display: 'block',
-                                marginBottom: '8px',
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                color: 'var(--foreground)'
-                            }}
-                        >
-                            Password
-                        </label>
-                        <input
-                            id="unlock-password"
-                            type="password"
-                            value={password}
-                            onChange={(e) => {
-                                setPassword(e.target.value);
-                                setError(null);
-                            }}
-                            disabled={isUnlocking}
-                            placeholder="Enter your password"
-                            autoFocus
-                            style={{
-                                width: '100%',
-                                padding: '14px 16px',
-                                borderRadius: '12px',
-                                border: error ? '2px solid var(--error)' : '2px solid var(--border)',
-                                background: 'var(--background)',
-                                color: 'var(--foreground)',
-                                fontSize: '16px',
-                                outline: 'none',
-                                transition: 'border-color 0.2s'
-                            }}
-                            onFocus={(e) => {
-                                if (!error) {
-                                    e.target.style.borderColor = 'var(--accent)';
-                                }
-                            }}
-                            onBlur={(e) => {
-                                if (!error) {
-                                    e.target.style.borderColor = 'var(--border)';
-                                }
-                            }}
-                        />
-                    </div>
+                .drag-indicator {
+                    display: none;
+                }
 
-                    {/* Error Message */}
-                    {error && (
+                @media (max-width: 768px) {
+                    .identity-unlock-container {
+                        align-items: flex-end;
+                        padding: 0;
+                    }
+
+                    .identity-unlock-sheet {
+                        max-width: 100%;
+                        border-radius: 0;
+                        border-top-left-radius: 20px;
+                        border-top-right-radius: 20px;
+                        padding: 24px;
+                        padding-bottom: calc(24px + env(safe-area-inset-bottom));
+                        animation: slideUp 0.3s ease-out;
+                    }
+
+                    .drag-indicator {
+                        display: block;
+                        width: 40px;
+                        height: 4px;
+                        background: var(--border);
+                        border-radius: 2px;
+                        margin: 0 auto 20px;
+                    }
+                }
+            `}</style>
+
+            <div
+                className="identity-unlock-container"
+                onClick={handleCancel}
+            >
+                <div
+                    className="identity-unlock-sheet"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Drag indicator - only visible on mobile */}
+                    <div className="drag-indicator" />
+
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                         <div style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '50%',
+                            background: 'rgba(255, 255, 255, 0.1)',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 14px',
-                            borderRadius: '10px',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            color: 'var(--error)',
-                            fontSize: '14px',
-                            marginBottom: '16px'
+                            justifyContent: 'center'
                         }}>
-                            <AlertCircle size={18} />
-                            <span>{error}</span>
+                            <Lock size={24} style={{ color: 'var(--accent)' }} />
                         </div>
-                    )}
+                        <h2 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>
+                            Identity Required
+                        </h2>
+                    </div>
 
-                    {/* Buttons */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
-                        <button
-                            type="submit"
-                            disabled={isUnlocking || !password.trim()}
-                            className="btn btn-primary"
-                            style={{
-                                width: '100%',
+                    {/* Description */}
+                    <p style={{ color: 'var(--foreground-secondary)', marginBottom: '20px', lineHeight: 1.5, fontSize: '15px' }}>
+                        Enter your password to unlock your identity
+                    </p>
+
+                    {/* Form */}
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ marginBottom: '16px' }}>
+                            <label
+                                htmlFor="unlock-password"
+                                style={{
+                                    display: 'block',
+                                    marginBottom: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: 500,
+                                    color: 'var(--foreground)'
+                                }}
+                            >
+                                Password
+                            </label>
+                            <input
+                                id="unlock-password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    setError(null);
+                                }}
+                                disabled={isUnlocking}
+                                placeholder="Enter your password"
+                                autoFocus
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 14px',
+                                    borderRadius: '8px',
+                                    border: error ? '2px solid var(--error)' : '1px solid var(--border)',
+                                    background: 'var(--background)',
+                                    color: 'var(--foreground)',
+                                    fontSize: '15px',
+                                    outline: 'none',
+                                    transition: 'border-color 0.2s'
+                                }}
+                                onFocus={(e) => {
+                                    if (!error) {
+                                        e.target.style.borderColor = 'var(--accent)';
+                                    }
+                                }}
+                                onBlur={(e) => {
+                                    if (!error) {
+                                        e.target.style.borderColor = 'var(--border)';
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
                                 gap: '8px',
-                                minHeight: '52px',
-                                padding: '14px 20px',
-                                fontSize: '16px',
-                                fontWeight: 600,
-                                borderRadius: '12px'
-                            }}
-                        >
-                            {isUnlocking ? (
-                                <>
-                                    <Loader2 size={20} className="animate-spin" />
-                                    <span>Unlocking...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Lock size={18} />
-                                    <span>Unlock Identity</span>
-                                </>
-                            )}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleCancel}
-                            disabled={isUnlocking}
-                            className="btn btn-ghost"
-                            style={{ 
-                                width: '100%',
-                                minHeight: '52px',
-                                padding: '14px 20px',
-                                fontSize: '16px',
-                                fontWeight: 500,
-                                borderRadius: '12px'
-                            }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+                                padding: '12px 14px',
+                                borderRadius: '8px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                color: 'var(--error)',
+                                fontSize: '14px',
+                                marginBottom: '16px'
+                            }}>
+                                <AlertCircle size={18} />
+                                <span>{error}</span>
+                            </div>
+                        )}
 
-                {/* Info Note */}
-                <p style={{
-                    fontSize: '13px',
-                    color: 'var(--foreground-tertiary)',
-                    marginTop: '20px',
-                    marginBottom: 0,
-                    lineHeight: 1.5,
-                    textAlign: 'center'
-                }}>
-                    Your password never leaves this device
-                </p>
+                        {/* Buttons */}
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                disabled={isUnlocking}
+                                className="btn btn-ghost"
+                                style={{ 
+                                    flex: 1,
+                                    minHeight: '44px',
+                                    padding: '10px 16px',
+                                    fontSize: '15px'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isUnlocking || !password.trim()}
+                                className="btn btn-primary"
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    minHeight: '44px',
+                                    padding: '10px 16px',
+                                    fontSize: '15px'
+                                }}
+                            >
+                                {isUnlocking ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        <span>Unlocking...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Lock size={16} />
+                                        <span>Unlock</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* Info Note */}
+                    <p style={{
+                        fontSize: '13px',
+                        color: 'var(--foreground-tertiary)',
+                        marginTop: '16px',
+                        marginBottom: 0,
+                        lineHeight: 1.5,
+                        textAlign: 'center'
+                    }}>
+                        Your password never leaves this device
+                    </p>
+                </div>
             </div>
-        </div>
+        </>
     );
 }
