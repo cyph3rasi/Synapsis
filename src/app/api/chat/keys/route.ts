@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { chatDeviceBundles, handleRegistry, remoteIdentityCache } from '@/db/schema';
 import { requireAuth } from '@/lib/auth';
 import { eq, and, gt } from 'drizzle-orm';
+import { updateRegistryFromProfile } from '@/lib/swarm/healing';
 
 /**
  * GET /api/chat/keys?did=<did>
@@ -114,6 +115,9 @@ export async function GET(request: NextRequest) {
 
             if (chatKey) {
               console.log('[Chat Keys GET] Found key in Swarm Profile');
+
+              // HEALING: Update the registry because we found the user at this nodeDomain!
+              await updateRegistryFromProfile(handleEntry.handle, did, nodeDomain);
 
               // Cache it
               await db.insert(remoteIdentityCache).values({

@@ -9,9 +9,9 @@ import { db, handleRegistry } from '@/db';
 import { desc, gt } from 'drizzle-orm';
 import type { SwarmGossipPayload, SwarmGossipResponse, SwarmSyncResult, SwarmNodeInfo } from './types';
 import { SWARM_CONFIG } from './types';
-import { 
-  getNodesForGossip, 
-  getActiveSwarmNodes, 
+import {
+  getNodesForGossip,
+  getActiveSwarmNodes,
   getNodesSince,
   upsertSwarmNodes,
   markNodeSuccess,
@@ -26,7 +26,7 @@ import { buildAnnouncement } from './discovery';
  */
 export async function buildGossipPayload(since?: string): Promise<SwarmGossipPayload> {
   const ourDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
-  
+
   // Get nodes to share
   let nodes: SwarmNodeInfo[];
   if (since) {
@@ -84,14 +84,15 @@ export async function processGossip(
   payload: SwarmGossipPayload
 ): Promise<SwarmGossipResponse> {
   const startTime = Date.now();
-  
+
   // Process incoming nodes
   const nodeResult = await upsertSwarmNodes(payload.nodes, payload.sender);
-  
+
   // Process incoming handles
   let handlesResult = { added: 0, updated: 0 };
   if (payload.handles && payload.handles.length > 0) {
-    handlesResult = await upsertHandleEntries(payload.handles);
+    // PASS SENDER: This allows us to trust "authoritative" updates from the node itself
+    handlesResult = await upsertHandleEntries(payload.handles, payload.sender);
   }
 
   // Build our response with nodes/handles to share back
@@ -115,10 +116,10 @@ export async function gossipToNode(
   since?: string
 ): Promise<SwarmSyncResult> {
   const startTime = Date.now();
-  
+
   try {
     const payload = await buildGossipPayload(since);
-    
+
     const baseUrl = targetDomain.startsWith('http') ? targetDomain : `https://${targetDomain}`;
     const url = `${baseUrl}/api/swarm/gossip`;
 
@@ -160,10 +161,11 @@ export async function gossipToNode(
 
     // Process the response (nodes and handles they sent back)
     const nodeResult = await upsertSwarmNodes(gossipResponse.nodes, targetDomain);
-    
+
     let handlesResult = { added: 0, updated: 0 };
     if (gossipResponse.handles && gossipResponse.handles.length > 0) {
-      handlesResult = await upsertHandleEntries(gossipResponse.handles);
+      // PASS TARGET: If we gossiped TO them, and they replied, treat their reply as authoritative
+      handlesResult = await upsertHandleEntries(gossipResponse.handles, targetDomain);
     }
 
     await markNodeSuccess(targetDomain);
@@ -182,9 +184,9 @@ export async function gossipToNode(
   } catch (error) {
     const durationMs = Date.now() - startTime;
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    
+
     await markNodeFailure(targetDomain);
-    
+
     const result: SwarmSyncResult = {
       success: false,
       nodesReceived: 0,
@@ -194,7 +196,7 @@ export async function gossipToNode(
       error: errorMsg,
       durationMs,
     };
-    
+
     await logSync(targetDomain, 'push', result);
     return result;
   }
@@ -211,7 +213,7 @@ export async function runGossipRound(): Promise<{
 }> {
   // Get random nodes to gossip with
   const targets = await getNodesForGossip(SWARM_CONFIG.gossipFanout);
-  
+
   let contacted = 0;
   let successful = 0;
   let totalNodesReceived = 0;
@@ -220,7 +222,7 @@ export async function runGossipRound(): Promise<{
   for (const target of targets) {
     contacted++;
     const result = await gossipToNode(target.domain);
-    
+
     if (result.success) {
       successful++;
       totalNodesReceived += result.nodesReceived;
