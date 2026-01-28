@@ -36,6 +36,72 @@ import { v4 as uuidv4 } from 'uuid';
 // Helper to check signature (we trust server for V2.1 baseline usually, but client check is better)
 // import { verifyUserAction } from '...'; // Client side verification lib?
 
+// Helper to encrypt a copy of message for sender (so they can read on any device)
+async function encryptForSelf(plaintext: string, identityPublicKey: CryptoKey): Promise<{ ciphertext: string; iv: string }> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  
+  // Generate a random IV
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  // Export public key raw to use as key material
+  const keyMaterial = await crypto.subtle.exportKey('raw', identityPublicKey);
+  
+  // Derive AES key using HKDF-like approach (simplified: hash the key material)
+  const aesKey = await crypto.subtle.digest('SHA-256', keyMaterial);
+  
+  // Import as AES-GCM key
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    aesKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt']
+  );
+  
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    data
+  );
+  
+  return {
+    ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+    iv: btoa(String.fromCharCode(...iv))
+  };
+}
+
+// Helper to decrypt self-encrypted message
+async function decryptForSelf(selfEncrypted: { ciphertext: string; iv: string }, identityKeyPair: CryptoKeyPair): Promise<string> {
+  // Export public key raw to use as key material (same as encryption)
+  const keyMaterial = await crypto.subtle.exportKey('raw', identityKeyPair.publicKey);
+  
+  // Derive AES key
+  const aesKey = await crypto.subtle.digest('SHA-256', keyMaterial);
+  
+  // Import as AES-GCM key
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    aesKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  
+  // Decode IV and ciphertext
+  const iv = Uint8Array.from(atob(selfEncrypted.iv), c => c.charCodeAt(0));
+  const ciphertext = Uint8Array.from(atob(selfEncrypted.ciphertext), c => c.charCodeAt(0));
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    ciphertext
+  );
+  
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
+
 export function useChatEncryption() {
   const { signUserAction, identity } = useUserIdentity();
   const [isReady, setIsReady] = useState(false);
@@ -385,6 +451,10 @@ export function useChatEncryption() {
       const serialized = await serializeRatchetState(newState);
       await storeEncrypted(sessionKey, serialized);
 
+      // Encrypt a copy for ourselves so we can read our own messages on any device
+      // Use a simple AES-GCM encryption with a key derived from our identity
+      const selfEncrypted = await encryptForSelf(content, localKeys.identity.publicKey);
+
       // Payload
       const payload = {
         recipientDid,
@@ -392,7 +462,8 @@ export function useChatEncryption() {
         senderDeviceId: localDeviceId, // V2.1 Addition
         ciphertext: ciphertext.ciphertext,
         header: headerData ? { ...headerData, ...ciphertext.header } : ciphertext.header,
-        iv: ciphertext.iv
+        iv: ciphertext.iv,
+        selfEncrypted // So sender can decrypt on any device
       };
 
       const fullData = {
@@ -446,10 +517,26 @@ export function useChatEncryption() {
       if (!payloadString) return '[Legacy Message]'; // Fail gracefully
 
       const payload = JSON.parse(payloadString);
-      const { recipientDeviceId, senderDeviceId, ciphertext, header, iv } = payload;
+      const { recipientDeviceId, senderDeviceId, ciphertext, header, iv, selfEncrypted } = payload;
 
       const localDeviceId = localStorage.getItem('synapsis_device_id');
-      if (recipientDeviceId !== localDeviceId) return `[Message for device ${recipientDeviceId.slice(0, 4)}...]`;
+      
+      // Check if this is a message WE sent (not for us to decrypt with ratchet)
+      if (recipientDeviceId !== localDeviceId) {
+        // This is a message we sent - try to decrypt the self-encrypted copy
+        if (selfEncrypted) {
+          try {
+            const localKeys = await loadDeviceKeys();
+            if (!localKeys) return '[Keys locked]';
+            const plaintext = await decryptForSelf(selfEncrypted, localKeys.identity);
+            return plaintext;
+          } catch (e) {
+            console.error('[Chat] Failed to decrypt self-encrypted message:', e);
+            return '[Sent Message]';
+          }
+        }
+        return '[Sent Message]';
+      }
 
       // 2. Load Session
       const sessionKey = `session:${senderDid}:${senderDeviceId}`;
