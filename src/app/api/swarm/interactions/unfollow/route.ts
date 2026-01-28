@@ -2,12 +2,15 @@
  * Swarm Unfollow Endpoint
  * 
  * POST: Receive an unfollow from another swarm node
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, remoteFollowers } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmUnfollowSchema = z.object({
   targetHandle: z.string(),
@@ -17,6 +20,7 @@ const swarmUnfollowSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -32,6 +36,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmUnfollowSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.unfollow.followerHandle,
+      data.unfollow.followerNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for unfollow from ${data.unfollow.followerHandle}@${data.unfollow.followerNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the target user
     const targetUser = await db.query.users.findFirst({

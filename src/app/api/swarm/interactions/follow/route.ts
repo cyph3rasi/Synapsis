@@ -5,12 +5,15 @@
  * 
  * This enables swarm-native follows between Synapsis nodes
  * with instant delivery and real-time updates.
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, notifications, remoteFollowers } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmFollowSchema = z.object({
   targetHandle: z.string(),
@@ -23,6 +26,7 @@ const swarmFollowSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -38,6 +42,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmFollowSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.follow.followerHandle,
+      data.follow.followerNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for follow from ${data.follow.followerHandle}@${data.follow.followerNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the target user (local user being followed)
     const targetUser = await db.query.users.findFirst({

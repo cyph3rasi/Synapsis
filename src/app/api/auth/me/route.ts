@@ -33,6 +33,9 @@ export async function GET() {
                 avatarUrl: session.user.avatarUrl,
                 bio: session.user.bio,
                 website: session.user.website,
+                did: session.user.did,
+                publicKey: session.user.publicKey,
+                privateKeyEncrypted: session.user.privateKeyEncrypted,
             },
         });
     } catch (error) {

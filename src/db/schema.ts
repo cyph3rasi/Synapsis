@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, boolean, index, foreignKey, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, integer, bigint, boolean, index, foreignKey, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================
@@ -17,6 +17,7 @@ export const nodes = pgTable('nodes', {
   faviconUrl: text('favicon_url'),
   accentColor: text('accent_color').default('#FFFFFF'),
   publicKey: text('public_key'),
+  privateKeyEncrypted: text('private_key_encrypted'), // Encrypted with AUTH_SECRET
   // NSFW settings
   isNsfw: boolean('is_nsfw').default(false).notNull(), // Entire node is NSFW
   // Cloudflare Turnstile settings
@@ -774,37 +775,37 @@ export const botRateLimitsRelations = relations(botRateLimits, ({ one }) => ({
 export const swarmNodes = pgTable('swarm_nodes', {
   id: uuid('id').primaryKey().defaultRandom(),
   domain: text('domain').notNull().unique(),
-  
+
   // Node metadata (fetched from remote)
   name: text('name'),
   description: text('description'),
   logoUrl: text('logo_url'),
   publicKey: text('public_key'),
   softwareVersion: text('software_version'),
-  
+
   // Stats (updated periodically)
   userCount: integer('user_count'),
   postCount: integer('post_count'),
-  
+
   // NSFW flag (synced from remote node)
   isNsfw: boolean('is_nsfw').default(false).notNull(),
-  
+
   // Discovery metadata
   discoveredVia: text('discovered_via'), // Domain of node that told us about this one
   discoveredAt: timestamp('discovered_at').defaultNow().notNull(),
-  
+
   // Health tracking
   lastSeenAt: timestamp('last_seen_at').defaultNow().notNull(),
   lastSyncAt: timestamp('last_sync_at'),
   consecutiveFailures: integer('consecutive_failures').default(0).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
-  
+
   // Trust/reputation (for future spam prevention)
   trustScore: integer('trust_score').default(50).notNull(), // 0-100
-  
+
   // Capabilities
   capabilities: text('capabilities'), // JSON array: ["handles", "gossip", "relay"]
-  
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -822,17 +823,17 @@ export const swarmNodes = pgTable('swarm_nodes', {
 export const swarmSeeds = pgTable('swarm_seeds', {
   id: uuid('id').primaryKey().defaultRandom(),
   domain: text('domain').notNull().unique(),
-  
+
   // Priority for connection order (lower = higher priority)
   priority: integer('priority').default(100).notNull(),
-  
+
   // Whether this seed is enabled
   isEnabled: boolean('is_enabled').default(true).notNull(),
-  
+
   // Health tracking
   lastContactAt: timestamp('last_contact_at'),
   consecutiveFailures: integer('consecutive_failures').default(0).notNull(),
-  
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('swarm_seeds_enabled_idx').on(table.isEnabled),
@@ -844,24 +845,24 @@ export const swarmSeeds = pgTable('swarm_seeds', {
  */
 export const swarmSyncLog = pgTable('swarm_sync_log', {
   id: uuid('id').primaryKey().defaultRandom(),
-  
+
   // Which node we synced with
   remoteDomain: text('remote_domain').notNull(),
-  
+
   // Direction: 'push' (we sent) or 'pull' (we received)
   direction: text('direction').notNull(),
-  
+
   // What was synced
   nodesReceived: integer('nodes_received').default(0).notNull(),
   nodesSent: integer('nodes_sent').default(0).notNull(),
   handlesReceived: integer('handles_received').default(0).notNull(),
   handlesSent: integer('handles_sent').default(0).notNull(),
-  
+
   // Result
   success: boolean('success').notNull(),
   errorMessage: text('error_message'),
   durationMs: integer('duration_ms'),
-  
+
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('swarm_sync_log_remote_idx').on(table.remoteDomain),
@@ -878,18 +879,18 @@ export const swarmSyncLog = pgTable('swarm_sync_log', {
  */
 export const chatConversations = pgTable('chat_conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
-  
+
   // Conversation type: 'direct' (1-on-1) or 'group' (future)
   type: text('type').default('direct').notNull(),
-  
+
   // For direct chats, store both participants
   participant1Id: uuid('participant1_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   participant2Handle: text('participant2_handle').notNull(), // Can be local or remote (user@domain)
-  
+
   // Last message info for sorting
   lastMessageAt: timestamp('last_message_at'),
   lastMessagePreview: text('last_message_preview'),
-  
+
   // Metadata
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -915,30 +916,30 @@ export const chatConversationsRelations = relations(chatConversations, ({ one, m
  */
 export const chatMessages = pgTable('chat_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
-  
+
   // Which conversation this belongs to
   conversationId: uuid('conversation_id').notNull().references(() => chatConversations.id, { onDelete: 'cascade' }),
-  
+
   // Sender info
   senderHandle: text('sender_handle').notNull(), // Can be local or remote
   senderDisplayName: text('sender_display_name'),
   senderAvatarUrl: text('sender_avatar_url'),
   senderNodeDomain: text('sender_node_domain'), // null if local
-  
+
   // Message content (encrypted for recipient with their public key)
   encryptedContent: text('encrypted_content').notNull(),
   // Sender's copy (encrypted with sender's public key so they can read their own messages)
   senderEncryptedContent: text('sender_encrypted_content'),
   // Sender's ECDH public key (for E2E decryption by recipient)
   senderChatPublicKey: text('sender_chat_public_key'),
-  
+
   // Swarm sync info
   swarmMessageId: text('swarm_message_id').unique(), // Format: swarm:domain:uuid
-  
+
   // Status tracking
   deliveredAt: timestamp('delivered_at'),
   readAt: timestamp('read_at'),
-  
+
   // Metadata
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -960,10 +961,10 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
  */
 export const chatTypingIndicators = pgTable('chat_typing_indicators', {
   id: uuid('id').primaryKey().defaultRandom(),
-  
+
   conversationId: uuid('conversation_id').notNull().references(() => chatConversations.id, { onDelete: 'cascade' }),
   userHandle: text('user_handle').notNull(),
-  
+
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
@@ -971,3 +972,36 @@ export const chatTypingIndicators = pgTable('chat_typing_indicators', {
   index('chat_typing_expires_idx').on(table.expiresAt),
   uniqueIndex('chat_typing_unique').on(table.conversationId, table.userHandle),
 ]);
+
+// ============================================
+// CRYPTO & SECURITY
+// ============================================
+
+/**
+ * Replay protection for signed user actions.
+ * Enforces uniqueness of (did, nonce) within the valid timeframe.
+ */
+export const signedActionDedupe = pgTable('signed_action_dedupe', {
+  // SHA-256 of canonical signed payload (without signature)
+  actionId: text('action_id').primaryKey(),
+
+  did: text('did').notNull(),
+  nonce: text('nonce').notNull(),
+  ts: bigint('ts', { mode: 'number' }).notNull(),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('signed_action_dedupe_created_idx').on(table.createdAt), // For cleanup
+]);
+
+/**
+ * Cache for remote public keys to enforce key continuity.
+ * Prevents TOFU (Trust On First Use) attacks after initial trust.
+ */
+export const remoteIdentityCache = pgTable('remote_identity_cache', {
+  did: text('did').primaryKey(), // The DID is the key
+  publicKey: text('public_key').notNull(),
+
+  fetchedAt: timestamp('fetched_at').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});

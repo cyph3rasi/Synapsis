@@ -207,6 +207,33 @@ export async function authenticateUser(
         await db.update(users)
             .set({ privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey) })
             .where(eq(users.id, user.id));
+
+        // Update local object
+        user.privateKeyEncrypted = serializeEncryptedKey(encryptedPrivateKey);
+    }
+
+    // MIGRATION: Check if user has legacy RSA key (upgrade to ECDSA P-256)
+    // RSA 2048 SPKI PEM is ~450 chars, ECDSA P-256 is ~178 chars.
+    if (user.publicKey.length > 300) {
+        console.log(`[Auth] Migrating user ${user.handle} from RSA to ECDSA P-256`);
+
+        // Generate new ECDSA key pair
+        const { publicKey, privateKey } = await generateKeyPair();
+
+        // Encrypt new private key
+        const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
+
+        // Update DB
+        await db.update(users)
+            .set({
+                publicKey: publicKey,
+                privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey)
+            })
+            .where(eq(users.id, user.id));
+
+        // Update local user object to return new keys
+        user.publicKey = publicKey;
+        user.privateKeyEncrypted = serializeEncryptedKey(encryptedPrivateKey);
     }
 
     return user;

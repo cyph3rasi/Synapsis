@@ -2,12 +2,15 @@
  * Swarm Unlike Endpoint
  * 
  * POST: Receive an unlike from another swarm node
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, remoteLikes } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmUnlikeSchema = z.object({
   postId: z.string().uuid(),
@@ -17,6 +20,7 @@ const swarmUnlikeSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -32,6 +36,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmUnlikeSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.unlike.actorHandle,
+      data.unlike.actorNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for unlike from ${data.unlike.actorHandle}@${data.unlike.actorNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the target post
     const post = await db.query.posts.findFirst({

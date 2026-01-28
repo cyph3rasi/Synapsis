@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, reports, posts, users } from '@/db';
 import { requireAuth } from '@/lib/auth';
+import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -12,18 +13,11 @@ const reportSchema = z.object({
 
 export async function POST(request: Request) {
     try {
-        const reporter = await requireAuth();
+        const signedAction = await request.json();
+        const reporter = await requireSignedAction(signedAction);
 
-        if (reporter.isSuspended || reporter.isSilenced) {
-            return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
-        }
-
-        if (!db) {
-            return NextResponse.json({ error: 'Database not available' }, { status: 503 });
-        }
-
-        const body = await request.json();
-        const data = reportSchema.parse(body);
+        // Trust signed payload
+        const data = reportSchema.parse(signedAction.data);
 
         if (data.targetType === 'post') {
             const targetPost = await db.query.posts.findFirst({

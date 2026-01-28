@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { nodes, users } from '@/db';
 import { eq, inArray } from 'drizzle-orm';
+import { getNodePublicKey } from '@/lib/swarm/node-keys';
 
 export async function GET() {
     try {
@@ -11,6 +12,9 @@ export async function GET() {
         const node = await db.query.nodes.findFirst({
             where: eq(nodes.domain, domain),
         });
+
+        // Ensure we have a public key
+        const publicKey = await getNodePublicKey();
 
         // Fetch admin users based on ADMIN_EMAILS env var
         const adminEmails = (process.env.ADMIN_EMAILS || '')
@@ -37,6 +41,7 @@ export async function GET() {
                 description: process.env.NEXT_PUBLIC_NODE_DESCRIPTION || 'A swarm social network node.',
                 accentColor: process.env.NEXT_PUBLIC_ACCENT_COLOR || '#FFFFFF',
                 domain,
+                publicKey,
                 admins,
                 turnstileSiteKey: null,
             });
@@ -44,9 +49,11 @@ export async function GET() {
 
         return NextResponse.json({ 
             ...node, 
+            publicKey, // Always include the public key
             admins,
-            // Don't expose the secret key
+            // Don't expose the secret keys
             turnstileSecretKey: undefined,
+            privateKeyEncrypted: undefined,
         });
     } catch (error) {
         console.error('Node info error:', error);

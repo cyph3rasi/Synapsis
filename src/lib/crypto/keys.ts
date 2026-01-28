@@ -1,20 +1,20 @@
 /**
  * Cryptographic Key Generation
  * 
- * Generates RSA key pairs for signing posts and verifying identity.
+ * Generates ECDSA P-256 key pairs for signing posts and verifying identity.
  */
 
 import * as crypto from 'crypto';
 
 /**
- * Generate an RSA key pair for signing
+ * Generate an ECDSA P-256 key pair for signing
  */
 export async function generateKeyPair(): Promise<{ publicKey: string; privateKey: string }> {
     return new Promise((resolve, reject) => {
         crypto.generateKeyPair(
-            'rsa',
+            'ec',
             {
-                modulusLength: 2048,
+                namedCurve: 'P-256',
                 publicKeyEncoding: {
                     type: 'spki',
                     format: 'pem',

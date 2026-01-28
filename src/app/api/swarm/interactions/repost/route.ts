@@ -2,12 +2,15 @@
  * Swarm Repost Endpoint
  * 
  * POST: Receive a repost from another swarm node
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, notifications } from '@/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmRepostSchema = z.object({
   postId: z.string().uuid(),
@@ -20,6 +23,7 @@ const swarmRepostSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -35,6 +39,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmRepostSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.repost.actorHandle,
+      data.repost.actorNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for repost from ${data.repost.actorHandle}@${data.repost.actorNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the target post
     const post = await db.query.posts.findFirst({

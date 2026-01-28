@@ -4,12 +4,14 @@
  * POST: Receives conversation deletion requests from other swarm nodes
  * 
  * Security: Only allows deletion if the sender is actually a participant in the conversation
+ * and the request is cryptographically signed.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, chatConversations } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const deletionSchema = z.object({
   senderHandle: z.string(),
@@ -17,6 +19,7 @@ const deletionSchema = z.object({
   recipientHandle: z.string(),
   conversationId: z.string().optional(),
   timestamp: z.string(),
+  signature: z.string(),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,6 +30,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = deletionSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.senderHandle,
+      data.senderNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm Chat Delete] Invalid signature from ${data.senderHandle}@${data.senderNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the recipient (local user)
     const recipient = await db.query.users.findFirst({

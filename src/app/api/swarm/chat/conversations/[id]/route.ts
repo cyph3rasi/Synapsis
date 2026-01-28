@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, chatConversations, chatMessages } from '@/db';
+import { db, chatConversations, chatMessages, users } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
@@ -42,32 +42,40 @@ export async function DELETE(
     if (deleteFor === 'both') {
       // Delete the entire conversation and all messages (cascade will handle messages)
       await db.delete(chatConversations).where(eq(chatConversations.id, id));
-      
+
       // Send deletion request to the other party
       const participant2Handle = conversation.participant2Handle;
       const isRemote = participant2Handle.includes('@');
-      
+
       if (isRemote) {
         // Extract domain from handle (format: handle@domain)
         const domain = participant2Handle.split('@')[1];
         const handle = participant2Handle.split('@')[0];
-        
+
         try {
           const protocol = domain.includes('localhost') ? 'http' : 'https';
           const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost';
-          
+
+          // SECURITY: Sign the deletion request
+          const { signPayload, getNodePrivateKey } = await import('@/lib/swarm/signature');
+          const privateKey = await getNodePrivateKey();
+
+          const payload = {
+            senderHandle: session.user.handle,
+            senderNodeDomain: nodeDomain,
+            recipientHandle: handle,
+            conversationId: id,
+            timestamp: new Date().toISOString(),
+          };
+
+          const signature = signPayload(payload, privateKey);
+
           await fetch(`${protocol}://${domain}/api/swarm/chat/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              senderHandle: session.user.handle,
-              senderNodeDomain: nodeDomain,
-              recipientHandle: handle,
-              conversationId: id,
-              timestamp: new Date().toISOString(),
-            }),
+            body: JSON.stringify({ ...payload, signature }),
           });
-          
+
           console.log(`[Chat Delete] Sent deletion request to ${domain}`);
         } catch (error) {
           console.error('[Chat Delete] Failed to notify remote node:', error);
@@ -76,9 +84,9 @@ export async function DELETE(
       } else {
         // Local user - find and delete their conversation too
         const recipientUser = await db.query.users.findFirst({
-          where: eq(db.users.handle, participant2Handle),
+          where: eq(users.handle, participant2Handle),
         });
-        
+
         if (recipientUser) {
           // Find their conversation with us
           const recipientConversation = await db.query.chatConversations.findFirst({
@@ -87,26 +95,26 @@ export async function DELETE(
               eq(chatConversations.participant2Handle, session.user.handle)
             ),
           });
-          
+
           if (recipientConversation) {
             await db.delete(chatConversations).where(eq(chatConversations.id, recipientConversation.id));
             console.log(`[Chat Delete] Deleted conversation for local user ${participant2Handle}`);
           }
         }
       }
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Conversation deleted for both parties' 
+
+      return NextResponse.json({
+        success: true,
+        message: 'Conversation deleted for both parties'
       });
     } else {
       // Delete for self only - just delete the conversation record
       // The other party will still have their copy
       await db.delete(chatConversations).where(eq(chatConversations.id, id));
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Conversation deleted for you' 
+
+      return NextResponse.json({
+        success: true,
+        message: 'Conversation deleted for you'
       });
     }
   } catch (error) {

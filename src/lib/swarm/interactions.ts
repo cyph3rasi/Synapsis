@@ -58,9 +58,12 @@ export interface SwarmLikePayload {
     actorDisplayName: string;
     actorAvatarUrl?: string;
     actorNodeDomain: string;
+    actorDid: string; // User's DID
+    actorPublicKey: string; // User's public key for verification
     interactionId: string;
     timestamp: string;
   };
+  userSignature: string; // User's cryptographic signature
 }
 
 export interface SwarmUnlikePayload {
@@ -249,7 +252,7 @@ export async function deliverSwarmMention(
 }
 
 /**
- * Generic interaction delivery
+ * Generic interaction delivery with cryptographic signature
  */
 async function deliverSwarmInteraction(
   targetDomain: string,
@@ -265,6 +268,13 @@ async function deliverSwarmInteraction(
 
     const url = `${baseUrl}${endpoint}`;
 
+    // SECURITY: Sign the payload with the node's private key
+    const { signPayload, getNodePrivateKey } = await import('./signature');
+    const privateKey = await getNodePrivateKey();
+    
+    const signature = signPayload(payload, privateKey);
+    const signedPayload = { ...payload as object, signature };
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
@@ -274,7 +284,7 @@ async function deliverSwarmInteraction(
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(signedPayload),
       signal: controller.signal,
     });
 

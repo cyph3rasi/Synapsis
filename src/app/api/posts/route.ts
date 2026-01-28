@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts } from '@/db';
 import { requireAuth } from '@/lib/auth';
+import { requireSignedAction, type SignedAction } from '@/lib/auth/verify-signature';
 import { eq, desc, and, inArray, isNull, isNotNull, or, lt } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -43,9 +44,15 @@ const createPostSchema = z.object({
 // Create a new post
 export async function POST(request: Request) {
     try {
-        const user = await requireAuth();
-        const body = await request.json();
-        const data = createPostSchema.parse(body);
+        // Parse the signed action from the request body
+        const signedAction: SignedAction = await request.json();
+
+        // Strictly verify the signature and get the user
+        // This replaces requireAuth() - the signature proves identity AND intent
+        const user = await requireSignedAction(signedAction);
+
+        // Extract post data from the signed action
+        const data = createPostSchema.parse(signedAction.data);
 
         if (user.isSuspended || user.isSilenced) {
             return NextResponse.json({ error: 'Account restricted' }, { status: 403 });
@@ -273,8 +280,21 @@ export async function POST(request: Request) {
             );
         }
 
-        if (error instanceof Error && error.message === 'Authentication required') {
-            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        if (error instanceof Error) {
+            // Handle signature verification errors
+            if (error.message === 'Invalid signature' ||
+                error.message === 'User not found' ||
+                error.message === 'Handle mismatch' ||
+                error.message === 'Timestamp too old or in future') {
+                return NextResponse.json(
+                    { error: error.message, code: 'INVALID_SIGNATURE' },
+                    { status: 403 }
+                );
+            }
+
+            if (error.message === 'Authentication required') {
+                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+            }
         }
 
         return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
+import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -62,9 +63,9 @@ export async function GET(request: Request) {
             if (row.actorNodeDomain && !row.actorAvatarUrl) {
                 const key = `${row.actorHandle}@${row.actorNodeDomain}`;
                 if (!remoteToFetch.has(key)) {
-                    remoteToFetch.set(key, { 
+                    remoteToFetch.set(key, {
                         handle: row.actorHandle.split('@')[0], // Get just the username part
-                        nodeDomain: row.actorNodeDomain 
+                        nodeDomain: row.actorNodeDomain
                     });
                 }
             }
@@ -85,14 +86,14 @@ export async function GET(request: Request) {
         const payload = rows.map((row) => {
             const key = row.actorNodeDomain ? `${row.actorHandle}@${row.actorNodeDomain}` : null;
             const freshProfile = key ? freshProfiles.get(key) : null;
-            
+
             return {
                 id: row.id,
                 type: row.type,
                 createdAt: row.createdAt,
                 readAt: row.readAt,
                 actor: {
-                    handle: row.actorNodeDomain 
+                    handle: row.actorNodeDomain
                         ? `${row.actorHandle}@${row.actorNodeDomain}`
                         : row.actorHandle,
                     displayName: freshProfile?.displayName || row.actorDisplayName,
@@ -119,13 +120,15 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
     try {
-        const user = await requireAuth();
+        const signedAction = await request.json();
+        const user = await requireSignedAction(signedAction);
 
         if (!db) {
             return NextResponse.json({ error: 'Database not available' }, { status: 503 });
         }
 
-        const body = await request.json();
+        // We trust the signed action 'data' for the IDs
+        const body = signedAction.data;
         const data = markSchema.parse(body);
 
         if (!data.all && (!data.ids || data.ids.length === 0)) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, posts, likes, users, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
+import { requireSignedAction, type SignedAction } from '@/lib/auth/verify-signature';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 
@@ -36,8 +37,14 @@ function extractSwarmPostId(apId: string): string | null {
 // Like a post
 export async function POST(request: Request, context: RouteContext) {
     try {
-        const user = await requireAuth();
-        const { id: rawId } = await context.params;
+        // Parse the signed action from the request body
+        const signedAction: SignedAction = await request.json();
+
+        // Verify the signature and get the user
+        const user = await requireSignedAction(signedAction);
+
+        // Extract postId from the signed action data
+        const { postId: rawId } = signedAction.data;
         const postId = decodeURIComponent(rawId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
@@ -64,9 +71,12 @@ export async function POST(request: Request, context: RouteContext) {
                     actorDisplayName: user.displayName || user.handle,
                     actorAvatarUrl: user.avatarUrl || undefined,
                     actorNodeDomain: nodeDomain,
+                    actorDid: user.did,
+                    actorPublicKey: user.publicKey,
                     interactionId: crypto.randomUUID(),
                     timestamp: new Date().toISOString(),
                 },
+                userSignature: signedAction.sig,
             });
 
             if (!result.success) {
@@ -163,9 +173,12 @@ export async function POST(request: Request, context: RouteContext) {
                                 actorDisplayName: user.displayName || user.handle,
                                 actorAvatarUrl: user.avatarUrl || undefined,
                                 actorNodeDomain: nodeDomain,
+                                actorDid: user.did,
+                                actorPublicKey: user.publicKey,
                                 interactionId: crypto.randomUUID(),
                                 timestamp: new Date().toISOString(),
                             },
+                            userSignature: signedAction.sig,
                         });
 
                         if (result.success) {
@@ -184,8 +197,17 @@ export async function POST(request: Request, context: RouteContext) {
 
         return NextResponse.json({ success: true, liked: true });
     } catch (error) {
-        if (error instanceof Error && error.message === 'Authentication required') {
-            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        if (error instanceof Error) {
+            // Handle signature verification errors
+            if (error.message === 'User not found' ||
+                error.message === 'Handle mismatch' ||
+                error.message === 'Invalid signature' ||
+                error.message === 'Timestamp too old or in future') {
+                return NextResponse.json({ error: error.message }, { status: 403 });
+            }
+            if (error.message === 'Authentication required') {
+                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+            }
         }
         return NextResponse.json({ error: 'Failed to like post' }, { status: 500 });
     }
@@ -194,8 +216,14 @@ export async function POST(request: Request, context: RouteContext) {
 // Unlike a post
 export async function DELETE(request: Request, context: RouteContext) {
     try {
-        const user = await requireAuth();
-        const { id: rawId } = await context.params;
+        // Parse the signed action from the request body
+        const signedAction: SignedAction = await request.json();
+
+        // Verify the signature and get the user
+        const user = await requireSignedAction(signedAction);
+
+        // Extract postId from the signed action data
+        const { postId: rawId } = signedAction.data;
         const postId = decodeURIComponent(rawId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
@@ -300,8 +328,17 @@ export async function DELETE(request: Request, context: RouteContext) {
 
         return NextResponse.json({ success: true, liked: false });
     } catch (error) {
-        if (error instanceof Error && error.message === 'Authentication required') {
-            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        if (error instanceof Error) {
+            // Handle signature verification errors
+            if (error.message === 'User not found' ||
+                error.message === 'Handle mismatch' ||
+                error.message === 'Invalid signature' ||
+                error.message === 'Timestamp too old or in future') {
+                return NextResponse.json({ error: error.message }, { status: 403 });
+            }
+            if (error.message === 'Authentication required') {
+                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+            }
         }
         return NextResponse.json({ error: 'Failed to unlike post' }, { status: 500 });
     }

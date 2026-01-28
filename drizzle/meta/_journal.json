@@ -64,6 +64,13 @@
       "when": 1769453302714,
       "tag": "0008_illegal_carlie_cooper",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1769562092857,
+      "tag": "0009_sweet_chat",
+      "breakpoints": true
     }
   ]
 }

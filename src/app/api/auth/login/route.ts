@@ -37,6 +37,9 @@ export async function POST(request: Request) {
                 id: user.id,
                 handle: user.handle,
                 displayName: user.displayName,
+                did: user.did,
+                publicKey: user.publicKey,
+                privateKeyEncrypted: user.privateKeyEncrypted, // Client will decrypt with password
             },
         });
     } catch (error) {

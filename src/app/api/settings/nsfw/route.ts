@@ -8,7 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users } from '@/db';
 import { eq } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth'; // kept for GET
+import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -43,11 +44,14 @@ export async function GET() {
  * 
  * Update NSFW settings. Enabling requires age confirmation.
  */
+// Update NSFW settings. Enabling requires age confirmation.
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
-    const body = await request.json();
-    const { nsfwEnabled, confirmAge } = updateSchema.parse(body);
+    const signedAction = await request.json();
+    const user = await requireSignedAction(signedAction);
+
+    // Trust signed payload data
+    const { nsfwEnabled, confirmAge } = updateSchema.parse(signedAction.data);
 
     if (!db) {
       return NextResponse.json({ error: 'Database not available' }, { status: 500 });

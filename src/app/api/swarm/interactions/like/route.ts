@@ -2,12 +2,15 @@
  * Swarm Like Endpoint
  * 
  * POST: Receive a like from another swarm node
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, notifications, remoteLikes } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmLikeSchema = z.object({
   postId: z.string().uuid(),
@@ -19,6 +22,7 @@ const swarmLikeSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -34,6 +38,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmLikeSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.like.actorHandle,
+      data.like.actorNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for like from ${data.like.actorHandle}@${data.like.actorNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the target post
     const post = await db.query.posts.findFirst({

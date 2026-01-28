@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { TriangleAlert } from 'lucide-react';
+import { decryptPrivateKey } from '@/lib/crypto/private-key-client';
+import { keyStore, importPrivateKey } from '@/lib/crypto/user-signing';
 
 declare global {
     interface Window {
@@ -225,21 +227,21 @@ export default function LoginPage() {
 
         try {
             const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
-            
+
             // Only include turnstileToken if Turnstile is enabled (site key exists)
             const body = mode === 'login'
-                ? { 
-                    email, 
-                    password, 
+                ? {
+                    email,
+                    password,
                     ...(nodeInfo.turnstileSiteKey ? { turnstileToken } : {})
-                  }
-                : { 
-                    email, 
-                    password, 
-                    handle, 
+                }
+                : {
+                    email,
+                    password,
+                    handle,
                     displayName,
                     ...(nodeInfo.turnstileSiteKey ? { turnstileToken } : {})
-                  };
+                };
 
             const res = await fetch(endpoint, {
                 method: 'POST',
@@ -251,6 +253,34 @@ export default function LoginPage() {
 
             if (!res.ok) {
                 throw new Error(data.error || 'Authentication failed');
+            }
+
+            // Decrypt and store private key if available
+            if (data.user?.privateKeyEncrypted) {
+                try {
+                    const privateKeyDecrypted = await decryptPrivateKey(
+                        data.user.privateKeyEncrypted,
+                        password
+                    );
+
+                    // Import and set in memory store
+                    // Remove PEM headers if present and clean whitespace
+                    let cleanKey = privateKeyDecrypted
+                        .replace(/-----BEGIN [A-Z ]+-----/, '')
+                        .replace(/-----END [A-Z ]+-----/, '')
+                        .replace(/\s/g, '');
+
+                    const binaryDer = Buffer.from(cleanKey, 'base64');
+                    const cryptoKey = await importPrivateKey(binaryDer);
+
+                    keyStore.setPrivateKey(cryptoKey);
+
+                    console.log('[Auth] Private key decrypted and stored successfully');
+                } catch (decryptError) {
+                    console.error('[Auth] Failed to decrypt private key:', decryptError);
+                    // Don't block login/registration if decryption fails - user can unlock later
+                    // The identity unlock prompt will be shown in the app
+                }
             }
 
             // Hard redirect to ensure cookie is picked up

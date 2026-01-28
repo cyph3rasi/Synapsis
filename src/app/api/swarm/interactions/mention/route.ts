@@ -2,12 +2,15 @@
  * Swarm Mention Endpoint
  * 
  * POST: Receive a mention notification from another swarm node
+ * 
+ * SECURITY: All requests must be cryptographically signed by the sender.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, notifications } from '@/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmMentionSchema = z.object({
   mentionedHandle: z.string(),
@@ -21,6 +24,7 @@ const swarmMentionSchema = z.object({
     interactionId: z.string(),
     timestamp: z.string(),
   }),
+  signature: z.string(),
 });
 
 /**
@@ -36,6 +40,20 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const data = swarmMentionSchema.parse(body);
+
+    // SECURITY: Verify the signature
+    const { signature, ...payload } = data;
+    const isValid = await verifyUserInteraction(
+      payload,
+      signature,
+      data.mention.actorHandle,
+      data.mention.actorNodeDomain
+    );
+
+    if (!isValid) {
+      console.warn(`[Swarm] Invalid signature for mention from ${data.mention.actorHandle}@${data.mention.actorNodeDomain}`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+    }
 
     // Find the mentioned user (local user)
     const mentionedUser = await db.query.users.findFirst({

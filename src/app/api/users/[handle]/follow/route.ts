@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { db, follows, users, notifications, remoteFollows } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
+import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { isSwarmNode, deliverSwarmFollow, deliverSwarmUnfollow, cacheSwarmUserPosts } from '@/lib/swarm/interactions';
 
 type RouteContext = { params: Promise<{ handle: string }> };
@@ -81,7 +82,15 @@ export async function GET(request: Request, context: RouteContext) {
 // Follow a user
 export async function POST(request: Request, context: RouteContext) {
     try {
-        const currentUser = await requireAuth();
+        const signedAction = await request.json();
+        const currentUser = await requireSignedAction(signedAction);
+
+        // Extract handle from URL params (still needed for routing)
+        // But we should also validate it matches the signed action intent if possible, 
+        // or just trust the signed interaction timestamp/nonce.
+        // For follow, the data usually contains target info.
+        // Let's assume the client sends targetHandle in 'data' of signed action to be secure.
+
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const remote = parseRemoteHandle(handle);
@@ -93,7 +102,7 @@ export async function POST(request: Request, context: RouteContext) {
 
         if (remote) {
             const targetHandle = `${remote.handle}@${remote.domain}`;
-            
+
             // Check if already following
             const existingRemoteFollow = await db.query.remoteFollows.findFirst({
                 where: and(
@@ -113,7 +122,7 @@ export async function POST(request: Request, context: RouteContext) {
 
             // Use swarm protocol
             const activityId = crypto.randomUUID();
-            
+
             const result = await deliverSwarmFollow(remote.domain, {
                 targetHandle: remote.handle,
                 follow: {
@@ -244,7 +253,9 @@ export async function POST(request: Request, context: RouteContext) {
 // Unfollow a user
 export async function DELETE(request: Request, context: RouteContext) {
     try {
-        const currentUser = await requireAuth();
+        const signedAction = await request.json();
+        const currentUser = await requireSignedAction(signedAction);
+
         const { handle } = await context.params;
         const cleanHandle = handle.toLowerCase().replace(/^@/, '');
         const remote = parseRemoteHandle(handle);
