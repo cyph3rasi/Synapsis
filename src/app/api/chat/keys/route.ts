@@ -46,12 +46,13 @@ export async function GET(request: NextRequest) {
       ),
     });
 
-    if (cached) {
-      console.log('[Chat Keys GET] Found cached remote key');
-      return NextResponse.json({
-        publicKey: cached.publicKey,
-      });
-    }
+    // DEBUG: Force refresh for now to fix development key mismatches
+    // if (cached) {
+    //   console.log('[Chat Keys GET] Found cached remote key');
+    //   return NextResponse.json({
+    //     publicKey: cached.publicKey,
+    //   });
+    // }
 
     // If not in cache, try to resolve DID to a node
     console.log('[Chat Keys GET] resolving DID to node...');

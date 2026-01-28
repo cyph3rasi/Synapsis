@@ -63,64 +63,6 @@ export default function ChatPage() {
     // Track the current conversation ID to prevent race conditions
     const currentConversationIdRef = useRef<string | null>(null);
 
-    // Load conversations
-    useEffect(() => {
-        if (user && isReady) {
-            loadConversations(true); // Initial load with spinner
-
-            // Poll for new conversations every 5 seconds (no spinner)
-            const pollInterval = setInterval(() => {
-                loadConversations(false);
-            }, 5000);
-
-            return () => clearInterval(pollInterval);
-        }
-    }, [user, isReady]);
-
-    // Handle Compose Intent
-    useEffect(() => {
-        if (composeHandle && isReady && !selectedConversation && conversations.length >= 0) {
-            // Check if we already have a conversation with this user
-            const existing = conversations.find(c =>
-                c.participant2.handle.toLowerCase() === composeHandle.toLowerCase()
-            );
-
-            if (existing) {
-                setSelectedConversation(existing);
-                // Clear the query param so refresh doesn't keep resetting state
-                router.replace('/chat', { scroll: false });
-            } else if (!loading) {
-                // Fetch user details to create a draft conversation
-                const fetchUserAndInitDraft = async () => {
-                    try {
-                        const res = await fetch(`/api/users/${encodeURIComponent(composeHandle)}`);
-                        const data = await res.json();
-                        if (data.user) {
-                            const draftConv: Conversation = {
-                                id: 'new',
-                                participant2: {
-                                    handle: data.user.handle,
-                                    displayName: data.user.displayName || data.user.handle,
-                                    avatarUrl: data.user.avatarUrl,
-                                    did: data.user.did
-                                },
-                                lastMessageAt: new Date().toISOString(),
-                                lastMessagePreview: 'New Conversation',
-                                unreadCount: 0
-                            };
-                            setSelectedConversation(draftConv);
-                            router.replace('/chat', { scroll: false });
-                        }
-                    } catch (e) {
-                        console.error("Failed to load user for compose", e);
-                    }
-                };
-                fetchUserAndInitDraft();
-            }
-        }
-    }, [composeHandle, isReady, selectedConversation, conversations, loading, router]);
-
-
     // Legacy / V2 Hybrid State
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
@@ -129,6 +71,10 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
+
+    // ============================================
+    // HELPER FUNCTIONS (Defined before useEffects)
+    // ============================================
 
     // Check if user is scrolled to bottom
     const checkIfAtBottom = () => {
@@ -149,56 +95,6 @@ export default function ChatPage() {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     };
-
-    // Redirect if not logged in
-    useEffect(() => {
-        if (user === null) {
-            router.push('/login');
-        }
-    }, [user, router]);
-
-    // Load messages when conversation is selected
-    useEffect(() => {
-        if (selectedConversation && isReady) {
-            // Update current conversation ref
-            currentConversationIdRef.current = selectedConversation.id;
-
-            // Clear messages immediately to prevent flash
-            setMessages([]);
-
-            if (selectedConversation.id === 'new') {
-                setLoadingMessages(false);
-                return; // Don't load messages for new/draft conversation
-            }
-
-            setLoadingMessages(true);
-
-            loadMessages(selectedConversation.id);
-            markAsRead(selectedConversation.id);
-
-            // Poll for new messages every 3 seconds
-            const pollInterval = setInterval(() => {
-                // Only load if still the same conversation
-                if (currentConversationIdRef.current === selectedConversation.id && selectedConversation.id !== 'new') {
-                    loadMessages(selectedConversation.id);
-                }
-            }, 3000);
-
-            return () => clearInterval(pollInterval);
-        } else if (!selectedConversation) {
-            // Clear messages when no conversation selected
-            currentConversationIdRef.current = null;
-            setMessages([]);
-            setLoadingMessages(false);
-        }
-    }, [selectedConversation, isReady]);
-
-    // Auto-scroll to bottom of messages only if user was already at bottom
-    useEffect(() => {
-        if (messagesEndRef.current && isAtBottom) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [messages, isAtBottom]);
 
     const loadConversations = async (isInitialLoad = false) => {
         if (isInitialLoad) setLoading(true);
@@ -247,12 +143,6 @@ export default function ChatPage() {
                                 // - We need the OTHER party's public key
                                 // - We use OUR private key
 
-                                // console.log('[Chat UI] Decrypting message:', {
-                                //     isSentByMe: msg.isSentByMe,
-                                //     recipientDid: envelope.recipientDid,
-                                //     senderPublicKey: envelope.senderPublicKey?.substring(0, 20) + '...'
-                                // });
-
                                 // If I sent this message, the "other party" is the recipient
                                 // If I received this message, the "other party" is the sender
                                 let otherPartyPublicKey = envelope.senderPublicKey;
@@ -264,13 +154,12 @@ export default function ChatPage() {
                                         if (keyRes.ok) {
                                             const keyData = await keyRes.json();
                                             otherPartyPublicKey = keyData.publicKey;
-                                            // console.log('[Chat UI] Fetched recipient public key:', otherPartyPublicKey?.substring(0, 20) + '...');
                                         }
                                     } catch (e) {
                                         console.error('[Chat UI] Failed to fetch recipient key:', e);
                                     }
                                 } else {
-                                    // console.log('[Chat UI] Using sender public key from envelope');
+                                    // Using sender public key from envelope
                                 }
 
                                 const plaintext = await decryptMessage(
@@ -390,9 +279,6 @@ export default function ChatPage() {
                 return;
             }
 
-            // Previously we auto-sent "👋" here.
-            // Now we just setup the draft conversation.
-
             // Check if existing conversation
             const existing = conversations.find(c =>
                 c.participant2.handle.toLowerCase() === data.user.handle.toLowerCase()
@@ -454,6 +340,125 @@ export default function ChatPage() {
         }
     };
 
+    // ============================================
+    // EFFECTS (Now that functions are defined)
+    // ============================================
+
+    // Load conversations
+    useEffect(() => {
+        if (user && isReady) {
+            loadConversations(true); // Initial load with spinner
+
+            // Poll for new conversations every 5 seconds (no spinner)
+            const pollInterval = setInterval(() => {
+                loadConversations(false);
+            }, 5000);
+
+            return () => clearInterval(pollInterval);
+        }
+    }, [user, isReady]);
+
+    // Handle Compose Intent
+    useEffect(() => {
+        if (composeHandle && isReady && !selectedConversation && conversations.length >= 0) {
+            // Check if we already have a conversation with this user
+            const existing = conversations.find(c =>
+                c.participant2.handle.toLowerCase() === composeHandle.toLowerCase()
+            );
+
+            if (existing) {
+                setSelectedConversation(existing);
+                // Clear the query param so refresh doesn't keep resetting state
+                router.replace('/chat', { scroll: false });
+            } else if (!loading) {
+                // Fetch user details to create a draft conversation
+                const fetchUserAndInitDraft = async () => {
+                    try {
+                        const res = await fetch(`/api/users/${encodeURIComponent(composeHandle)}`);
+                        const data = await res.json();
+                        if (data.user) {
+                            const draftConv: Conversation = {
+                                id: 'new',
+                                participant2: {
+                                    handle: data.user.handle,
+                                    displayName: data.user.displayName || data.user.handle,
+                                    avatarUrl: data.user.avatarUrl,
+                                    did: data.user.did
+                                },
+                                lastMessageAt: new Date().toISOString(),
+                                lastMessagePreview: 'New Conversation',
+                                unreadCount: 0
+                            };
+                            setSelectedConversation(draftConv);
+                            router.replace('/chat', { scroll: false });
+                        } else {
+                            // User not found, clear compose param to show list
+                            console.error('User not found for compose');
+                            router.replace('/chat');
+                        }
+                    } catch (e) {
+                        console.error("Failed to load user for compose", e);
+                        router.replace('/chat');
+                    }
+                };
+                fetchUserAndInitDraft();
+            }
+        }
+    }, [composeHandle, isReady, selectedConversation, conversations, loading, router]);
+
+    // Redirect if not logged in
+    useEffect(() => {
+        if (user === null) {
+            router.push('/login');
+        }
+    }, [user, router]);
+
+    // Load messages when conversation is selected
+    useEffect(() => {
+        if (selectedConversation && isReady) {
+            // Update current conversation ref
+            currentConversationIdRef.current = selectedConversation.id;
+
+            // Clear messages immediately to prevent flash
+            setMessages([]);
+
+            if (selectedConversation.id === 'new') {
+                setLoadingMessages(false);
+                return; // Don't load messages for new/draft conversation
+            }
+
+            setLoadingMessages(true);
+
+            loadMessages(selectedConversation.id);
+            markAsRead(selectedConversation.id);
+
+            // Poll for new messages every 3 seconds
+            const pollInterval = setInterval(() => {
+                // Only load if still the same conversation
+                if (currentConversationIdRef.current === selectedConversation.id && selectedConversation.id !== 'new') {
+                    loadMessages(selectedConversation.id);
+                }
+            }, 3000);
+
+            return () => clearInterval(pollInterval);
+        } else if (!selectedConversation) {
+            // Clear messages when no conversation selected
+            currentConversationIdRef.current = null;
+            setMessages([]);
+            setLoadingMessages(false);
+        }
+    }, [selectedConversation, isReady]);
+
+    // Auto-scroll to bottom of messages only if user was already at bottom
+    useEffect(() => {
+        if (messagesEndRef.current && isAtBottom) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages, isAtBottom]);
+
+    // ============================================
+    // RENDER LOGIC
+    // ============================================
 
     const filteredConversations = conversations.filter((conv) =>
         conv.participant2.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -504,6 +509,15 @@ export default function ChatPage() {
 
     // Loading State
     if (!isReady || status === 'initializing') {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+                <Loader2 className="animate-spin" size={32} />
+            </div>
+        );
+    }
+
+    // Prevent flash of list view while processing compose intent
+    if (composeHandle && !selectedConversation) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
                 <Loader2 className="animate-spin" size={32} />

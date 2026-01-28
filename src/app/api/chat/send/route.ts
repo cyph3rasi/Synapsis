@@ -114,11 +114,18 @@ export async function POST(request: NextRequest) {
             });
 
             if (!registryEntry) {
+                console.error('Recipient DID not found in registry:', recipientDid);
                 return NextResponse.json({ error: 'Recipient not found in registry' }, { status: 404 });
             }
 
             const targetDomain = registryEntry.nodeDomain;
-            const targetHandle = registryEntry.handle; // e.g. user@domain
+            // Ensure handle is fully qualified for remote users
+            let targetHandle = registryEntry.handle;
+            if (!targetHandle.includes('@') && targetDomain) {
+                targetHandle = `${targetHandle}@${targetDomain}`;
+            }
+
+            console.log(`[Remote Send] Sending to ${targetHandle} at ${targetDomain}`);
 
             // 2. Prepare Payload
             const messageData = {
