@@ -95,87 +95,93 @@ export function Sidebar() {
             </Link>
             <nav>
                 {user && (
-                    <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`}>
+                    <Link href="/" className={`nav-item ${isHome ? 'active' : ''}`} title="Home">
                         <HomeIcon />
                         <span>Home</span>
                     </Link>
                 )}
-                <Link href="/explore" className={`nav-item ${pathname?.startsWith('/explore') ? 'active' : ''}`}>
+                <Link href="/explore" className={`nav-item ${pathname?.startsWith('/explore') ? 'active' : ''}`} title="Explore">
                     <SearchIcon />
                     <span>Explore</span>
                 </Link>
                 {user && (
-                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`}>
+                    <Link href="/notifications" className={`nav-item ${pathname?.startsWith('/notifications') ? 'active' : ''}`} title="Notifications">
                         <BellIcon />
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            Notifications
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+                            <span className="nav-label">Notifications</span>
                             {unreadCount > 0 && (
                                 <span style={{
+                                    position: 'absolute',
+                                    top: '-4px',
+                                    right: '-4px',
                                     width: '8px',
                                     height: '8px',
                                     background: 'var(--error)',
                                     borderRadius: '50%',
-                                }} />
+                                }} className="notification-dot" />
                             )}
                         </span>
                     </Link>
                 )}
                 {user && (
-                    <Link href="/chat" className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`}>
+                    <Link href="/chat" className={`nav-item ${pathname?.startsWith('/chat') ? 'active' : ''}`} title="Chat">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            Chat
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+                            <span className="nav-label">Chat</span>
                             {unreadChatCount > 0 && (
                                 <span style={{
+                                    position: 'absolute',
+                                    top: '-4px',
+                                    right: '-4px',
                                     width: '8px',
                                     height: '8px',
                                     background: 'var(--error)',
                                     borderRadius: '50%',
-                                }} />
+                                }} className="notification-dot" />
                             )}
                         </span>
                     </Link>
                 )}
                 {user && (
-                    <Link href="/settings/bots" className={`nav-item ${pathname?.startsWith('/settings/bots') ? 'active' : ''}`}>
+                    <Link href="/bots" className={`nav-item ${pathname?.startsWith('/bots') ? 'active' : ''}`} title="Bots">
                         <BotIcon />
                         <span>Bots</span>
                     </Link>
                 )}
                 {user ? (
-                    <Link href={`/u/${user.handle}`} className={`nav-item ${pathname === '/u/' + user.handle ? 'active' : ''}`}>
+                    <Link href={`/u/${user.handle}`} className={`nav-item ${pathname === '/u/' + user.handle ? 'active' : ''}`} title="Profile">
                         <UserIcon />
                         <span>Profile</span>
                     </Link>
                 ) : (
-                    <Link href="/login" className={`nav-item ${pathname === '/login' ? 'active' : ''}`}>
+                    <Link href="/login" className={`nav-item ${pathname === '/login' ? 'active' : ''}`} title="Login">
                         <UserIcon />
                         <span>Login</span>
                     </Link>
                 )}
                 {isAdmin && (
-                    <Link href="/moderation" className={`nav-item ${pathname?.startsWith('/moderation') ? 'active' : ''}`}>
+                    <Link href="/moderation" className={`nav-item ${pathname?.startsWith('/moderation') ? 'active' : ''}`} title="Moderation">
                         <ShieldIcon />
                         <span>Moderation</span>
                     </Link>
                 )}
                 {isAdmin && (
-                    <Link href="/admin" className={`nav-item ${pathname?.startsWith('/admin') ? 'active' : ''}`}>
+                    <Link href="/admin" className={`nav-item ${pathname?.startsWith('/admin') ? 'active' : ''}`} title="Admin">
                         <Settings2 size={24} />
                         <span>Admin</span>
                     </Link>
                 )}
                 {user && (
-                    <Link href="/settings" className={`nav-item ${pathname?.startsWith('/settings') ? 'active' : ''}`}>
+                    <Link href="/settings" className={`nav-item ${pathname?.startsWith('/settings') ? 'active' : ''}`} title="Settings">
                         <SettingsIcon />
                         <span>Settings</span>
                     </Link>
                 )}
             </nav>
             {user && (
-                <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
+                <div style={{ marginTop: 'auto', paddingTop: '16px' }} className="sidebar-user-info">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, marginBottom: '12px' }}>
                         <div className="avatar avatar-sm" style={{ flexShrink: 0 }}>
                             {user.avatarUrl ? (

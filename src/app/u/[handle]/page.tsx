@@ -504,8 +504,8 @@ export default function ProfilePage() {
                                             {isFollowing ? 'Following' : 'Follow'}
                                         </button>
                                     )}
-                                    {/* Message Button (V2 Chat) */}
-                                    {user.did && (
+                                    {/* Message Button (V2 Chat) - Respect privacy settings */}
+                                    {user.did && !user.isBot && (user as any).canReceiveDms !== false && (
                                         <Link href={`/chat?compose=${user.handle}`} className="btn btn-ghost" style={{ padding: '8px' }}>
                                             <Mail size={20} />
                                         </Link>

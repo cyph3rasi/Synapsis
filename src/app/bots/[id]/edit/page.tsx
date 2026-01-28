@@ -299,7 +299,7 @@ export default function EditBotPage() {
         }
       }
 
-      router.push(`/settings/bots/${botId}`);
+      router.push(`/bots/${botId}`);
     } catch (err) {
       console.error('Update bot error:', err);
       setError(err instanceof Error ? err.message : 'Failed to update bot');

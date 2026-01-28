@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
 import { eq, desc, and, lt, isNull } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
-import { decryptMessage } from '@/lib/swarm/chat-crypto';
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,15 +43,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    // Get user's private key for decryption
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-    });
-
-    if (!user?.privateKeyEncrypted) {
-      return NextResponse.json({ error: 'Cannot decrypt messages' }, { status: 500 });
-    }
-
     // Build query with cursor-based pagination
     const baseCondition = eq(chatMessages.conversationId, conversationId);
     const whereCondition = cursor
@@ -65,90 +56,16 @@ export async function GET(request: NextRequest) {
       limit,
     });
 
-    // Get recipient info for sent messages
-    const recipientHandle = conversation.participant2Handle;
-    let recipientPublicKey: string | null = null;
-    
-    console.log('[Messages API] Fetching recipient key for:', recipientHandle);
-    
-    // Check if this is a remote user (has @domain)
-    const isRemote = recipientHandle.includes('@');
-    
-    if (isRemote) {
-      // Remote user - fetch from their node
-      const [handle, domain] = recipientHandle.split('@');
-      try {
-        const protocol = domain.includes('localhost') ? 'http' : 'https';
-        const response = await fetch(`${protocol}://${domain}/api/users/${handle}`);
-        if (response.ok) {
-          const data = await response.json();
-          recipientPublicKey = data.user?.chatPublicKey || null;
-          console.log('[Messages API] Fetched remote recipient key:', !!recipientPublicKey);
-        }
-      } catch (error) {
-        console.error('[Messages API] Failed to fetch remote recipient key:', error);
-      }
-    } else {
-      // Local user
-      const recipientUser = await db.query.users.findFirst({
-        where: eq(users.handle, recipientHandle),
-      });
-      recipientPublicKey = recipientUser?.chatPublicKey || null;
-    }
-    
-    console.log('[Messages API] Recipient public key found:', !!recipientPublicKey);
-
-    // Get sender DID for received messages
-    const senderDids = new Map<string, string>();
-    for (const msg of messages) {
+    const messagesMapped = messages.map((msg) => {
       const isSentByMe = msg.senderHandle === session.user.handle;
-      if (!isSentByMe && !senderDids.has(msg.senderHandle)) {
-        // Try to get DID for this sender
-        try {
-          const isRemote = msg.senderHandle.includes('@');
-          if (isRemote) {
-            const [handle, domain] = msg.senderHandle.split('@');
-            const protocol = domain.includes('localhost') ? 'http' : 'https';
-            const response = await fetch(`${protocol}://${domain}/api/users/${handle}`);
-            if (response.ok) {
-              const data = await response.json();
-              if (data.user?.did) {
-                senderDids.set(msg.senderHandle, data.user.did);
-              }
-            }
-          } else {
-            const senderUser = await db.query.users.findFirst({
-              where: eq(users.handle, msg.senderHandle),
-            });
-            if (senderUser?.did) {
-              senderDids.set(msg.senderHandle, senderUser.did);
-            }
-          }
-        } catch (e) {
-          console.error('[Messages API] Failed to resolve sender DID:', e);
-        }
-      }
-    }
 
-    const messagesWithDecryption = messages.map((msg) => {
-      const isSentByMe = msg.senderHandle === session.user.handle;
-      
-      const senderPubKey = isSentByMe ? recipientPublicKey : msg.senderChatPublicKey;
-      
-      console.log('[Messages API] Message:', msg.id, 'isSentByMe:', isSentByMe, 'senderPubKey:', !!senderPubKey, 'msgSenderChatPubKey:', !!msg.senderChatPublicKey);
-      
       return {
         id: msg.id,
         senderHandle: msg.senderHandle,
         senderDisplayName: msg.senderDisplayName,
         senderAvatarUrl: msg.senderAvatarUrl,
-        senderDid: isSentByMe ? undefined : senderDids.get(msg.senderHandle), // Add DID for received messages
-        // For decryption:
-        // - Sent messages: need recipient's public key
-        // - Received messages: need sender's public key
-        senderPublicKey: senderPubKey,
-        isE2E: !!msg.senderChatPublicKey || (isSentByMe && !!recipientPublicKey),
-        encryptedContent: msg.encryptedContent, // This is now the full envelope JSON
+        senderDid: msg.senderDid,
+        content: msg.content,
         deliveredAt: msg.deliveredAt,
         readAt: msg.readAt,
         createdAt: msg.createdAt,
@@ -157,7 +74,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      messages: messagesWithDecryption.reverse(), // Oldest first for display
+      messages: messagesMapped.reverse(), // Oldest first for display
       nextCursor: messages.length === limit ? messages[messages.length - 1].createdAt.toISOString() : null,
     });
   } catch (error) {

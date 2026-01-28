@@ -51,7 +51,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="layout">
+        <div className="layout" style={{ position: 'relative', minHeight: '100vh' }}>
             <Sidebar />
             <main className="main">
                 {children}

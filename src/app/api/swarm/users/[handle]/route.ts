@@ -22,7 +22,7 @@ export interface SwarmUserProfile {
   isBot?: boolean;
   botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
-  chatPublicKey?: string;
+  publicKey?: string; // Signing key for verifying actions
   did?: string;
 }
 
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       isBot: user.isBot || undefined,
       botOwnerHandle: user.isBot && user.botOwner ? user.botOwner.handle : undefined,
       nodeDomain,
-      chatPublicKey: user.chatPublicKey || undefined,
+      publicKey: user.publicKey, // Expose signing key
       did: user.did || undefined,
     };
 

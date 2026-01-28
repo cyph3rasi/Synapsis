@@ -38,7 +38,13 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/api/favicon",
     },
     themeColor: "#0a0a0a",
-    viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+    viewport: {
+      width: "device-width",
+      initialScale: 1,
+      maximumScale: 5,
+      userScalable: true,
+      viewportFit: "cover",
+    },
   };
 }
 

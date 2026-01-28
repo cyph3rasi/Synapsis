@@ -17,7 +17,8 @@ export interface User {
     isSwarm?: boolean; // Whether this user is from a Synapsis swarm node
     nodeDomain?: string | null; // Domain of the node this user is from (for swarm users)
     did?: string;
-    chatPublicKey?: string;
+    canReceiveDms?: boolean;
+    dmPrivacy?: 'everyone' | 'following' | 'none';
     botOwner?: {
         id: string;
         handle: string;

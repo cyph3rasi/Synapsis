@@ -287,9 +287,22 @@ export default function ExplorePage() {
 
     return (
         <div className="explore-page">
-            <header className="explore-header">
-                <h1>Explore</h1>
-                <form onSubmit={handleSearch} className="explore-search">
+            <header style={{
+                padding: '16px',
+                borderBottom: '1px solid var(--border)',
+                position: 'sticky',
+                top: 0,
+                background: 'rgba(10, 10, 10, 0.95)',
+                zIndex: 10,
+                backdropFilter: 'blur(12px)',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <h1 style={{ fontSize: '20px', fontWeight: 600 }}>Explore</h1>
+                </div>
+            </header>
+
+            <div style={{ padding: '0 16px' }}>
+                <form onSubmit={handleSearch} className="explore-search" style={{ marginTop: '16px' }}>
                     <SearchIcon />
                     <input
                         type="text"
@@ -298,7 +311,7 @@ export default function ExplorePage() {
                         onChange={(e) => setQuery(e.target.value)}
                     />
                 </form>
-            </header>
+            </div>
 
             <div className="explore-tabs">
                 <button

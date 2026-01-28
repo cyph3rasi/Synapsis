@@ -1301,35 +1301,798 @@ a.btn-primary:visited {
 }
 
 @media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-top: 1px solid var(--border);
-    background: var(--background);
-    z-index: 100;
-    padding: 8px 16px;
+  /* Mobile-first optimizations */
+  html {
+    height: 100%;
   }
 
-  .sidebar nav {
-    display: flex;
-    justify-content: space-around;
+  body {
+    font-size: 16px; /* Prevent zoom on input focus */
+    overflow-x: hidden;
+    height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .nav-item span {
-    display: none;
-  }
-
-  .logo {
-    display: none;
+  /* Layout adjustments */
+  .layout {
+    flex-direction: column;
+    max-width: 100%;
+    padding: 0;
   }
 
   .main {
+    max-width: 100%;
+    width: 100%;
+    border-right: none;
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+    order: 1;
+  }
+
+  /* Fixed bottom navigation - CRITICAL */
+  .sidebar {
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    border-right: none !important;
+    border-left: none !important;
+    border-bottom: none !important;
+    border-top: 1px solid var(--border) !important;
+    background: rgba(10, 10, 10, 0.98) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    z-index: 1000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    order: 2;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
+  .sidebar nav {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    padding: 4px 0 !important;
+    min-height: 60px !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .nav-item {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    padding: 8px 4px !important;
+    min-height: 56px !important;
+    font-size: 11px !important;
+    border-radius: 0 !important;
+    max-width: 100px !important;
+    min-width: 60px !important;
+    border: none !important;
+    background: transparent !important;
+    transition: none !important;
+    color: var(--foreground-secondary) !important;
+  }
+
+  .nav-item svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .nav-item span {
+    display: block !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+  }
+
+  .nav-item:hover {
+    background: transparent !important;
+    border: none !important;
+    color: var(--foreground-secondary) !important;
+  }
+
+  .nav-item:active {
+    background: transparent !important;
+    border: none !important;
+  }
+
+  .nav-item.active {
+    background: transparent !important;
+    color: var(--accent) !important;
+    border: none !important;
+  }
+
+  .nav-item.active svg {
+    color: var(--accent) !important;
+  }
+
+  .nav-item.active span {
+    color: var(--accent) !important;
+  }
+
+  .logo {
+    display: none !important;
+  }
+
+  /* Hide sidebar user info on mobile */
+  .sidebar > div:not(nav) {
+    display: none !important;
+  }
+
+  .sidebar .sidebar-user-info {
+    display: none !important;
+  }
+
+  /* Show nav labels on mobile */
+  .nav-label {
+    display: inline !important;
+  }
+
+  /* Position notification dots correctly on mobile */
+  .notification-dot {
+    position: absolute !important;
+    top: -2px !important;
+    right: -6px !important;
+  }
+
+  /* Post optimizations */
+  .post {
+    padding: 16px;
+  }
+
+  .post-header {
+    gap: 10px;
+  }
+
+  .post-content {
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .post.detail .post-content {
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  /* Larger touch targets for actions */
+  .post-actions {
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .post-action {
+    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius-md);
+    transition: background 0.15s ease;
+  }
+
+  .post-action:active {
+    background: var(--background-tertiary);
+  }
+
+  .post-action svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Compose optimizations */
+  .compose {
+    padding: 16px;
+  }
+
+  .compose-input {
+    font-size: 16px;
+    min-height: 120px;
+    padding: 12px;
+  }
+
+  .compose-footer {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .compose-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .btn {
+    min-height: 44px;
+    padding: 10px 20px;
+    font-size: 15px;
+  }
+
+  .btn-primary {
+    flex: 0;
+    min-width: auto;
+  }
+
+  /* Avatar sizing */
+  .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .avatar-sm {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .avatar-lg {
+    width: 80px;
+    height: 80px;
+    font-size: 28px;
+  }
+
+  /* Media grid */
+  .post-media-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .post-media-item img,
+  .post-media-item video {
+    max-height: 400px;
+  }
+
+  /* User rows */
+  .user-row {
+    padding: 16px;
+  }
+
+  .user-card {
+    padding: 16px;
+  }
+
+  /* Feed toggle */
+  .feed-toggle {
+    font-size: 14px;
+  }
+
+  .feed-toggle-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+
+  /* Feed meta */
+  .feed-meta {
+    margin: 12px;
+    padding: 12px;
+  }
+
+  /* Header sticky positioning */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(12px);
+    background: rgba(10, 10, 10, 0.95);
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  /* Explore page */
+  .explore-header {
+    padding: 16px;
+  }
+
+  .explore-header h1 {
+    font-size: 20px;
+  }
+
+  .explore-search {
+    padding: 12px 16px;
+  }
+
+  .explore-search input {
+    font-size: 16px;
+  }
+
+  .explore-tab {
+    padding: 16px 12px;
+    font-size: 15px;
+  }
+
+  /* Settings and admin pages */
+  .install-shell,
+  .admin-shell,
+  .notifications-shell {
+    padding: 16px 12px 80px;
+  }
+
+  /* Input fields */
+  .input {
+    font-size: 16px;
+    padding: 12px 14px;
+    min-height: 44px;
+  }
+
+  /* Container */
+  .container {
+    padding: 0 12px;
+  }
+
+  /* Link preview */
+  .link-preview-card {
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+
+  .link-preview-info {
+    padding: 12px;
+  }
+
+  .link-preview-title {
+    font-size: 16px;
+  }
+
+  /* Compose media */
+  .compose-media-grid {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .compose-media-item {
+    max-height: 100px;
+  }
+
+  .compose-media-item img,
+  .compose-media-item video {
+    height: 100px;
+  }
+
+  /* Thread line */
+  .thread-line {
+    left: 30px;
+    top: 60px;
+  }
+
+  /* Notification adjustments */
+  .notification-row {
+    padding: 16px;
+  }
+
+  /* Admin adjustments */
+  .admin-row {
+    padding: 14px;
+  }
+
+  /* Better tap targets for all buttons */
+  button {
+    min-height: 44px;
+  }
+
+  /* Improve readability */
+  .post-time,
+  .user-card-handle,
+  .notification-meta {
+    font-size: 14px;
+  }
+
+  /* Video embeds */
+  .video-embed-container {
+    margin-bottom: 12px;
+  }
+
+  /* Scrolling improvements */
+  .main {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Safe area insets for notched devices */
+  .main {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Improve touch feedback */
+  .post:active {
+    background: var(--background-tertiary);
+  }
+
+  .user-row:active,
+  .user-card:active {
+    background: var(--background-tertiary);
+  }
+
+  /* Better button touch states */
+  .btn:active {
+    transform: scale(0.98);
+  }
+
+  /* Compose media button touch target */
+  .compose-media-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Improve menu dropdown positioning on mobile */
+  .post-menu-dropdown {
+    right: 0;
+    left: auto;
+  }
+
+  /* Better modal positioning on mobile */
+  .modal {
+    margin: 16px;
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Identity unlock prompt mobile fixes */
+  .card {
+    max-width: calc(100vw - 32px) !important;
+  }
+
+  /* Fix button sizing in modals */
+  .card .btn {
+    min-height: 44px !important;
+    padding: 10px 16px !important;
+    font-size: 15px !important;
+  }
+
+  .card .btn-primary {
+    flex: 1 !important;
+  }
+
+  .card .btn-ghost {
+    flex: 1 !important;
+  }
+
+  /* Improve form spacing */
+  form {
+    padding: 16px;
+  }
+
+  /* Better card spacing */
+  .card {
+    padding: 16px;
+    margin: 12px;
+  }
+
+  /* Improve status pills */
+  .status-pill {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  /* Better admin filters on mobile */
+  .admin-filters {
+    flex-wrap: wrap;
+  }
+
+  /* Improve pill buttons */
+  .pill {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  /* Better explore content spacing */
+  .explore-content {
     padding-bottom: 80px;
+  }
+
+  /* Improve notification row spacing */
+  .notification-row {
+    gap: 12px;
+  }
+
+  /* Better avatar in notifications */
+  .notification-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Improve install grid on mobile */
+  .install-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Better admin summary on mobile */
+  .install-summary {
+    grid-template-columns: 1fr;
+  }
+
+  /* Improve compose reply target */
+  .compose-reply-target {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  /* Better link preview on mobile */
+  .link-preview-card.mini {
+    max-height: 100px;
+  }
+
+  .link-preview-card.mini .link-preview-image {
+    width: 100px;
+    min-width: 100px;
+    height: 100px;
+  }
+
+  .link-preview-card.mini .link-preview-image img {
+    height: 100px;
+  }
+
+  /* Improve post menu button */
+  .post-menu-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Better video controls on mobile */
+  video {
+    max-width: 100%;
+  }
+
+  /* Improve blurred video container */
+  .blurred-video-main {
+    max-height: 400px;
+  }
+
+  /* Better emoji sizing on mobile */
+  .post-content img.emoji,
+  .compose-input img.emoji {
+    height: 1.8em;
+    width: 1.8em;
+  }
+
+  /* Improve post reasons chips */
+  .post-reason-chip {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  /* Better NSFW toggle */
+  .compose-nsfw-toggle {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  /* Improve character counter */
+  .compose-counter {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  /* Better footer spacing */
+  .compose-footer-left {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Improve search section */
+  .search-section {
+    padding: 16px 12px;
+  }
+
+  .search-section h2 {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  /* Better swarm post styling */
+  .swarm-post-card {
+    padding: 16px;
+  }
+
+  .swarm-post-content {
+    font-size: 16px;
+  }
+
+  /* Improve post detail view */
+  .post.detail {
+    padding: 20px 16px;
+  }
+
+  /* Better thread view on mobile */
+  .thread-container {
+    padding: 0;
+  }
+
+  .post.thread-parent {
+    padding: 12px 16px;
+  }
+
+  /* Improve reply indicator */
+  .post-reply-to {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  /* Better loading states */
+  .explore-loading,
+  .explore-empty {
+    padding: 32px 16px;
+  }
+
+  /* Improve empty states */
+  .admin-empty,
+  .notifications-empty {
+    padding: 32px 16px;
+  }
+
+  /* Chat page mobile optimizations */
+  .chat-container {
+    flex-direction: column;
+  }
+
+  .chat-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chat-main {
+    width: 100%;
+    height: calc(100vh - 80px);
+  }
+
+  /* Better form inputs on mobile */
+  textarea {
+    font-size: 16px;
+  }
+
+  select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  /* Improve modal dialogs on mobile */
+  dialog {
+    max-width: calc(100vw - 32px);
+    margin: 16px;
+  }
+
+  /* Better table responsiveness */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Improve code blocks on mobile */
+  pre {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better image handling */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Improve settings pages */
+  .settings-section {
+    padding: 16px 12px;
+  }
+
+  /* Better profile pages */
+  .profile-header {
+    padding: 16px;
+  }
+
+  .profile-stats {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* Improve bot pages */
+  .bot-card {
+    padding: 16px;
+  }
+
+  /* Better moderation pages */
+  .moderation-card {
+    padding: 16px;
+  }
+
+  /* Improve notification pages */
+  .notifications-header {
+    padding: 16px;
+  }
+
+  /* Better login/register pages */
+  .auth-container {
+    padding: 24px 16px;
+  }
+
+  /* Improve install pages */
+  .install-header h1 {
+    font-size: 24px;
+  }
+
+  /* Better admin pages */
+  .admin-header h1 {
+    font-size: 22px;
+  }
+
+  /* Improve tabs */
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better dropdown menus */
+  .dropdown-menu {
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Improve tooltips on mobile */
+  [title] {
+    position: relative;
+  }
+
+  /* Better focus states for accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Improve skeleton loaders */
+  .skeleton {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Better error states */
+  .error-message {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Improve success states */
+  .success-message {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Better warning states */
+  .warning-message {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Improve info states */
+  .info-message {
+    padding: 12px;
+    font-size: 14px;
   }
 }
 

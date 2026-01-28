@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { useSodiumChat } from '@/lib/hooks/useSodiumChat';
+import { signedAPI } from '@/lib/api/signed-fetch';
 import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -21,15 +21,14 @@ interface Conversation {
     unreadCount: number;
 }
 
+
 interface Message {
     id: string;
     senderHandle: string;
     senderDisplayName?: string;
     senderAvatarUrl?: string;
-    senderDid?: string; // V2 needs DID
-    senderPublicKey?: string; // Legacy
-    encryptedContent: string;
-    decryptedContent?: string;
+    senderDid?: string;
+    content: string;
     isSentByMe: boolean;
     deliveredAt?: string;
     readAt?: string;
@@ -39,8 +38,6 @@ interface Message {
 export default function ChatPage() {
     const { user, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
     const router = useRouter();
-    // Libsodium E2EE Hook
-    const { isReady, status, sendMessage, decryptMessage } = useSodiumChat();
     const searchParams = useSearchParams();
     const composeHandle = searchParams.get('compose');
 
@@ -49,19 +46,10 @@ export default function ChatPage() {
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
-    const [newChatHandle, setNewChatHandle] = useState('');
-    const [showNewChat, setShowNewChat] = useState(false);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [loadingMessages, setLoadingMessages] = useState(false);
-
-    // Cache for decrypted messages to avoid re-decrypting on every poll
-    const decryptedCacheRef = useRef<Map<string, string>>(new Map());
-    // Track which messages we've attempted to decrypt (even if they failed)
-    const attemptedDecryptionRef = useRef<Set<string>>(new Set());
-    // Track the current conversation ID to prevent race conditions
-    const currentConversationIdRef = useRef<string | null>(null);
 
     // Legacy / V2 Hybrid State
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -96,12 +84,14 @@ export default function ChatPage() {
         }
     };
 
-    const loadConversations = async (isInitialLoad = false) => {
-        if (isInitialLoad) setLoading(true);
+    const loadConversations = async (isInitialLoad = true) => {
         try {
+            if (isInitialLoad) setLoading(true);
             const res = await fetch('/api/swarm/chat/conversations');
-            const data = await res.json();
-            setConversations(data.conversations || []);
+            if (res.ok) {
+                const data = await res.json();
+                setConversations(data.conversations || []);
+            }
         } catch (e) {
             console.error("Failed to load conversations", e);
         } finally {
@@ -114,81 +104,23 @@ export default function ChatPage() {
             const res = await fetch(`/api/swarm/chat/messages?conversationId=${conversationId}`);
             const data = await res.json();
 
-            const decrypted = await Promise.all((data.messages || []).map(async (msg: any) => {
-                try {
-                    // Check cache first
-                    const cacheKey = `${msg.id}`;
-                    const cached = decryptedCacheRef.current.get(cacheKey);
-                    if (cached) {
-                        return { ...msg, decryptedContent: cached };
-                    }
-
-                    // Check if already attempted
-                    if (attemptedDecryptionRef.current.has(cacheKey)) {
-                        const fallback = decryptedCacheRef.current.get(cacheKey) || '🔒 [Encrypted]';
-                        return { ...msg, decryptedContent: fallback };
-                    }
-
-                    // Mark as attempted
-                    attemptedDecryptionRef.current.add(cacheKey);
-
-                    // Parse libsodium message format
-                    if (msg.encryptedContent && msg.encryptedContent.startsWith('{')) {
-                        try {
-                            const envelope = JSON.parse(msg.encryptedContent);
-
-                            // Libsodium format: {senderPublicKey, recipientDid, ciphertext, nonce}
-                            if (envelope.senderPublicKey && envelope.ciphertext && envelope.nonce) {
-                                // For decryption with crypto_box_open_easy:
-                                // - We need the OTHER party's public key
-                                // - We use OUR private key
-
-                                // If I sent this message, the "other party" is the recipient
-                                // If I received this message, the "other party" is the sender
-                                let otherPartyPublicKey = envelope.senderPublicKey;
-
-                                if (msg.isSentByMe && envelope.recipientDid) {
-                                    // I'm the sender, so I need the recipient's public key to decrypt my own message
-                                    try {
-                                        const keyRes = await fetch(`/api/chat/keys?did=${encodeURIComponent(envelope.recipientDid)}`, { cache: 'no-store' });
-                                        if (keyRes.ok) {
-                                            const keyData = await keyRes.json();
-                                            otherPartyPublicKey = keyData.publicKey;
-                                        }
-                                    } catch (e) {
-                                        console.error('[Chat UI] Failed to fetch recipient key:', e);
-                                    }
-                                } else {
-                                    // Using sender public key from envelope
-                                }
-
-                                const plaintext = await decryptMessage(
-                                    envelope.ciphertext,
-                                    envelope.nonce,
-                                    otherPartyPublicKey
-                                );
-
-                                decryptedCacheRef.current.set(cacheKey, plaintext);
-                                return { ...msg, decryptedContent: plaintext };
-                            }
-                        } catch (e) {
-                            console.error('[Chat UI] Libsodium decryption failed:', e);
-                        }
-                    }
-
-                    // Fallback
-                    const fallback = '🔒 [Encrypted - refresh page]';
-                    decryptedCacheRef.current.set(cacheKey, fallback);
-                    return { ...msg, decryptedContent: fallback };
-                } catch (err) {
-                    console.error('[Chat UI] Message processing error:', err);
-                    return { ...msg, decryptedContent: '[Error]' };
-                }
+            const plainMessages = (data.messages || []).map((msg: any) => ({
+                ...msg,
+                content: msg.content || '[Empty Message]'
             }));
 
-            setMessages(decrypted);
-        } catch (err) {
-            console.error('[Chat UI] Load messages error:', err);
+            // Only update if different
+            setMessages(prev => {
+                const prevIds = prev.map(m => m.id).join(',');
+                const newIds = plainMessages.map((m: any) => m.id).join(',');
+                if (prevIds === newIds && prev.length === plainMessages.length) return prev;
+                return plainMessages;
+            });
+
+            // Mark as read
+            markAsRead(conversationId);
+        } catch (e) {
+            console.error("Failed to load messages", e);
         }
     };
 
@@ -218,8 +150,18 @@ export default function ChatPage() {
                 if (!did) throw new Error('User not found');
             }
 
-            // Send using Signal Protocol
-            await sendMessage(did, newMessage, selectedConversation.participant2.handle);
+            if (!user.did) throw new Error('User DID missing');
+
+
+
+            // Send using Signed API
+            await signedAPI.sendChat(
+                did,
+                selectedConversation.participant2.handle,
+                newMessage,
+                user.did,
+                user.handle
+            );
 
             setNewMessage('');
 
@@ -247,71 +189,6 @@ export default function ChatPage() {
         } catch (err: any) {
             console.error('[Send] Error:', err);
             alert(`Failed: ${err.message}`);
-        } finally {
-            setSending(false);
-        }
-    };
-
-    const startNewChat = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newChatHandle.trim()) return;
-        setSending(true);
-        try {
-            let cleanHandle = newChatHandle.replace(/^@/, '');
-
-            // If the handle includes a domain, check if it's our local domain
-            if (cleanHandle.includes('@')) {
-                const [handle, domain] = cleanHandle.split('@');
-                const localDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || window.location.host;
-
-                // If it's our local domain, strip it for the API call
-                if (domain === localDomain) {
-                    cleanHandle = handle;
-                }
-            }
-
-            const res = await fetch(`/api/users/${encodeURIComponent(cleanHandle)}`);
-            const data = await res.json();
-
-            if (!data.user?.did) {
-                alert('User not found or Olm encryption not enabled.');
-                setSending(false);
-                return;
-            }
-
-            // Check if existing conversation
-            const existing = conversations.find(c =>
-                c.participant2.handle.toLowerCase() === data.user.handle.toLowerCase()
-            );
-
-            if (existing) {
-                setSelectedConversation(existing);
-            } else {
-                // Setup draft
-                const draftConv: Conversation = {
-                    id: 'new',
-                    participant2: {
-                        handle: data.user.handle,
-                        displayName: data.user.displayName || data.user.handle,
-                        avatarUrl: data.user.avatarUrl,
-                        did: data.user.did
-                    },
-                    lastMessageAt: new Date().toISOString(),
-                    lastMessagePreview: 'New Conversation',
-                    unreadCount: 0
-                };
-                setSelectedConversation(draftConv);
-            }
-
-            setShowNewChat(false);
-            setNewChatHandle('');
-        } catch (e: any) {
-            console.error('[Chat UI] Start chat failed:', e);
-            if (e.message.includes('Recipient keys not found') || e.message.includes('Failed to fetch recipient keys')) {
-                alert('This user has not set up secure chat yet. They need to log in to enable end-to-end encryption.');
-            } else {
-                alert('Failed to start chat: ' + e.message);
-            }
         } finally {
             setSending(false);
         }
@@ -345,8 +222,9 @@ export default function ChatPage() {
     // ============================================
 
     // Load conversations
+    // Load conversations
     useEffect(() => {
-        if (user && isReady) {
+        if (user) {
             loadConversations(true); // Initial load with spinner
 
             // Poll for new conversations every 5 seconds (no spinner)
@@ -356,11 +234,11 @@ export default function ChatPage() {
 
             return () => clearInterval(pollInterval);
         }
-    }, [user, isReady]);
+    }, [user]);
 
     // Handle Compose Intent
     useEffect(() => {
-        if (composeHandle && isReady && !selectedConversation && conversations.length >= 0) {
+        if (composeHandle && !selectedConversation && conversations.length >= 0) {
             // Check if we already have a conversation with this user
             const existing = conversations.find(c =>
                 c.participant2.handle.toLowerCase() === composeHandle.toLowerCase()
@@ -377,6 +255,11 @@ export default function ChatPage() {
                         const res = await fetch(`/api/users/${encodeURIComponent(composeHandle)}`);
                         const data = await res.json();
                         if (data.user) {
+                            if (data.user.isBot || data.user.canReceiveDms === false) {
+                                console.error('Cannot DM this account due to privacy settings');
+                                router.replace('/chat');
+                                return;
+                            }
                             const draftConv: Conversation = {
                                 id: 'new',
                                 participant2: {
@@ -404,7 +287,7 @@ export default function ChatPage() {
                 fetchUserAndInitDraft();
             }
         }
-    }, [composeHandle, isReady, selectedConversation, conversations, loading, router]);
+    }, [composeHandle, selectedConversation, conversations, loading, router]);
 
     // Redirect if not logged in
     useEffect(() => {
@@ -415,9 +298,8 @@ export default function ChatPage() {
 
     // Load messages when conversation is selected
     useEffect(() => {
-        if (selectedConversation && isReady) {
-            // Update current conversation ref
-            currentConversationIdRef.current = selectedConversation.id;
+        if (selectedConversation) {
+
 
             // Clear messages immediately to prevent flash
             setMessages([]);
@@ -435,7 +317,7 @@ export default function ChatPage() {
             // Poll for new messages every 3 seconds
             const pollInterval = setInterval(() => {
                 // Only load if still the same conversation
-                if (currentConversationIdRef.current === selectedConversation.id && selectedConversation.id !== 'new') {
+                if (selectedConversation.id !== 'new') {
                     loadMessages(selectedConversation.id);
                 }
             }, 3000);
@@ -443,11 +325,11 @@ export default function ChatPage() {
             return () => clearInterval(pollInterval);
         } else if (!selectedConversation) {
             // Clear messages when no conversation selected
-            currentConversationIdRef.current = null;
+
             setMessages([]);
             setLoadingMessages(false);
         }
-    }, [selectedConversation, isReady]);
+    }, [selectedConversation]);
 
     // Auto-scroll to bottom of messages only if user was already at bottom
     useEffect(() => {
@@ -471,10 +353,10 @@ export default function ChatPage() {
     if (!isIdentityUnlocked) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '24px' }}>
-                <Lock size={48} style={{ color: 'rgb(251, 191, 36)' }} />
-                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Identity Locked</h2>
+                <Lock size={48} style={{ color: 'var(--accent)' }} />
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Identity Required</h2>
                 <p style={{ color: 'var(--foreground-secondary)', maxWidth: '400px', textAlign: 'center' }}>
-                    End-to-end encrypted chat requires your identity to be unlocked. Your private keys are needed to encrypt and decrypt messages.
+                    Chat requires your identity to be unlocked. Your private keys are used to sign messages to prove they came from you.
                 </p>
                 <button
                     onClick={() => setShowUnlockPrompt(true)}
@@ -488,33 +370,7 @@ export default function ChatPage() {
         );
     }
 
-    // Error State
-    if (status === 'error') {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-                <Shield size={48} style={{ color: 'var(--destructive)' }} />
-                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Connection Failed</h2>
-                <p style={{ color: 'var(--foreground-secondary)', maxWidth: '300px', textAlign: 'center' }}>
-                    Unable to initialize secure chat. Please refresh the page to try again.
-                </p>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="btn btn-primary"
-                >
-                    Refresh Page
-                </button>
-            </div>
-        );
-    }
 
-    // Loading State
-    if (!isReady || status === 'initializing') {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-                <Loader2 className="animate-spin" size={32} />
-            </div>
-        );
-    }
 
     // Prevent flash of list view while processing compose intent
     if (composeHandle && !selectedConversation) {
@@ -530,15 +386,24 @@ export default function ChatPage() {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', maxWidth: '600px', margin: '0 auto' }}>
                 {/* Header */}
-                <div className="post" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--background)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                <header style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 20,
+                    background: 'rgba(10, 10, 10, 0.8)',
+                    backdropFilter: 'blur(12px)',
+                    borderBottom: '1px solid var(--border)',
+                    padding: '12px 16px',
+                    flexShrink: 0
+                }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button
                             onClick={() => setSelectedConversation(null)}
-                            style={{ background: 'none', border: 'none', padding: '8px', cursor: 'pointer', color: 'var(--foreground)' }}
+                            style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: 'var(--foreground)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
                             <ArrowLeft size={20} />
                         </button>
-                        <div className="avatar">
+                        <div className="avatar" style={{ width: '32px', height: '32px', fontSize: '14px' }}>
                             {selectedConversation.participant2.avatarUrl ? (
                                 <img src={selectedConversation.participant2.avatarUrl} alt="" />
                             ) : (
@@ -546,19 +411,19 @@ export default function ChatPage() {
                             )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600 }}>{selectedConversation.participant2.displayName}</div>
-                            <div style={{ fontSize: '13px', color: 'var(--foreground-tertiary)' }}>
+                            <div style={{ fontWeight: 600, fontSize: '15px' }}>{selectedConversation.participant2.displayName}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {formatFullHandle(selectedConversation.participant2.handle)}
                             </div>
                         </div>
                         <button
                             onClick={() => { setConversationToDelete(selectedConversation); setShowDeleteModal(true); }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--foreground-tertiary)' }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--foreground-tertiary)', padding: '4px' }}
                         >
                             <Trash2 size={18} />
                         </button>
                     </div>
-                </div>
+                </header>
 
                 {/* Messages */}
                 <div
@@ -598,7 +463,7 @@ export default function ChatPage() {
                                         border: msg.isSentByMe ? 'none' : '1px solid var(--border)',
                                         wordBreak: 'break-word'
                                     }}>
-                                        {msg.decryptedContent || msg.encryptedContent}
+                                        {msg.content}
                                     </div>
                                     <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
                                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -685,30 +550,24 @@ export default function ChatPage() {
     // LIST VIEW
     return (
         <>
-            <div className="post" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--background)', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>Messages</h1>
-                    <button onClick={() => setShowNewChat(true)} className="btn btn-primary btn-sm">
-                        <Plus size={16} style={{ marginRight: 6 }} /> New
-                    </button>
-                </div>
+            <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--background)' }}>
+                <header style={{
+                    padding: '16px',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'rgba(10, 10, 10, 0.8)',
+                    backdropFilter: 'blur(12px)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h1 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>Chat</h1>
+                    </div>
+                </header>
 
-                {showNewChat ? (
-                    <form onSubmit={startNewChat} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <input
-                            type="text"
-                            placeholder="@username"
-                            className="input"
-                            value={newChatHandle}
-                            onChange={e => setNewChatHandle(e.target.value)}
-                            autoFocus
-                        />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                            <button type="button" onClick={() => setShowNewChat(false)} className="btn btn-ghost btn-sm">Cancel</button>
-                            <button type="submit" className="btn btn-primary btn-sm" disabled={sending}>Start</button>
-                        </div>
-                    </form>
-                ) : (
+                <div style={{
+                    padding: '16px',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'rgba(10, 10, 10, 0.8)',
+                    backdropFilter: 'blur(12px)',
+                }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--background-secondary)', borderRadius: 'var(--radius-full)', padding: '8px 16px', border: '1px solid var(--border)' }}>
                         <Search size={16} style={{ color: 'var(--foreground-tertiary)' }} />
                         <input
@@ -719,7 +578,7 @@ export default function ChatPage() {
                             onChange={e => setSearchQuery(e.target.value)}
                         />
                     </div>
-                )}
+                </div>
             </div>
 
             {loading ? (

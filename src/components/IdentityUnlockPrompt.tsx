@@ -66,46 +66,71 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                 left: 0,
                 right: 0,
                 bottom: 0,
-                background: 'rgba(0, 0, 0, 0.5)',
+                background: 'rgba(0, 0, 0, 0.8)',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-end',
                 justifyContent: 'center',
                 zIndex: 99999,
-                padding: '16px'
+                padding: 0
             }}
             onClick={handleCancel}
         >
             <div
-                className="card"
+                className="identity-unlock-sheet"
                 style={{
-                    maxWidth: '400px',
                     width: '100%',
-                    padding: '24px'
+                    maxWidth: '100%',
+                    background: 'var(--background-secondary)',
+                    borderTopLeftRadius: '20px',
+                    borderTopRightRadius: '20px',
+                    padding: '24px',
+                    paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
+                    boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.5)',
+                    animation: 'slideUp 0.3s ease-out'
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
+                <style jsx>{`
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(100%);
+                        }
+                        to {
+                            transform: translateY(0);
+                        }
+                    }
+                `}</style>
+
+                {/* Drag indicator */}
+                <div style={{
+                    width: '40px',
+                    height: '4px',
+                    background: 'var(--border)',
+                    borderRadius: '2px',
+                    margin: '0 auto 20px'
+                }} />
+
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     <div style={{
-                        width: '40px',
-                        height: '40px',
+                        width: '56px',
+                        height: '56px',
                         borderRadius: '50%',
-                        background: 'rgba(59, 130, 246, 0.1)',
+                        background: 'rgba(255, 255, 255, 0.1)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        margin: '0 auto 16px'
                     }}>
-                        <Lock size={20} style={{ color: 'var(--accent)' }} />
+                        <Lock size={28} style={{ color: 'var(--accent)' }} />
                     </div>
-                    <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
-                        Unlock Identity
+                    <h2 style={{ fontSize: '22px', fontWeight: 600, margin: '0 0 8px 0' }}>
+                        Identity Required
                     </h2>
+                    <p style={{ color: 'var(--foreground-secondary)', margin: 0, lineHeight: 1.5, fontSize: '15px' }}>
+                        Enter your password to unlock your identity
+                    </p>
                 </div>
-
-                {/* Description */}
-                <p style={{ color: 'var(--foreground-secondary)', marginBottom: '20px', lineHeight: 1.5 }}>
-                    Enter your password to unlock your cryptographic identity and perform actions.
-                </p>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit}>
@@ -128,19 +153,19 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                             value={password}
                             onChange={(e) => {
                                 setPassword(e.target.value);
-                                setError(null); // Clear error when user types
+                                setError(null);
                             }}
                             disabled={isUnlocking}
                             placeholder="Enter your password"
                             autoFocus
                             style={{
                                 width: '100%',
-                                padding: '10px 12px',
-                                borderRadius: '8px',
-                                border: error ? '1px solid var(--error)' : '1px solid var(--border)',
+                                padding: '14px 16px',
+                                borderRadius: '12px',
+                                border: error ? '2px solid var(--error)' : '2px solid var(--border)',
                                 background: 'var(--background)',
                                 color: 'var(--foreground)',
-                                fontSize: '14px',
+                                fontSize: '16px',
                                 outline: 'none',
                                 transition: 'border-color 0.2s'
                             }}
@@ -163,39 +188,47 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
-                            padding: '10px 12px',
-                            borderRadius: '8px',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
                             background: 'rgba(239, 68, 68, 0.1)',
                             color: 'var(--error)',
                             fontSize: '14px',
                             marginBottom: '16px'
                         }}>
-                            <AlertCircle size={16} />
+                            <AlertCircle size={18} />
                             <span>{error}</span>
                         </div>
                     )}
 
                     {/* Buttons */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
                         <button
                             type="submit"
                             disabled={isUnlocking || !password.trim()}
                             className="btn btn-primary"
                             style={{
-                                flex: 1,
+                                width: '100%',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '8px'
+                                gap: '8px',
+                                minHeight: '52px',
+                                padding: '14px 20px',
+                                fontSize: '16px',
+                                fontWeight: 600,
+                                borderRadius: '12px'
                             }}
                         >
                             {isUnlocking ? (
                                 <>
-                                    <Loader2 size={18} className="animate-spin" />
+                                    <Loader2 size={20} className="animate-spin" />
                                     <span>Unlocking...</span>
                                 </>
                             ) : (
-                                'Unlock'
+                                <>
+                                    <Lock size={18} />
+                                    <span>Unlock Identity</span>
+                                </>
                             )}
                         </button>
                         <button
@@ -203,7 +236,14 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                             onClick={handleCancel}
                             disabled={isUnlocking}
                             className="btn btn-ghost"
-                            style={{ flex: 1 }}
+                            style={{ 
+                                width: '100%',
+                                minHeight: '52px',
+                                padding: '14px 20px',
+                                fontSize: '16px',
+                                fontWeight: 500,
+                                borderRadius: '12px'
+                            }}
                         >
                             Cancel
                         </button>
@@ -212,13 +252,14 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
 
                 {/* Info Note */}
                 <p style={{
-                    fontSize: '12px',
+                    fontSize: '13px',
                     color: 'var(--foreground-tertiary)',
-                    marginTop: '16px',
+                    marginTop: '20px',
                     marginBottom: 0,
-                    lineHeight: 1.4
+                    lineHeight: 1.5,
+                    textAlign: 'center'
                 }}>
-                    You can browse without unlocking, but you'll need to unlock to like, post, or follow.
+                    Your password never leaves this device
                 </p>
             </div>
         </div>

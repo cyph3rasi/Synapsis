@@ -200,12 +200,12 @@ export default function Home() {
         borderBottom: '1px solid var(--border)',
         position: 'sticky',
         top: 0,
-        background: 'var(--background)',
+        background: 'rgba(10, 10, 10, 0.95)',
         zIndex: 10,
         backdropFilter: 'blur(12px)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Home</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 600 }}>Home</h1>
           <div className="feed-toggle">
             <button
               className={`feed-toggle-btn ${feedType === 'following' ? 'active' : ''}`}

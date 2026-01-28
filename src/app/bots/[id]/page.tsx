@@ -76,7 +76,7 @@ export default function BotDetailPage() {
   const handleTriggerPost = async () => {
     setActionLoading(true);
     try {
-      const response = await fetch(`/api/bots/${botId}/post`, { 
+      const response = await fetch(`/api/bots/${botId}/post`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -188,10 +188,10 @@ export default function BotDetailPage() {
       });
       if (response.ok) {
         setShowAddSource(false);
-        setNewSource({ 
-          type: 'rss', 
-          url: '', 
-          subreddit: '', 
+        setNewSource({
+          type: 'rss',
+          url: '',
+          subreddit: '',
           apiKey: '',
           braveQuery: '',
           braveFreshness: 'pw',
@@ -252,7 +252,7 @@ export default function BotDetailPage() {
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 16px 64px' }}>
         <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <p style={{ color: 'var(--foreground-tertiary)' }}>Bot not found</p>
-          <Link href="/settings/bots" className="btn" style={{ marginTop: '16px' }}>
+          <Link href="/bots" className="btn" style={{ marginTop: '16px' }}>
             Back to Bots
           </Link>
         </div>
@@ -260,8 +260,8 @@ export default function BotDetailPage() {
     );
   }
 
-  const scheduleConfig = typeof bot.scheduleConfig === 'string' 
-    ? JSON.parse(bot.scheduleConfig) 
+  const scheduleConfig = typeof bot.scheduleConfig === 'string'
+    ? JSON.parse(bot.scheduleConfig)
     : bot.scheduleConfig || null;
   const personalityConfig = typeof bot.personalityConfig === 'string'
     ? JSON.parse(bot.personalityConfig)
@@ -270,16 +270,16 @@ export default function BotDetailPage() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 16px 64px' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-        <Link href="/settings/bots" style={{ color: 'var(--foreground)' }}>
+        <Link href="/bots" style={{ color: 'var(--foreground)' }}>
           <ArrowLeftIcon />
         </Link>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <h1 style={{ fontSize: '24px', fontWeight: 700 }}>{bot.name}</h1>
             {bot.autonomousMode && (
-              <span style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
                 gap: '4px',
                 fontSize: '11px',
                 padding: '4px 10px',
@@ -331,7 +331,7 @@ export default function BotDetailPage() {
             {bot.isActive ? 'Deactivate' : 'Activate'}
           </button>
           <Link
-            href={`/settings/bots/${botId}/edit`}
+            href={`/bots/${botId}/edit`}
             className="btn"
           >
             <Pencil size={16} />
@@ -407,8 +407,8 @@ export default function BotDetailPage() {
           <Sparkles size={18} />
           Personality
         </h2>
-        <div style={{ 
-          fontSize: '13px', 
+        <div style={{
+          fontSize: '13px',
           color: 'var(--foreground-secondary)',
           background: 'var(--background-tertiary)',
           padding: '12px',
@@ -635,7 +635,7 @@ export default function BotDetailPage() {
               <button
                 onClick={handleAddSource}
                 disabled={
-                  actionLoading || 
+                  actionLoading ||
                   (newSource.type === 'rss' && !newSource.url) ||
                   (newSource.type === 'reddit' && !newSource.subreddit) ||
                   (newSource.type === 'brave_news' && (!newSource.braveQuery || !newSource.apiKey)) ||
@@ -671,11 +671,11 @@ export default function BotDetailPage() {
               } catch {
                 displayName = source.url || 'Unknown';
               }
-              
+
               return (
-                <div 
-                  key={source.id} 
-                  style={{ 
+                <div
+                  key={source.id}
+                  style={{
                     padding: '12px',
                     background: 'var(--background-tertiary)',
                     borderRadius: 'var(--radius-md)',
@@ -716,7 +716,7 @@ export default function BotDetailPage() {
           onClick={() => {
             if (confirm(`Are you sure you want to delete ${bot.name}? This cannot be undone.`)) {
               fetch(`/api/bots/${botId}`, { method: 'DELETE' })
-                .then(() => router.push('/settings/bots'))
+                .then(() => router.push('/bots'))
                 .catch(() => showToast('Failed to delete bot', 'error'));
             }
           }}

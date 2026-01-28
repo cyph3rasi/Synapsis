@@ -92,7 +92,7 @@ export function useUserIdentity() {
   const unlockIdentity = async (privateKeyEncrypted: string, password: string, userDid?: string, userHandle?: string, userPublicKey?: string) => {
     try {
       console.log('[Identity] Unlocking with DID:', userDid, 'Handle:', userHandle);
-      
+
       // Set identity first if provided (needed for storage key derivation)
       if (userDid && userHandle && userPublicKey) {
         keyStore.setIdentity({
@@ -130,42 +130,11 @@ export function useUserIdentity() {
       keyStore.setPrivateKey(cryptoKey);
       console.log('[Identity] Private key stored in memory');
 
-      // 4. Derive and store storage key for chat encryption
-      // Use libsodium's pwhash to derive a storage key from the password
-      const sodiumModule = await import('libsodium-wrappers-sumo');
-      await sodiumModule.default.ready;
-      const sodium = sodiumModule.default;
-      
-      // Use a fixed salt derived from the user's identity to ensure consistency
-      const identity = keyStore.getIdentity();
-      console.log('[Identity] Retrieved identity from keyStore:', identity);
-      
-      if (identity) {
-        const saltString = `synapsis-chat-storage-${identity.did}`;
-        // Generate a fixed-length salt from the DID
-        // Hash to 32 bytes, then take first 16 bytes for salt
-        const fullHash = sodium.crypto_generichash(32, saltString, null);
-        const salt = fullHash.slice(0, sodium.crypto_pwhash_SALTBYTES);
-        
-        console.log('[Identity] Deriving storage key...');
-        const storageKey = sodium.crypto_pwhash(
-          32, // 32 bytes for secretbox
-          password,
-          salt,
-          sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE,
-          sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
-          sodium.crypto_pwhash_ALG_DEFAULT
-        );
-        
-        keyStore.setStorageKey(storageKey);
-        console.log('[Identity] Storage key derived and stored');
-      } else {
-        console.error('[Identity] No identity in keyStore - cannot derive storage key');
-      }
-
-      // 5. Update State
+      // 4. Update State
       setIdentity(prev => prev ? { ...prev, isUnlocked: true } : null); // We need the other data...
       setIsUnlocked(true);
+
+
 
       // If we didn't have identity wrapper set yet, we might need it.
       // Usually initializeIdentity handles both.

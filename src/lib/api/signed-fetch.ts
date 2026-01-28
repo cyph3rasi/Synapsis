@@ -210,4 +210,16 @@ export const signedAPI = {
       userHandle
     );
   },
+  /**
+   * Send a chat message
+   */
+  async sendChat(recipientDid: string, recipientHandle: string, content: string, userDid: string, userHandle: string) {
+    return signedFetch(
+      '/api/chat/send',
+      'chat',
+      { recipientDid, recipientHandle, content },
+      userDid,
+      userHandle
+    );
+  },
 };

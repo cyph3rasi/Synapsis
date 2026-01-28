@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db, users } from '@/db';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { getSession } from '@/lib/auth';
+import { db, users, follows } from '@/db';
 import { fetchSwarmUserProfile, isSwarmNode } from '@/lib/swarm/interactions';
 
 type RouteContext = { params: Promise<{ handle: string }> };
@@ -62,7 +63,6 @@ export async function GET(request: Request, context: RouteContext) {
                                 isSwarm: true,
                                 nodeDomain: remoteDomain,
                                 isBot: profile.isBot || false,
-                                chatPublicKey: profile.chatPublicKey,
                                 did: profile.did,
                             }
                         });
@@ -96,10 +96,37 @@ export async function GET(request: Request, context: RouteContext) {
             website: user.website,
             movedTo: user.movedTo,
             isBot: user.isBot,
-            publicKey: user.publicKey, // RSA key for signing
-            chatPublicKey: user.chatPublicKey, // ECDH key for E2E chat
+            publicKey: user.publicKey, // Signing key
             did: user.did, // V2 Identity
+            dmPrivacy: user.dmPrivacy,
         };
+
+        // Check if viewer can DM this user
+        let canReceiveDms = true;
+        if (user.isBot) {
+            canReceiveDms = false;
+        } else if (user.dmPrivacy === 'none') {
+            canReceiveDms = false;
+        } else if (user.dmPrivacy === 'following') {
+            canReceiveDms = false; // Default to false for 'following'
+            const session = await getSession();
+            if (session?.user) {
+                if (session.user.id === user.id) {
+                    canReceiveDms = true; // Can DM yourself
+                } else {
+                    const isFollowingViewer = await db.query.follows.findFirst({
+                        where: and(
+                            eq(follows.followerId, user.id),
+                            eq(follows.followingId, session.user.id)
+                        )
+                    });
+                    if (isFollowingViewer) {
+                        canReceiveDms = true;
+                    }
+                }
+            }
+        }
+        userResponse.canReceiveDms = canReceiveDms;
 
         // If this is a bot, include owner info
         if (user.isBot && user.botOwnerId) {

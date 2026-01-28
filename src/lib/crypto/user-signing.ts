@@ -27,7 +27,7 @@ class InMemoryKeyStore implements KeyStore {
   private static instance: InMemoryKeyStore;
   private privateKey: CryptoKey | null = null;
   private identity: { did: string; handle: string; publicKey: string } | null = null;
-  private storageKey: Uint8Array | null = null; // For encrypting chat keys
+
 
   private constructor() { }
 
@@ -57,18 +57,11 @@ class InMemoryKeyStore implements KeyStore {
     return this.identity;
   }
 
-  setStorageKey(key: Uint8Array): void {
-    this.storageKey = key;
-  }
 
-  getStorageKey(): Uint8Array | null {
-    return this.storageKey;
-  }
 
   clear(): void {
     this.privateKey = null;
     this.identity = null;
-    this.storageKey = null;
   }
 }
 

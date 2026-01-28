@@ -10,6 +10,7 @@ const updateProfileSchema = z.object({
     avatarUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
     headerUrl: z.string().url().or(z.string().length(0)).optional().nullable(),
     website: z.string().url().or(z.string().length(0)).optional().nullable(),
+    dmPrivacy: z.enum(['everyone', 'following', 'none']).optional(),
 });
 
 export async function GET() {
@@ -33,6 +34,7 @@ export async function GET() {
                 avatarUrl: session.user.avatarUrl,
                 bio: session.user.bio,
                 website: session.user.website,
+                dmPrivacy: session.user.dmPrivacy,
                 did: session.user.did,
                 publicKey: session.user.publicKey,
                 privateKeyEncrypted: session.user.privateKeyEncrypted,
@@ -60,6 +62,7 @@ export async function PATCH(request: Request) {
             avatarUrl?: string | null;
             headerUrl?: string | null;
             website?: string | null;
+            dmPrivacy?: 'everyone' | 'following' | 'none';
             updatedAt?: Date;
         } = {};
 
@@ -68,6 +71,7 @@ export async function PATCH(request: Request) {
         if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl === '' ? null : data.avatarUrl;
         if (data.headerUrl !== undefined) updateData.headerUrl = data.headerUrl === '' ? null : data.headerUrl;
         if (data.website !== undefined) updateData.website = data.website === '' ? null : data.website;
+        if (data.dmPrivacy !== undefined) updateData.dmPrivacy = data.dmPrivacy;
 
         if (Object.keys(updateData).length === 0) {
             return NextResponse.json({
@@ -79,6 +83,7 @@ export async function PATCH(request: Request) {
                     bio: currentUser.bio,
                     headerUrl: currentUser.headerUrl,
                     website: currentUser.website,
+                    dmPrivacy: currentUser.dmPrivacy,
                     followersCount: currentUser.followersCount,
                     followingCount: currentUser.followingCount,
                     postsCount: currentUser.postsCount,
@@ -103,6 +108,7 @@ export async function PATCH(request: Request) {
                 bio: updatedUser.bio,
                 headerUrl: updatedUser.headerUrl,
                 website: updatedUser.website,
+                dmPrivacy: updatedUser.dmPrivacy,
                 followersCount: updatedUser.followersCount,
                 followingCount: updatedUser.followingCount,
                 postsCount: updatedUser.postsCount,

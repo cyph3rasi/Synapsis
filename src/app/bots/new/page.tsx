@@ -242,7 +242,7 @@ export default function NewBotPage() {
           });
         }
 
-        router.push(`/settings/bots/${data.bot.id}`);
+        router.push(`/bots/${data.bot.id}`);
       } else {
         const data = await response.json();
         console.error('Bot creation failed:', data);
@@ -845,7 +845,7 @@ export default function NewBotPage() {
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px 64px' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-        <Link href="/settings/bots" style={{ color: 'var(--foreground)' }}>
+        <Link href="/bots" style={{ color: 'var(--foreground)' }}>
           <ArrowLeftIcon />
         </Link>
         <div>

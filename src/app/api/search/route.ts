@@ -65,35 +65,61 @@ export async function GET(request: Request) {
             }
         }
 
+        const isHandleSearch = query.trim().startsWith('@');
         const searchPattern = `%${localSearchQuery}%`;
         let searchUsers: SearchUser[] = [];
         let searchPosts: typeof posts.$inferSelect[] = [];
 
         // Search users
         if (type === 'all' || type === 'users') {
-            const userConditions = and(
-                or(
-                    ilike(users.handle, searchPattern),
-                    ilike(users.displayName, searchPattern),
-                    ilike(users.bio, searchPattern)
-                ),
-                eq(users.isSuspended, false),
-                eq(users.isSilenced, false)
-            );
-            const localUsers = await db.select({
-                id: users.id,
-                handle: users.handle,
-                displayName: users.displayName,
-                avatarUrl: users.avatarUrl,
-                bio: users.bio,
-                isBot: users.isBot,
-            })
-                .from(users)
-                .where(userConditions)
-                .limit(limit);
-            
-            // Filter out remote placeholder users (those with @ in handle)
-            searchUsers = localUsers.filter(u => !u.handle.includes('@'));
+            if (isHandleSearch) {
+                // Try exact match first
+                const exactMatch = await db.select({
+                    id: users.id,
+                    handle: users.handle,
+                    displayName: users.displayName,
+                    avatarUrl: users.avatarUrl,
+                    bio: users.bio,
+                    isBot: users.isBot,
+                })
+                    .from(users)
+                    .where(and(
+                        eq(users.handle, localSearchQuery),
+                        eq(users.isSuspended, false),
+                        eq(users.isSilenced, false)
+                    ))
+                    .limit(1);
+
+                if (exactMatch.length > 0) {
+                    searchUsers = exactMatch;
+                }
+            }
+
+            if (searchUsers.length === 0) {
+                const userConditions = and(
+                    or(
+                        ilike(users.handle, searchPattern),
+                        ilike(users.displayName, searchPattern),
+                        ilike(users.bio, searchPattern)
+                    ),
+                    eq(users.isSuspended, false),
+                    eq(users.isSilenced, false)
+                );
+                const localUsers = await db.select({
+                    id: users.id,
+                    handle: users.handle,
+                    displayName: users.displayName,
+                    avatarUrl: users.avatarUrl,
+                    bio: users.bio,
+                    isBot: users.isBot,
+                })
+                    .from(users)
+                    .where(userConditions)
+                    .limit(limit);
+
+                // Filter out remote placeholder users (those with @ in handle)
+                searchUsers = localUsers.filter(u => !u.handle.includes('@'));
+            }
         }
 
         // Swarm user lookup (exact handle@domain queries)

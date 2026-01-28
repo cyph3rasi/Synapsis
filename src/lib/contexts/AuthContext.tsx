@@ -80,15 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         await unlockIdentityHook(
-            targetUser.privateKeyEncrypted, 
+            targetUser.privateKeyEncrypted,
             password,
             targetUser.did,
             targetUser.handle,
             targetUser.publicKey
         );
 
-        // Signal Protocol will auto-initialize when the chat page is opened
-        
+
         setShowUnlockPrompt(false); // Close prompt on success
     };
 

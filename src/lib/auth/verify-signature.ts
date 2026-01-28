@@ -29,7 +29,39 @@ export interface SignedAction {
 }
 
 /**
- * Verify a signed user action
+ * Verify a signed action against a specific public key
+ */
+export async function verifyActionSignature(signedAction: SignedAction, publicKeyStr: string): Promise<boolean> {
+  try {
+    const { sig, ...payload } = signedAction;
+    const canonicalString = canonicalize(payload);
+    const encoder = new TextEncoder();
+    const dataBytes = encoder.encode(canonicalString);
+
+    // Convert signature from Base64Url to buffer
+    const sigBase64 = base64UrlToBase64(sig);
+    const sigBuffer = Buffer.from(sigBase64, 'base64');
+
+    // Import public key (stored as SPKI Base64)
+    const publicKey = await importPublicKey(publicKeyStr);
+
+    return await cryptoSubtle.verify(
+      {
+        name: 'ECDSA',
+        hash: { name: 'SHA-256' },
+      },
+      publicKey,
+      sigBuffer,
+      dataBytes
+    );
+  } catch (error) {
+    console.error('[Verify] Crypto exception:', error);
+    return false;
+  }
+}
+
+/**
+ * Verify a signed user action (looks up user in DB)
  * 
  * @param signedAction - The signed action payload
  * @returns The user if signature is valid and not replayed
@@ -48,6 +80,7 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
   // 1. FRESHNESS CHECK (Fail fast before DB/Crypto)
   const now = Date.now();
   const diff = Math.abs(now - payload.ts);
+  // Allow 5 minutes clock skew
   const fiveMinutesMs = 5 * 60 * 1000;
 
   if (diff > fiveMinutesMs) {
@@ -60,8 +93,6 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
   });
 
   if (!user) {
-    // If federation, we might need to look up in remote_identity_cache here.
-    // For now, assume local user or user must exist in users table (synced).
     return { valid: false, error: 'User not found' };
   }
 
@@ -70,60 +101,34 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
   }
 
   // 3. CRYPTOGRAPHIC VERIFICATION
-  try {
-    const canonicalString = canonicalize(payload);
-    const encoder = new TextEncoder();
-    const dataBytes = encoder.encode(canonicalString);
+  const isValid = await verifyActionSignature(signedAction, user.publicKey);
 
-    // Convert signature from Base64Url to buffer
-    const sigBase64 = base64UrlToBase64(sig);
-    const sigBuffer = Buffer.from(sigBase64, 'base64');
-
-    // Import public key (stored as SPKI Base64 in DB)
-    const publicKey = await importPublicKey(user.publicKey);
-
-    const isValid = await cryptoSubtle.verify(
-      {
-        name: 'ECDSA',
-        hash: { name: 'SHA-256' },
-      },
-      publicKey,
-      sigBuffer,
-      dataBytes
-    );
-
-    if (!isValid) {
-      return { valid: false, error: 'INVALID_SIGNATURE' };
-    }
-
-    // 4. ACTION ID HASH COMPUTATION
-    // SHA-256(canonicalPayload)
-    // We use the same canonical string we just verified.
-    const actionIdHash = crypto.createHash('sha256').update(canonicalString).digest('hex');
-
-    // 5. REPLAY PROTECTION (DB)
-    try {
-      await db.insert(signedActionDedupe).values({
-        actionId: actionIdHash,
-        did: payload.did,
-        nonce: payload.nonce,
-        ts: payload.ts,
-      });
-    } catch (err: any) {
-      // Check for unique constraint violation (duplicate key)
-      if (err.code === '23505') { // Postgres unique_violation code
-        return { valid: false, error: 'REPLAYED_NONCE' };
-      }
-      console.error('[Verify] Dedupe error:', err);
-      throw err; // Internal error
-    }
-
-    return { valid: true, user };
-
-  } catch (error) {
-    console.error('[Verify] Verification exception:', error);
-    return { valid: false, error: 'VERIFICATION_ERROR' };
+  if (!isValid) {
+    return { valid: false, error: 'INVALID_SIGNATURE' };
   }
+
+  // 4. ACTION ID HASH COMPUTATION
+  const canonicalString = canonicalize(payload);
+  const actionIdHash = crypto.createHash('sha256').update(canonicalString).digest('hex');
+
+  // 5. REPLAY PROTECTION (DB)
+  try {
+    await db.insert(signedActionDedupe).values({
+      actionId: actionIdHash,
+      did: payload.did,
+      nonce: payload.nonce,
+      ts: payload.ts,
+    });
+  } catch (err: any) {
+    // Check for unique constraint violation (duplicate key)
+    if (err.code === '23505') { // Postgres unique_violation code
+      return { valid: false, error: 'REPLAYED_NONCE' };
+    }
+    console.error('[Verify] Dedupe error:', err);
+    throw err; // Internal error
+  }
+
+  return { valid: true, user };
 }
 
 /**

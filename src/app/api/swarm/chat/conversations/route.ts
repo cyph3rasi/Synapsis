@@ -54,7 +54,6 @@ export async function GET(request: NextRequest) {
           handle: participant2Handle,
           displayName: participant2Handle,
           avatarUrl: null as string | null,
-          chatPublicKey: null as string | null,
         };
 
         // Try to get cached user info
@@ -67,20 +66,22 @@ export async function GET(request: NextRequest) {
             handle: cachedUser.handle,
             displayName: cachedUser.displayName || cachedUser.handle,
             avatarUrl: cachedUser.avatarUrl,
-            chatPublicKey: cachedUser.chatPublicKey, // ECDH key for E2E chat
           };
         }
 
         return {
           ...conv,
-          participant2: participant2Info,
+          participant2: {
+            ...participant2Info,
+            isBot: cachedUser?.isBot || false,
+          },
           unreadCount: Number(unreadCount[0]?.count || 0),
         };
       })
     );
 
     return NextResponse.json({
-      conversations: conversationsWithUnread,
+      conversations: conversationsWithUnread.filter(c => !c.participant2.isBot),
     });
   } catch (error) {
     console.error('List conversations error:', error);
