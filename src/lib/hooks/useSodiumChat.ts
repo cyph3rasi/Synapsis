@@ -61,6 +61,9 @@ export function useSodiumChat() {
 
           // Verify key exists on server
           console.log('[Sodium] Verifying key on server...');
+          if (!user.did) {
+            throw new Error('User DID not available');
+          }
           const checkResponse = await fetch(`/api/chat/keys?did=${encodeURIComponent(user.did)}`);
 
           let shouldPublish = false;
