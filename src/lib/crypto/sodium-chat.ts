@@ -58,25 +58,22 @@ export async function generateChatKeyPair(): Promise<{
 
 // Helper to robustly decode Base64 regardless of variant (Original vs URLSafe)
 function tryDecodeBase64(str: string): Uint8Array {
-  const variants = [
-    // Standard Base64 (likely for Remote keys with +/)
-    (sodium.base64_variants && sodium.base64_variants.ORIGINAL),
-    // URL-Safe Base64 (likely for Local keys)
-    (sodium.base64_variants && sodium.base64_variants.URLSAFE),
-    // No Padding variants
-    (sodium.base64_variants && sodium.base64_variants.ORIGINAL_NO_PADDING),
-    (sodium.base64_variants && sodium.base64_variants.URLSAFE_NO_PADDING),
-    // Fallback/Default
-    undefined
-  ];
+  // Use a Set to ensure uniqueness and order, explicitly allowing undefined
+  const variants = new Set<number | undefined>();
 
-  // Filter out undefined variants (if enum missing) and create unique set
-  const validVariants = [...new Set(variants.filter(v => v !== undefined))];
-  // Add undefined at the end as fallback if not present
-  if (!validVariants.includes(undefined)) validVariants.push(undefined);
+  // Prefer standard/known variants first
+  if (sodium.base64_variants) {
+    if (sodium.base64_variants.ORIGINAL !== undefined) variants.add(sodium.base64_variants.ORIGINAL);
+    if (sodium.base64_variants.URLSAFE !== undefined) variants.add(sodium.base64_variants.URLSAFE);
+    if (sodium.base64_variants.ORIGINAL_NO_PADDING !== undefined) variants.add(sodium.base64_variants.ORIGINAL_NO_PADDING);
+    if (sodium.base64_variants.URLSAFE_NO_PADDING !== undefined) variants.add(sodium.base64_variants.URLSAFE_NO_PADDING);
+  }
+
+  // Always add default (undefined) as fallback
+  variants.add(undefined);
 
   let lastError;
-  for (const v of validVariants) {
+  for (const v of variants) {
     try {
       return v !== undefined
         ? sodium.from_base64(str, v)
