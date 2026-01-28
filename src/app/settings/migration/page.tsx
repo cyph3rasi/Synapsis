@@ -10,6 +10,8 @@ interface ExportStats {
     posts: number;
     following: number;
     mediaFiles: number;
+    dms: number;
+    bots: number;
 }
 
 export default function MigrationPage() {
@@ -137,6 +139,8 @@ export default function MigrationPage() {
                         <li>Your profile information</li>
                         <li>All your posts</li>
                         <li>Your following list</li>
+                        <li>All DMs and conversation history</li>
+                        <li>Your automated bots and their configuration</li>
                     </ul>
                 </div>
 
@@ -167,7 +171,7 @@ export default function MigrationPage() {
                         borderRadius: '8px',
                         marginBottom: '20px',
                     }}>
-                        Export successful! Downloaded {exportStats.posts} posts and {exportStats.mediaFiles} media references.
+                        Export successful! Downloaded {exportStats.posts} posts, {exportStats.dms} DM threads, and {exportStats.bots} bots.
                     </div>
                 )}
 

@@ -6,9 +6,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users, posts, media, follows, nodes } from '@/db';
+import { db, users, posts, media, follows, nodes, chatConversations, chatMessages, bots, botContentSources, botActivityLogs } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { encryptApiKey, serializeEncryptedData } from '@/lib/bots/encryption';
 import { v4 as uuid } from 'uuid';
 import { upsertHandleEntries } from '@/lib/federation/handles';
 
@@ -45,11 +46,54 @@ interface ImportFollowing {
     handle: string;
 }
 
+interface ImportDMConversation {
+    id: string;
+    type: string;
+    participant2Handle: string;
+    lastMessageAt: string | null;
+    lastMessagePreview: string | null;
+    messages: ImportDMMessage[];
+}
+
+interface ImportDMMessage {
+    senderHandle: string;
+    senderDisplayName: string | null;
+    senderAvatarUrl: string | null;
+    senderNodeDomain: string | null;
+    senderDid: string | null;
+    content: string | null;
+    deliveredAt: string | null;
+    readAt: string | null;
+    createdAt: string;
+}
+
+interface ImportBot {
+    id: string;
+    name: string;
+    handle: string;
+    bio: string | null;
+    avatarUrl: string | null;
+    headerUrl: string | null;
+    personalityConfig: any;
+    llmProvider: string;
+    llmModel: string;
+    llmApiKey: string;
+    botPrivateKey: string;
+    publicKey: string;
+    scheduleConfig: any;
+    autonomousMode: boolean;
+    isActive: boolean;
+    sources: any[];
+    activityLogs: any[];
+}
+
 interface ImportPackage {
     manifest: ImportManifest;
     profile: ImportProfile;
     posts: ImportPost[];
     following: ImportFollowing[];
+    dms: ImportDMConversation[];
+    bots: ImportBot[];
 }
 
 /**
@@ -122,6 +166,8 @@ export async function POST(req: NextRequest) {
         if (manifest.version !== '1.0') {
             return NextResponse.json({ error: 'Unsupported export version' }, { status: 400 });
         }
+
+        const { dms: importDMs = [], bots: importBots = [] } = exportData;
 
         // Verify signature
         if (!verifyManifestSignature(manifest)) {
@@ -198,9 +244,9 @@ export async function POST(req: NextRequest) {
 
         if (node?.isNsfw) {
             await db.update(users)
-                .set({ 
+                .set({
                     nsfwEnabled: true,
-                    isNsfw: true 
+                    isNsfw: true
                 })
                 .where(eq(users.id, newUser.id));
         }
@@ -241,6 +287,105 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date().toISOString(),
         }]);
 
+        // Import DMs
+        for (const conv of importDMs) {
+            try {
+                const [newConv] = await db.insert(chatConversations).values({
+                    participant1Id: newUser.id,
+                    participant2Handle: conv.participant2Handle,
+                    type: conv.type,
+                    lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt) : null,
+                    lastMessagePreview: conv.lastMessagePreview
+                }).returning();
+
+                for (const msg of conv.messages) {
+                    await db.insert(chatMessages).values({
+                        conversationId: newConv.id,
+                        senderHandle: msg.senderHandle,
+                        senderDisplayName: msg.senderDisplayName,
+                        senderAvatarUrl: msg.senderAvatarUrl,
+                        senderNodeDomain: msg.senderNodeDomain,
+                        senderDid: msg.senderDid,
+                        content: msg.content,
+                        deliveredAt: msg.deliveredAt ? new Date(msg.deliveredAt) : null,
+                        readAt: msg.readAt ? new Date(msg.readAt) : null,
+                        createdAt: new Date(msg.createdAt)
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to import DM conversation:', error);
+            }
+        }
+
+        // Import Bots
+        for (const botData of importBots) {
+            try {
+                // 1. Create Bot User Account
+                const botDid = `did:web:${nodeDomain}:users:${botData.handle.toLowerCase()}`;
+
+                // Re-encrypt bot private key
+                const encryptedBotPrivKey = encryptApiKey(botData.botPrivateKey);
+
+                const [botUser] = await db.insert(users).values({
+                    did: botDid,
+                    handle: botData.handle.toLowerCase(),
+                    displayName: botData.name,
+                    bio: botData.bio,
+                    avatarUrl: botData.avatarUrl,
+                    headerUrl: botData.headerUrl,
+                    publicKey: botData.publicKey,
+                    privateKeyEncrypted: serializeEncryptedData(encryptedBotPrivKey),
+                    isBot: true,
+                    botOwnerId: newUser.id
+                }).returning();
+
+                // 2. Create Bot Config
+                const encryptedLlmKey = encryptApiKey(botData.llmApiKey);
+
+                const [newBot] = await db.insert(bots).values({
+                    userId: botUser.id,
+                    ownerId: newUser.id,
+                    name: botData.name,
+                    personalityConfig: JSON.stringify(botData.personalityConfig),
+                    llmProvider: botData.llmProvider,
+                    llmModel: botData.llmModel,
+                    llmApiKeyEncrypted: serializeEncryptedData(encryptedLlmKey),
+                    scheduleConfig: botData.scheduleConfig ? JSON.stringify(botData.scheduleConfig) : null,
+                    autonomousMode: botData.autonomousMode,
+                    isActive: botData.isActive
+                }).returning();
+
+                // 3. Import Sources
+                for (const source of botData.sources) {
+                    await db.insert(botContentSources).values({
+                        botId: newBot.id,
+                        type: source.type,
+                        url: source.url,
+                        subreddit: source.subreddit,
+                        apiKeyEncrypted: source.apiKeyEncrypted,
+                        sourceConfig: source.sourceConfig ? JSON.stringify(source.sourceConfig) : null,
+                        keywords: source.keywords ? JSON.stringify(source.keywords) : null,
+                        isActive: source.isActive
+                    });
+                }
+
+                // 4. Import Activity Logs
+                for (const log of botData.activityLogs) {
+                    await db.insert(botActivityLogs).values({
+                        botId: newBot.id,
+                        action: log.action,
+                        details: JSON.stringify(log.details),
+                        success: log.success,
+                        errorMessage: log.errorMessage,
+                        createdAt: new Date(log.createdAt)
+                    });
+                }
+
+            } catch (error) {
+                console.error(`Failed to import bot ${botData.name}:`, error);
+            }
+        }
+
         // Notify old node about the migration
         try {
             await notifyOldNode(manifest.sourceNode, manifest.handle, newActorUrl, manifest.did, privateKey);
@@ -260,6 +405,8 @@ export async function POST(req: NextRequest) {
             stats: {
                 postsImported: importedPosts,
                 followingToRestore: following.length,
+                dmsImported: importDMs.length,
+                botsImported: importBots.length,
             },
             message: 'Account imported successfully. Your followers on other Synapsis nodes will be automatically migrated.',
         });

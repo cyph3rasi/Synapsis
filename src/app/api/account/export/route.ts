@@ -7,9 +7,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, verifyPassword } from '@/lib/auth';
-import { db, posts, media, follows, users, remoteFollows } from '@/db';
+import { db, posts, media, follows, users, remoteFollows, chatConversations, chatMessages, bots, botContentSources, botActivityLogs } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { decryptApiKey, deserializeEncryptedData } from '@/lib/bots/encryption';
 
 // We'll use a simple in-memory zip approach
 // For production, consider using a streaming zip library
@@ -49,6 +50,47 @@ interface ExportFollowing {
     displayName?: string | null;
     bio?: string | null;
     avatarUrl?: string | null;
+}
+
+interface ExportDMConversation {
+    id: string;
+    type: string;
+    participant2Handle: string;
+    lastMessageAt: string | null;
+    lastMessagePreview: string | null;
+    messages: ExportDMMessage[];
+}
+
+interface ExportDMMessage {
+    senderHandle: string;
+    senderDisplayName: string | null;
+    senderAvatarUrl: string | null;
+    senderNodeDomain: string | null;
+    senderDid: string | null;
+    content: string | null;
+    deliveredAt: string | null;
+    readAt: string | null;
+    createdAt: string;
+}
+
+interface ExportBot {
+    id: string;
+    name: string;
+    handle: string;
+    bio: string | null;
+    avatarUrl: string | null;
+    headerUrl: string | null;
+    personalityConfig: any;
+    llmProvider: string;
+    llmModel: string;
+    llmApiKey: string; // Decrypted
+    botPrivateKey: string; // Decrypted
+    publicKey: string;
+    scheduleConfig: any;
+    autonomousMode: boolean;
+    isActive: boolean;
+    sources: any[];
+    activityLogs: any[];
 }
 
 /**
@@ -136,6 +178,27 @@ export async function POST(req: NextRequest) {
             where: eq(remoteFollows.followerId, user.id),
         });
 
+        // Fetch DMs
+        const userConversations = await db.query.chatConversations.findMany({
+            where: eq(chatConversations.participant1Id, user.id),
+            with: {
+                messages: true
+            }
+        });
+
+        // Fetch Bots
+        const userBots = await db.query.bots.findMany({
+            where: eq(bots.ownerId, user.id),
+            with: {
+                user: true,
+                contentSources: true,
+                activityLogs: {
+                    limit: 50,
+                    orderBy: (logs, { desc }) => [desc(logs.createdAt)]
+                }
+            }
+        });
+
         // Build export data
         const exportPosts: ExportPost[] = userPosts.map(post => ({
             id: post.id,
@@ -177,6 +240,75 @@ export async function POST(req: NextRequest) {
             headerUrl: user.headerUrl,
         };
 
+        const exportDMs: ExportDMConversation[] = userConversations.map(conv => ({
+            id: conv.id,
+            type: conv.type,
+            participant2Handle: conv.participant2Handle,
+            lastMessageAt: conv.lastMessageAt?.toISOString() || null,
+            lastMessagePreview: conv.lastMessagePreview,
+            messages: conv.messages.map(msg => ({
+                senderHandle: msg.senderHandle,
+                senderDisplayName: msg.senderDisplayName,
+                senderAvatarUrl: msg.senderAvatarUrl,
+                senderNodeDomain: msg.senderNodeDomain,
+                senderDid: msg.senderDid,
+                content: msg.content,
+                deliveredAt: msg.deliveredAt?.toISOString() || null,
+                readAt: msg.readAt?.toISOString() || null,
+                createdAt: msg.createdAt.toISOString()
+            }))
+        }));
+
+        const exportBots: ExportBot[] = userBots.map(bot => {
+            // Decrypt bot keys
+            let llmApiKey = '';
+            let botPrivateKey = '';
+            try {
+                if (bot.llmApiKeyEncrypted) {
+                    llmApiKey = decryptApiKey(deserializeEncryptedData(bot.llmApiKeyEncrypted));
+                }
+                if (bot.user?.privateKeyEncrypted) {
+                    botPrivateKey = decryptApiKey(deserializeEncryptedData(bot.user.privateKeyEncrypted));
+                }
+            } catch (e) {
+                console.error(`Failed to decrypt keys for bot ${bot.name}:`, e);
+            }
+
+            return {
+                id: bot.id,
+                name: bot.name,
+                handle: bot.user.handle,
+                bio: bot.user.bio,
+                avatarUrl: bot.user.avatarUrl,
+                headerUrl: bot.user.headerUrl,
+                personalityConfig: JSON.parse(bot.personalityConfig),
+                llmProvider: bot.llmProvider,
+                llmModel: bot.llmModel,
+                llmApiKey,
+                botPrivateKey,
+                publicKey: bot.user.publicKey,
+                scheduleConfig: bot.scheduleConfig ? JSON.parse(bot.scheduleConfig) : null,
+                autonomousMode: bot.autonomousMode,
+                isActive: bot.isActive,
+                sources: bot.contentSources.map(s => ({
+                    type: s.type,
+                    url: s.url,
+                    subreddit: s.subreddit,
+                    apiKeyEncrypted: s.apiKeyEncrypted, // These are specific to sources and might need their own decryption if they use AUTH_SECRET
+                    sourceConfig: s.sourceConfig ? JSON.parse(s.sourceConfig) : null,
+                    keywords: s.keywords ? JSON.parse(s.keywords) : null,
+                    isActive: s.isActive
+                })),
+                activityLogs: bot.activityLogs.map(l => ({
+                    action: l.action,
+                    details: JSON.parse(l.details),
+                    success: l.success,
+                    errorMessage: l.errorMessage,
+                    createdAt: l.createdAt.toISOString()
+                }))
+            };
+        });
+
         // Encrypt private key
         const privateKey = user.privateKeyEncrypted || '';
         const { encrypted, salt, iv } = encryptPrivateKey(privateKey, password);
@@ -205,8 +337,8 @@ export async function POST(req: NextRequest) {
             profile,
             posts: exportPosts,
             following: exportFollowing,
-            // Media URLs are included in posts, client can download them separately
-            // For full ZIP export, we'd need to fetch and bundle media files
+            dms: exportDMs,
+            bots: exportBots,
         };
 
         return NextResponse.json({
@@ -215,6 +347,8 @@ export async function POST(req: NextRequest) {
             stats: {
                 posts: exportPosts.length,
                 following: exportFollowing.length,
+                dms: exportDMs.length,
+                bots: exportBots.length,
                 mediaFiles: exportPosts.reduce((sum, p) => sum + p.media.length, 0),
             },
         });

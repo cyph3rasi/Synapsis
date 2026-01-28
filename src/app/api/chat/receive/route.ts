@@ -134,7 +134,6 @@ export async function POST(request: NextRequest) {
             senderNodeDomain: senderNodeDomain,
             senderDid: did,
             content: content,
-            encryptedContent: '',
             deliveredAt: new Date(),
         });
 

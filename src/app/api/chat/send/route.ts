@@ -119,8 +119,6 @@ export async function POST(request: NextRequest) {
                 senderNodeDomain: null,
                 senderDid: user.did,
                 content: content,
-                // Encrypted fields are null for plain text chat
-                encryptedContent: '',
                 deliveredAt: new Date(),
             });
 
@@ -133,7 +131,6 @@ export async function POST(request: NextRequest) {
                 senderNodeDomain: null,
                 senderDid: user.did,
                 content: content,
-                encryptedContent: '',
                 deliveredAt: new Date(),
                 readAt: new Date() // Sender has read their own message
             });
@@ -217,7 +214,6 @@ export async function POST(request: NextRequest) {
                 senderNodeDomain: null,
                 senderDid: user.did,
                 content: content,
-                encryptedContent: '',
                 deliveredAt: new Date(),
                 readAt: new Date()
             });
