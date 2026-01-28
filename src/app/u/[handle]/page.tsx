@@ -7,7 +7,7 @@ import { ArrowLeftIcon, CalendarIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
-import { Rocket, MoreHorizontal } from 'lucide-react';
+import { Rocket, MoreHorizontal, Mail } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { Bot } from 'lucide-react';
 
@@ -47,15 +47,15 @@ function UserRow({ user }: { user: UserSummary }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontWeight: 600 }}>{user.displayName || user.handle}</span>
                     {user.isBot && (
-                        <span 
-                            style={{ 
+                        <span
+                            style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '3px',
-                                fontSize: '10px', 
-                                padding: '2px 6px', 
-                                borderRadius: '4px', 
-                                background: 'var(--accent-muted)', 
+                                fontSize: '10px',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                background: 'var(--accent-muted)',
                                 color: 'var(--accent)',
                                 fontWeight: 500,
                             }}
@@ -184,7 +184,7 @@ export default function ProfilePage() {
     // Infinite scroll observer
     useEffect(() => {
         if (!loadMoreRef.current) return;
-        
+
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting) {
@@ -412,12 +412,12 @@ export default function ProfilePage() {
                 background: 'var(--background)',
                 zIndex: 10,
             }}>
-                <button 
-                    onClick={() => router.back()} 
-                    style={{ 
-                        color: 'var(--foreground)', 
-                        background: 'none', 
-                        border: 'none', 
+                <button
+                    onClick={() => router.back()}
+                    style={{
+                        color: 'var(--foreground)',
+                        background: 'none',
+                        border: 'none',
                         cursor: 'pointer',
                         padding: 0,
                         display: 'flex',
@@ -503,6 +503,12 @@ export default function ProfilePage() {
                                         >
                                             {isFollowing ? 'Following' : 'Follow'}
                                         </button>
+                                    )}
+                                    {/* Message Button (V2 Chat) */}
+                                    {user.did && (
+                                        <Link href={`/chat?compose=${user.handle}`} className="btn btn-ghost" style={{ padding: '8px' }}>
+                                            <Mail size={20} />
+                                        </Link>
                                     )}
                                     <div style={{ position: 'relative' }}>
                                         <button
@@ -623,7 +629,7 @@ export default function ProfilePage() {
                                     {(user as any).botOwner && (
                                         <>
                                             {' · Managed by '}
-                                            <Link 
+                                            <Link
                                                 href={`/u/${(user as any).botOwner.handle}`}
                                                 style={{ color: 'var(--accent)', fontWeight: 500 }}
                                             >
@@ -798,7 +804,7 @@ export default function ProfilePage() {
 
                 {/* Tabs */}
                 <div style={{ display: 'flex', borderTop: '1px solid var(--border)' }}>
-                    {(user?.isBot 
+                    {(user?.isBot
                         ? ['posts', 'replies', 'followers', 'following'] as const
                         : ['posts', 'replies', 'likes', 'followers', 'following'] as const
                     ).map(tab => (

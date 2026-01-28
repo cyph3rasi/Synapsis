@@ -97,6 +97,7 @@ export async function GET(request: Request, context: RouteContext) {
             isBot: user.isBot,
             publicKey: user.publicKey, // RSA key for signing
             chatPublicKey: user.chatPublicKey, // ECDH key for E2E chat
+            did: user.did, // V2 Identity
         };
 
         // If this is a bot, include owner info

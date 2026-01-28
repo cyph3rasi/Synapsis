@@ -29,9 +29,18 @@ export function useUserIdentity() {
   const [isUnlocked, setIsUnlocked] = useState(false);
 
   // Check status on mount / updates
+  // Check status on mount / updates and poll for changes in singleton
   useEffect(() => {
-    const hasKey = !!keyStore.getPrivateKey();
-    setIsUnlocked(hasKey);
+    const check = () => {
+      const hasKey = !!keyStore.getPrivateKey();
+      setIsUnlocked(hasKey);
+      // We could also try to recover identity data if it's missing but key exists?
+      // But identity data usually comes from initializeIdentity
+    };
+
+    check();
+    const interval = setInterval(check, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   /**

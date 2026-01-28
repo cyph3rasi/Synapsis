@@ -50,6 +50,12 @@ export default function Home() {
     }
   }, [user, router]);
 
+  const feedTypeRef = useRef(feedType);
+
+  useEffect(() => {
+    feedTypeRef.current = feedType;
+  }, [feedType]);
+
   const loadFeed = async (type: 'following' | 'curated', cursor?: string | null) => {
     if (cursor) {
       setLoadingMore(true);
@@ -60,8 +66,12 @@ export default function Home() {
       const endpoint = type === 'curated'
         ? `/api/posts?type=curated${cursor ? `&cursor=${cursor}` : ''}`
         : `/api/posts?type=home${cursor ? `&cursor=${cursor}` : ''}`;
+
       const res = await fetch(endpoint);
       const data = await res.json();
+
+      // Race condition check: ignore if user switched tabs
+      if (type !== feedTypeRef.current) return;
 
       if (cursor) {
         setPosts(prev => [...prev, ...(data.posts || [])]);
@@ -71,14 +81,18 @@ export default function Home() {
       setFeedMeta(data.meta || null);
       setNextCursor(data.nextCursor || null);
     } catch {
+      if (type !== feedTypeRef.current) return;
+
       if (!cursor) {
         setPosts([]);
       }
       setFeedMeta(null);
       setNextCursor(null);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (type === feedTypeRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   };
 

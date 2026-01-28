@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   unlockChatStorage,
   loadDeviceKeys,
@@ -39,6 +39,44 @@ export function useChatEncryption() {
 
   // Session Cache (In-Memory)
   const sessionsRef = useRef<Map<string, RatchetState>>(new Map());
+
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Auto-detect if storage is unlocked (by AuthContext)
+  useEffect(() => {
+    if (isReady) {
+      setIsLocked(false);
+      return;
+    }
+
+    const check = async () => {
+      const unlocked = isStorageUnlocked();
+      setIsLocked(!unlocked);
+
+      if (unlocked) {
+        try {
+          // If storage is open, verify keys exist
+          // If so, we are ready.
+          // If not, we might need ensureReady to generate, but usually they exist.
+          const keys = await loadDeviceKeys();
+          if (keys) {
+            setIsReady(true);
+            setStatus('ready');
+          }
+        } catch (e) {
+          console.error("Auto-ready check failed", e);
+        }
+      }
+    };
+
+    check(); // Checks immediately
+    const interval = setInterval(check, 1000); // And polls
+    return () => clearInterval(interval);
+  }, [isReady]);
+
+  // ... (ensureReady, sendMessage, decryptMessage) ...
+
+
 
   const ensureReady = useCallback(async (password: string, userId: string) => {
     setStatus('initializing');
@@ -279,6 +317,7 @@ export function useChatEncryption() {
 
   return {
     isReady,
+    isLocked,
     status,
     ensureReady,
     sendMessage,

@@ -162,12 +162,17 @@ export async function encrypt(
         ? new TextEncoder().encode(plaintext)
         : plaintext;
 
+    const algorithm: any = {
+        name: 'AES-GCM',
+        iv: iv
+    };
+
+    if (associatedData) {
+        algorithm.additionalData = associatedData;
+    }
+
     const encrypted = await cryptoSubtle.encrypt(
-        {
-            name: 'AES-GCM',
-            iv: iv,
-            additionalData: associatedData
-        },
+        algorithm,
         key,
         data
     );
@@ -196,12 +201,16 @@ export async function decrypt(
     const iv = base64ToArrayBuffer(ivBase64);
 
     try {
+        const algorithm: any = {
+            name: 'AES-GCM',
+            iv: iv
+        };
+        if (associatedData) {
+            algorithm.additionalData = associatedData;
+        }
+
         const decrypted = await cryptoSubtle.decrypt(
-            {
-                name: 'AES-GCM',
-                iv: iv,
-                additionalData: associatedData
-            },
+            algorithm,
             key,
             ciphertext
         );
