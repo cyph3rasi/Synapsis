@@ -18,12 +18,15 @@ import { v4 as uuidv4 } from 'uuid';
 export interface KeyStore {
   setPrivateKey(key: CryptoKey): void;
   getPrivateKey(): CryptoKey | null;
+  setIdentity(data: { did: string; handle: string; publicKey: string }): void;
+  getIdentity(): { did: string; handle: string; publicKey: string } | null;
   clear(): void;
 }
 
 class InMemoryKeyStore implements KeyStore {
   private static instance: InMemoryKeyStore;
   private privateKey: CryptoKey | null = null;
+  private identity: { did: string; handle: string; publicKey: string } | null = null;
 
   private constructor() { }
 
@@ -45,8 +48,17 @@ class InMemoryKeyStore implements KeyStore {
     return this.privateKey;
   }
 
+  setIdentity(data: { did: string; handle: string; publicKey: string }): void {
+    this.identity = data;
+  }
+
+  getIdentity() {
+    return this.identity;
+  }
+
   clear(): void {
     this.privateKey = null;
+    this.identity = null;
   }
 }
 

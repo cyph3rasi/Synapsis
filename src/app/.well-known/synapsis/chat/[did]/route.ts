@@ -40,8 +40,18 @@ export async function GET(
 
     return NextResponse.json(response, {
         headers: {
-            'Access-Control-Allow-Origin': '*', // Federation Header
-            'Cache-Control': 'max-age=60' // Cache for 1 min
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'max-age=60'
         }
+    });
+}
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
     });
 }

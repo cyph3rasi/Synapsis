@@ -55,13 +55,29 @@ export function useChatEncryption() {
 
       if (unlocked) {
         try {
-          // If storage is open, verify keys exist
-          // If so, we are ready.
-          // If not, we might need ensureReady to generate, but usually they exist.
           const keys = await loadDeviceKeys();
           if (keys) {
             setIsReady(true);
             setStatus('ready');
+          } else if (status === 'idle' && identity?.did) {
+            // Keys missing but storage unlocked (and we have identity).
+            // Attempt to generate/restore keys.
+            console.log('[Chat] Storage unlocked but keys missing. Attempting generation...');
+            // We pass a placeholder password because storage is already unlocked.
+            // We need the user ID. We can extract it from the DID or if identity has 'id'? 
+            // identity interface in useUserIdentity: { did, handle, publicKey, isUnlocked }
+            // It lacks 'id' (GUID). 
+            // BUT ensureReady takes 'userId'. 
+            // We used 'targetUser.id' in AuthContext.
+            // We might need to fetch 'me' or assume DID is enough? 
+            // ensureReady uses userId for... unlockChatStorage(pass, userId).
+            // If unlocked, we don't use userId?
+            // Let's check ensureReady usage of userId. => It is passed to unlockChatStorage.
+            // If unlocked, it skips unlockChatStorage.
+            // So userId is ignored if unlocked. Safe to pass placeholder.
+            ensureReady('ALREADY_UNLOCKED', 'placeholder-user-id').catch(err => {
+              console.error('[Chat] Auto-generation failed:', err);
+            });
           }
         } catch (e) {
           console.error("Auto-ready check failed", e);
@@ -72,7 +88,7 @@ export function useChatEncryption() {
     check(); // Checks immediately
     const interval = setInterval(check, 1000); // And polls
     return () => clearInterval(interval);
-  }, [isReady]);
+  }, [isReady, identity, status, signUserAction]);
 
   // ... (ensureReady, sendMessage, decryptMessage) ...
 
@@ -138,13 +154,31 @@ export function useChatEncryption() {
     }
   }, [signUserAction]);
 
-  const sendMessage = useCallback(async (recipientDid: string, content: string) => {
+  const sendMessage = useCallback(async (recipientDid: string, content: string, nodeDomain?: string) => {
     if (!isReady || !identity) throw new Error('Chat not ready');
 
-    // 1. Fetch Recipient Bundles
-    const res = await fetch(`/.well-known/synapsis/chat/${recipientDid}`);
-    if (!res.ok) throw new Error('Recipient not found');
-    const bundles: any[] = await res.json();
+    // 1. Fetch Recipient Bundles (via Proxy to avoid CORS)
+    // We use our own server to fetch the keys from the remote node.
+    let proxyUrl = `/api/chat/keys/fetch?did=${encodeURIComponent(recipientDid)}`;
+    if (nodeDomain) {
+      proxyUrl += `&nodeDomain=${encodeURIComponent(nodeDomain)}`;
+    }
+
+    let bundles: any[];
+    try {
+      console.log(`[Chat] Fetching keys via proxy: ${proxyUrl}`);
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        const data = await res.json();
+        console.error(`[Chat] Bundle fetch failed (${res.status}):`, data);
+        throw new Error(`Recipient keys not found (Status: ${res.status})`);
+      }
+      bundles = await res.json();
+    } catch (err: any) {
+      console.error(`[Chat] Network error fetching bundles:`, err);
+      throw new Error(`Failed to resolve recipient keys: ${err.message}`);
+    }
+
 
     const localDeviceId = localStorage.getItem('synapsis_device_id');
     if (!localDeviceId) throw new Error('No local device ID');

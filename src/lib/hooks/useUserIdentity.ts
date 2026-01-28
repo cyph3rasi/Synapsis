@@ -34,12 +34,24 @@ export function useUserIdentity() {
     const check = () => {
       const hasKey = !!keyStore.getPrivateKey();
       setIsUnlocked(hasKey);
-      // We could also try to recover identity data if it's missing but key exists?
-      // But identity data usually comes from initializeIdentity
+
+      // Auto-sync identity if available in singleton but missing in local state
+      const globalIdentity = keyStore.getIdentity();
+      if (globalIdentity) {
+        setIdentity(prev => {
+          // Avoid rerenders if same
+          if (prev && prev.did === globalIdentity.did && prev.isUnlocked === hasKey) return prev;
+          return { ...globalIdentity, isUnlocked: hasKey };
+        });
+      } else {
+        // If global cleared, clear local
+        setIdentity(prev => prev ? null : null);
+      }
     };
 
     check();
-    const interval = setInterval(check, 1000);
+    // Poll fast to ensure UI updates are snappy
+    const interval = setInterval(check, 500);
     return () => clearInterval(interval);
   }, []);
 
@@ -54,14 +66,21 @@ export function useUserIdentity() {
   }, password?: string) => {
 
     // If password provided, attempt unlock
+    // Save to singleton
+    const coreIdentity = {
+      did: userData.did,
+      handle: userData.handle,
+      publicKey: userData.publicKey
+    };
+    keyStore.setIdentity(coreIdentity);
+
+    // If password provided, attempt unlock
     if (password) {
       await unlockIdentity(userData.privateKeyEncrypted, password);
     } else {
       // Just set public identity info if locked
       setIdentity({
-        did: userData.did,
-        handle: userData.handle,
-        publicKey: userData.publicKey,
+        ...coreIdentity,
         isUnlocked: !!keyStore.getPrivateKey()
       });
     }
@@ -131,10 +150,16 @@ export function useUserIdentity() {
    * Sign a user action
    */
   const signUserAction = async (action: string, data: any) => {
-    if (!identity || !isUnlocked) {
+    // Re-check global state directly to be safe
+    const pk = keyStore.getPrivateKey();
+    const id = keyStore.getIdentity();
+
+    if (!id || !pk) {
+      console.error('[Identity] Sign failed. Identity:', id, 'HasKey:', !!pk);
       throw new Error('Identity locked');
     }
-    return await createSignedAction(action, data, identity.did, identity.handle);
+    // Use the fetched identity to ensure sync
+    return await createSignedAction(action, data, id.did, id.handle);
   };
 
   return {

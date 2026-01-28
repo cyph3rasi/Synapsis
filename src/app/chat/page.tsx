@@ -258,14 +258,27 @@ export default function ChatPage() {
             // conversation.participant2 might have valid handle.
             // We resolve DID first.
             let did = selectedConversation.participant2.did;
+            // We need to support nodeDomain for existing chats too.
+            // But Conversation interface might lack it.
+            // We can try to resolve it from handle if needed, or if we stored it?
+            // "participant2" comes from API.
+            // Let's assume we re-fetch to be safe if it's remote?
+            // Or just check handle structure?
+            let nodeDomain = undefined;
+            if (selectedConversation.participant2.handle.includes('@')) {
+                const parts = selectedConversation.participant2.handle.split('@');
+                if (parts.length === 2) nodeDomain = parts[1];
+            }
+
             if (!did) {
                 const res = await fetch(`/api/users/${encodeURIComponent(selectedConversation.participant2.handle)}`);
                 const data = await res.json();
                 did = data.user?.did;
+                nodeDomain = data.user?.nodeDomain || nodeDomain; // API is authoritative
                 if (!did) throw new Error('User not found');
             }
 
-            await sendMessage(did, newMessage);
+            await sendMessage(did, newMessage, nodeDomain);
 
             // Legacy UI expects message reload.
             setNewMessage('');
@@ -293,15 +306,20 @@ export default function ChatPage() {
             }
 
             // Send "Hello" to init session
-            await sendMessage(data.user.did, '👋');
+            await sendMessage(data.user.did, '👋', data.user.nodeDomain);
 
             setShowNewChat(false);
             setNewChatHandle('');
             loadConversations(false);
             // Select the new conversation (we might need to find it)
             // For now just reload list.
-        } catch (e) {
-            alert('Failed to start chat');
+        } catch (e: any) {
+            console.error('Start chat failed:', e);
+            if (e.message.includes('Recipient keys not found')) {
+                alert('This user has not set up secure chat yet. They need to log in to enable end-to-end encryption.');
+            } else {
+                alert('Failed to start chat: ' + e.message);
+            }
         } finally { setSending(false); }
     };
 
@@ -351,8 +369,27 @@ export default function ChatPage() {
         );
     }
 
+    // Error State
+    if (status === 'error') {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                <Shield size={48} style={{ color: 'var(--destructive)' }} />
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Connection Failed</h2>
+                <p style={{ color: 'var(--foreground-secondary)', maxWidth: '300px', textAlign: 'center' }}>
+                    Unable to initialize secure chat. This might be a network issue or missing keys.
+                </p>
+                <button
+                    onClick={() => ensureReady('RETRY', user?.id || 'retry')}
+                    className="btn btn-primary"
+                >
+                    Retry Connection
+                </button>
+            </div>
+        );
+    }
+
     // Loading State
-    if (status === 'initializing' || status === 'generating_keys') {
+    if ((!isReady && status !== 'error') || status === 'initializing' || status === 'generating_keys') {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
                 <Loader2 className="animate-spin" size={32} />
