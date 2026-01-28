@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { chatDeviceBundles, handleRegistry, remoteIdentityCache } from '@/db/schema';
+import { chatDeviceBundles, handleRegistry, remoteIdentityCache, users } from '@/db/schema';
 import { requireAuth } from '@/lib/auth';
 import { eq, and, gt } from 'drizzle-orm';
 
@@ -205,8 +205,7 @@ export async function POST(request: NextRequest) {
         );
       console.log('[Chat Keys POST] Updated existing key');
     } else {
-      // Insert new bundle
-      console.log('[Chat Keys POST] Inserting new bundle...');
+      console.log('[Chat Keys POST] Inserted new key');
       await db.insert(chatDeviceBundles).values({
         userId: user.id,
         did: user.did,
@@ -218,6 +217,11 @@ export async function POST(request: NextRequest) {
       });
       console.log('[Chat Keys POST] Inserted new key');
     }
+
+    // Sync to users table too for profile discovery
+    await db.update(users)
+      .set({ chatPublicKey: publicKey })
+      .where(eq(users.id, user.id));
 
     console.log('[Chat Keys POST] Key published successfully for', user.handle);
     return NextResponse.json({ success: true });

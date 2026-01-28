@@ -37,6 +37,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
+        console.log(`[Chat Receive] From: ${senderHandle} (${senderNodeDomain}), To: ${recipientDid} [${encryptedContent.substring(0, 20)}...]`);
+
+        // Ensure remote handle is fully qualified
+        let finalSenderHandle = senderHandle;
+        if (!finalSenderHandle.includes('@') && senderNodeDomain) {
+            finalSenderHandle = `${senderHandle}@${senderNodeDomain}`;
+        }
+
         // 1. Find local recipient
         const recipientUser = await db.query.users.findFirst({
             where: eq(users.did, recipientDid)
@@ -51,14 +59,14 @@ export async function POST(request: NextRequest) {
         let conversation = await db.query.chatConversations.findFirst({
             where: and(
                 eq(chatConversations.participant1Id, recipientUser.id),
-                eq(chatConversations.participant2Handle, senderHandle)
+                eq(chatConversations.participant2Handle, finalSenderHandle)
             )
         });
 
         if (!conversation) {
             const [newConv] = await db.insert(chatConversations).values({
                 participant1Id: recipientUser.id,
-                participant2Handle: senderHandle,
+                participant2Handle: finalSenderHandle,
                 lastMessageAt: new Date(),
                 lastMessagePreview: '[Encrypted Message]'
             }).returning();
@@ -68,7 +76,7 @@ export async function POST(request: NextRequest) {
         // 3. Store Message
         await db.insert(chatMessages).values({
             conversationId: conversation.id,
-            senderHandle: senderHandle,
+            senderHandle: finalSenderHandle,
             senderDisplayName: senderDisplayName || senderHandle,
             senderAvatarUrl: senderAvatarUrl,
             senderNodeDomain: senderNodeDomain,
