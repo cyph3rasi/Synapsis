@@ -98,6 +98,38 @@ export async function GET(request: NextRequest) {
     
     console.log('[Messages API] Recipient public key found:', !!recipientPublicKey);
 
+    // Get sender DID for received messages
+    const senderDids = new Map<string, string>();
+    for (const msg of messages) {
+      const isSentByMe = msg.senderHandle === session.user.handle;
+      if (!isSentByMe && !senderDids.has(msg.senderHandle)) {
+        // Try to get DID for this sender
+        try {
+          const isRemote = msg.senderHandle.includes('@');
+          if (isRemote) {
+            const [handle, domain] = msg.senderHandle.split('@');
+            const protocol = domain.includes('localhost') ? 'http' : 'https';
+            const response = await fetch(`${protocol}://${domain}/api/users/${handle}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.user?.did) {
+                senderDids.set(msg.senderHandle, data.user.did);
+              }
+            }
+          } else {
+            const senderUser = await db.query.users.findFirst({
+              where: eq(users.handle, msg.senderHandle),
+            });
+            if (senderUser?.did) {
+              senderDids.set(msg.senderHandle, senderUser.did);
+            }
+          }
+        } catch (e) {
+          console.error('[Messages API] Failed to resolve sender DID:', e);
+        }
+      }
+    }
+
     const messagesWithDecryption = messages.map((msg) => {
       const isSentByMe = msg.senderHandle === session.user.handle;
       
@@ -110,6 +142,7 @@ export async function GET(request: NextRequest) {
         senderHandle: msg.senderHandle,
         senderDisplayName: msg.senderDisplayName,
         senderAvatarUrl: msg.senderAvatarUrl,
+        senderDid: isSentByMe ? undefined : senderDids.get(msg.senderHandle), // Add DID for received messages
         // For decryption:
         // - Sent messages: need recipient's public key
         // - Received messages: need sender's public key

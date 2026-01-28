@@ -612,7 +612,8 @@ export function useChatEncryption() {
 
       // 5. Update Session
       sessionsRef.current.set(sessionKey, newState);
-      await storeEncrypted(sessionKey, newState);
+      const serialized = await serializeRatchetState(newState);
+      await storeEncrypted(sessionKey, serialized);
 
       return plaintext;
 

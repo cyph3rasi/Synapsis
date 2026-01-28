@@ -4,9 +4,41 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useChatEncryption } from '@/lib/hooks/useChatEncryption';
+import { loadDeviceKeys } from '@/lib/crypto/chat-storage';
 import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { useRouter, useSearchParams } from 'next/navigation';
+
+// Helper to decrypt self-encrypted message (copied from useChatEncryption)
+async function decryptForSelf(selfEncrypted: { ciphertext: string; iv: string }, identityKeyPair: CryptoKeyPair): Promise<string> {
+  // Export public key raw to use as key material (same as encryption)
+  const keyMaterial = await crypto.subtle.exportKey('raw', identityKeyPair.publicKey);
+  
+  // Derive AES key
+  const aesKey = await crypto.subtle.digest('SHA-256', keyMaterial);
+  
+  // Import as AES-GCM key
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    aesKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  
+  // Decode IV and ciphertext
+  const iv = Uint8Array.from(atob(selfEncrypted.iv), c => c.charCodeAt(0));
+  const ciphertext = Uint8Array.from(atob(selfEncrypted.ciphertext), c => c.charCodeAt(0));
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    ciphertext
+  );
+  
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
 
 interface Conversation {
     id: string;
@@ -158,88 +190,109 @@ export default function ChatPage() {
             const res = await fetch(`/api/swarm/chat/messages?conversationId=${conversationId}`);
             const data = await res.json();
 
-            // Resolve DIDs if needed?
-            // V2: We need Sender DID to decrypt. 
-            // The API response should include senderDid if possible.
-            // If not, we have handle.
-            // But encryption is bound to DID.
-            // We'll rely on `senderNodeDomain`?
-
             const decrypted = await Promise.all((data.messages || []).map(async (msg: any) => {
                 try {
-                    // Try V2 Decryption
-                    // Construct a fake envelope-like structure expected by our hook
-                    // We assume `encryptedContent` IS the V2 payload JSON.
-                    // And we need `senderDid`.
-                    // Does msg have `senderDid`?
-                    // If not, we might need to resolve it or `senderHandle`.
-                    // Let's guess senderDid from cache or user info?
+                    console.log('[Chat UI] Processing message:', {
+                        id: msg.id,
+                        isSentByMe: msg.isSentByMe,
+                        hasEncryptedContent: !!msg.encryptedContent,
+                        contentPreview: msg.encryptedContent?.substring(0, 100)
+                    });
 
-                    let senderDid = msg.senderDid;
-                    if (!senderDid) {
-                        // Fallback: This might fail if we don't know the DID.
-                        // Can we resolve handle?
-                        // Ideally the backend message object includes DID.
-                        // If not, decryption returns error.
-                    }
-
-                    // Note: In V2, 'isSentByMe' means we can decrypt using OUR session with recipient?
-                    // No, `isSentByMe` means WE encrypted it.
-                    // We should have stored the `plaintext` locally or a `self-encrypted` copy?
-                    // Ratchet implementations often encrypt a copy for the sender.
-                    // My `sendMessage` implementation (Step 488) did NOT encrypt for self explicitly in the DB payload logic.
-                    // However, `api/chat/send` stored `envelope` in `chatInbox` (Local).
-                    // If `isSentByMe`, the `recipientDeviceId` in the stored envelope is... ?
-                    // In `sendMessage`, I iterated over Recipient Bundles.
-                    // I did NOT creating a bundle for myself.
-                    // SO: I cannot decrypt my own sent messages unless I stored them plaintext or self-encrypted.
-                    // In the previous V2 hook, I updated `activeMessages` optimistically.
-
-                    // If these messages are "Me" messages from another device, I can't read them!
-                    // This is a known V2 Ratchet limitation if not explicitly handling "Self-Send".
-                    // For now, I'll display "[Encrypted Sync]" or similar if I can't decrypt.
-
-                    if (msg.isSentByMe) {
-                        // Optimistic approach: We might not be able to decrypt our own history from other devices yet.
-                        // Unless I implement "Encrypt to Self" loop.
-                        // I will display the content if it's plaintext (legacy) or placeholder.
-                        if (!msg.encryptedContent) return msg;
-                        // return { ...msg, decryptedContent: '[Sent Message]' };
-                    }
-
-                    // encryptedContent is now the full envelope JSON
+                    // Check if this is a V2 encrypted message (JSON envelope)
                     if (msg.encryptedContent && msg.encryptedContent.startsWith('{')) {
                         try {
+                            // First layer: { did, handle, ciphertext }
                             const envelope = JSON.parse(msg.encryptedContent);
-                            // envelope contains { did, handle, ciphertext }
-                            const envelopeMock = {
-                                did: envelope.did,
-                                data: {
-                                    ciphertext: envelope.ciphertext
+                            console.log('[Chat UI] Parsed envelope:', {
+                                hasDid: !!envelope.did,
+                                hasHandle: !!envelope.handle,
+                                hasCiphertext: !!envelope.ciphertext,
+                                ciphertextPreview: envelope.ciphertext?.substring(0, 100)
+                            });
+
+                            // Second layer: the actual payload with selfEncrypted
+                            let payload;
+                            if (envelope.ciphertext && typeof envelope.ciphertext === 'string' && envelope.ciphertext.startsWith('{')) {
+                                payload = JSON.parse(envelope.ciphertext);
+                                console.log('[Chat UI] Parsed V2 payload:', {
+                                    hasSelfEncrypted: !!payload.selfEncrypted,
+                                    hasCiphertext: !!payload.ciphertext,
+                                    recipientDeviceId: payload.recipientDeviceId,
+                                    senderDeviceId: payload.senderDeviceId
+                                });
+                            } else {
+                                // Old format or malformed
+                                payload = envelope;
+                            }
+
+                            // For messages we sent, try to decrypt the selfEncrypted copy
+                            if (msg.isSentByMe && payload.selfEncrypted && user?.did) {
+                                console.log('[Chat UI] Attempting to decrypt self-encrypted message');
+                                try {
+                                    const localKeys = await loadDeviceKeys();
+                                    if (localKeys) {
+                                        const plaintext = await decryptForSelf(payload.selfEncrypted, localKeys.identity);
+                                        console.log('[Chat UI] Self-decrypt successful:', plaintext.substring(0, 50));
+                                        return { ...msg, decryptedContent: plaintext };
+                                    }
+                                } catch (e) {
+                                    console.error('[Chat UI] Self-decrypt failed:', e);
                                 }
-                            };
-                            const dec = await decryptMessage(envelopeMock);
-                            if (!dec.startsWith('[')) {
-                                return { ...msg, decryptedContent: dec };
+                            }
+
+                            // For messages we received, decrypt normally
+                            if (!msg.isSentByMe) {
+                                console.log('[Chat UI] Attempting to decrypt received message');
+                                // Need to get the sender's DID
+                                let senderDid = msg.senderDid || envelope.did;
+                                
+                                if (!senderDid && msg.senderHandle) {
+                                    // Try to resolve DID from handle
+                                    try {
+                                        const userRes = await fetch(`/api/users/${encodeURIComponent(msg.senderHandle)}`);
+                                        if (userRes.ok) {
+                                            const userData = await userRes.json();
+                                            senderDid = userData.user?.did;
+                                        }
+                                    } catch (e) {
+                                        console.error('[Chat UI] Failed to resolve sender DID:', e);
+                                    }
+                                }
+
+                                if (senderDid) {
+                                    // Create the envelope structure that decryptMessage expects
+                                    const decryptEnvelope = {
+                                        did: senderDid,
+                                        data: {
+                                            ciphertext: envelope.ciphertext // Pass the inner payload JSON string
+                                        }
+                                    };
+                                    const dec = await decryptMessage(decryptEnvelope);
+                                    console.log('[Chat UI] Received decrypt result:', dec.substring(0, 50));
+                                    if (!dec.startsWith('[')) {
+                                        return { ...msg, decryptedContent: dec };
+                                    }
+                                }
                             }
                         } catch (e) {
-                            console.error('[Chat] Failed to parse envelope:', e);
+                            console.error('[Chat UI] V2 decryption failed:', e);
                         }
                     }
 
-                    // Legacy Message types?
-                    if (!msg.senderPublicKey && !msg.encryptedContent.startsWith('{')) {
-                        return { ...msg, decryptedContent: '[Legacy Message]' };
-                    }
-
+                    // Fallback: show encrypted indicator
+                    console.log('[Chat UI] Could not decrypt message, showing encrypted');
                     return { ...msg, decryptedContent: '[Encrypted]' };
                 } catch (err) {
+                    console.error('[Chat UI] Message processing error:', err);
                     return { ...msg, decryptedContent: '[Error]' };
                 }
             }));
 
             setMessages(decrypted);
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error('[Chat UI] Load messages error:', err); 
+        }
     };
 
     const markAsRead = async (conversationId: string) => {
