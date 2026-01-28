@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:dev": "dotenv -e .env.dev -- next dev --turbopack -p 3050",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -41,6 +42,7 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
     "dotenv": "^17.2.3",
+    "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.8",
     "eslint": "^9",
     "eslint-config-next": "16.1.4",
