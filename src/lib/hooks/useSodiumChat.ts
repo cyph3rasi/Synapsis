@@ -64,7 +64,7 @@ export function useSodiumChat() {
           if (!user.did) {
             throw new Error('User DID not available');
           }
-          const checkResponse = await fetch(`/api/chat/keys?did=${encodeURIComponent(user.did)}`);
+          const checkResponse = await fetch(`/api/chat/keys?did=${encodeURIComponent(user.did)}`, { cache: 'no-store' });
 
           let shouldPublish = false;
 

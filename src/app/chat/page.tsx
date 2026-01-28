@@ -150,7 +150,7 @@ export default function ChatPage() {
                                 if (msg.isSentByMe && envelope.recipientDid) {
                                     // I'm the sender, so I need the recipient's public key to decrypt my own message
                                     try {
-                                        const keyRes = await fetch(`/api/chat/keys?did=${encodeURIComponent(envelope.recipientDid)}`);
+                                        const keyRes = await fetch(`/api/chat/keys?did=${encodeURIComponent(envelope.recipientDid)}`, { cache: 'no-store' });
                                         if (keyRes.ok) {
                                             const keyData = await keyRes.json();
                                             otherPartyPublicKey = keyData.publicKey;

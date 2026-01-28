@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
 
     const bundle = await db.query.chatDeviceBundles.findFirst({
       where: eq(chatDeviceBundles.did, did),
+      orderBy: (bundles, { desc }) => [desc(bundles.lastSeenAt)],
     });
 
     console.log('[Chat Keys GET] Found local bundle:', bundle ? 'YES' : 'NO');
