@@ -91,8 +91,7 @@ export async function processGossip(
   // Process incoming handles
   let handlesResult = { added: 0, updated: 0 };
   if (payload.handles && payload.handles.length > 0) {
-    // PASS SENDER: This allows us to trust "authoritative" updates from the node itself
-    handlesResult = await upsertHandleEntries(payload.handles, payload.sender);
+    handlesResult = await upsertHandleEntries(payload.handles);
   }
 
   // Build our response with nodes/handles to share back
@@ -164,8 +163,7 @@ export async function gossipToNode(
 
     let handlesResult = { added: 0, updated: 0 };
     if (gossipResponse.handles && gossipResponse.handles.length > 0) {
-      // PASS TARGET: If we gossiped TO them, and they replied, treat their reply as authoritative
-      handlesResult = await upsertHandleEntries(gossipResponse.handles, targetDomain);
+      handlesResult = await upsertHandleEntries(gossipResponse.handles);
     }
 
     await markNodeSuccess(targetDomain);

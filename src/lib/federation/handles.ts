@@ -11,11 +11,7 @@ export type HandleEntry = {
 export const normalizeHandle = (handle: string) =>
     handle.toLowerCase().replace(/^@/, '').trim();
 
-// [Modified] Added sourceDomain parameter
-export async function upsertHandleEntries(
-    entries: HandleEntry[],
-    sourceDomain?: string
-) {
+export async function upsertHandleEntries(entries: HandleEntry[]) {
     if (!db) {
         return { added: 0, updated: 0 };
     }
@@ -49,22 +45,7 @@ export async function upsertHandleEntries(
             continue;
         }
 
-        // PROPAGATION FIX:
-        // 1. If the update comes from the node that OWNS the handle (sourceDomain == entry.nodeDomain),
-        //    we treat it as authoritative.
-        // 2. We allow updates if the timestamp is newer OR equal (to handle clock skew).
-        // 3. We allow updates if the authoritative source is correcting a mismatch (e.g. we thought it was distinct, they say it's them).
-
-        const isAuthoritative = sourceDomain && (sourceDomain === entry.nodeDomain);
-        const isNewerOrEqual = incomingUpdatedAt.getTime() >= (existing.updatedAt?.getTime() || 0);
-
-        // If authoritative, we accept it even if timestamps are identical (recovery)
-        // If not authoritative, only accept strictly newer
-        const shouldUpdate = isAuthoritative
-            ? isNewerOrEqual || (existing.nodeDomain !== entry.nodeDomain) // Auto-correct wrong domain
-            : incomingUpdatedAt > (existing.updatedAt || new Date(0));
-
-        if (shouldUpdate) {
+        if (!existing.updatedAt || incomingUpdatedAt > existing.updatedAt) {
             await db.update(handleRegistry)
                 .set({
                     did: entry.did,
