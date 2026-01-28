@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { chatConversations, chatMessages, users } from '@/db/schema';
+import { chatConversations, chatMessages, users, handleRegistry } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 /**
@@ -92,6 +92,20 @@ export async function POST(request: NextRequest) {
                 lastMessagePreview: '[Encrypted Message]'
             })
             .where(eq(chatConversations.id, conversation.id));
+
+        // 5. Upsert sender into HandleRegistry ensures we can reply/fetch keys later
+        await db.insert(handleRegistry).values({
+            handle: finalSenderHandle, // user@domain
+            did: senderDid,
+            nodeDomain: senderNodeDomain
+        }).onConflictDoUpdate({
+            target: handleRegistry.handle,
+            set: {
+                did: senderDid,
+                nodeDomain: senderNodeDomain,
+                lastSeenAt: new Date()
+            }
+        });
 
         return NextResponse.json({ success: true });
 
