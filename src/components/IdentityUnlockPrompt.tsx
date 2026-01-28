@@ -26,7 +26,7 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!password.trim()) {
             setError('Please enter your password');
             return;
@@ -37,7 +37,7 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
 
         try {
             await unlockIdentity(password);
-            
+
             // Success! Call the onUnlock callback if provided
             if (onUnlock) {
                 onUnlock();
@@ -70,7 +70,7 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 1000,
+                zIndex: 99999,
                 padding: '16px'
             }}
             onClick={handleCancel}
@@ -110,10 +110,10 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                 {/* Form */}
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: '16px' }}>
-                        <label 
+                        <label
                             htmlFor="unlock-password"
-                            style={{ 
-                                display: 'block', 
+                            style={{
+                                display: 'block',
                                 marginBottom: '8px',
                                 fontSize: '14px',
                                 fontWeight: 500,
@@ -181,7 +181,7 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                             type="submit"
                             disabled={isUnlocking || !password.trim()}
                             className="btn btn-primary"
-                            style={{ 
+                            style={{
                                 flex: 1,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -211,9 +211,9 @@ export function IdentityUnlockPrompt({ onUnlock, onCancel }: IdentityUnlockPromp
                 </form>
 
                 {/* Info Note */}
-                <p style={{ 
-                    fontSize: '12px', 
-                    color: 'var(--foreground-tertiary)', 
+                <p style={{
+                    fontSize: '12px',
+                    color: 'var(--foreground-tertiary)',
                     marginTop: '16px',
                     marginBottom: 0,
                     lineHeight: 1.4

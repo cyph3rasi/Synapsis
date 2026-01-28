@@ -8,6 +8,7 @@ import { PostCard } from '@/components/PostCard';
 import { Compose } from '@/components/Compose';
 import { Post } from '@/lib/types';
 import { EyeOff } from 'lucide-react';
+import { signedAPI } from '@/lib/api/signed-fetch';
 
 interface FeedMeta {
   score: number;
@@ -21,7 +22,7 @@ interface FeedMeta {
 
 export default function Home() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, did, handle } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -39,7 +40,7 @@ export default function Home() {
       selfBoost: number;
     };
   } | null>(null);
-  
+
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Redirect unauthenticated users to explore page
@@ -56,12 +57,12 @@ export default function Home() {
       setLoading(true);
     }
     try {
-      const endpoint = type === 'curated' 
-        ? `/api/posts?type=curated${cursor ? `&cursor=${cursor}` : ''}` 
+      const endpoint = type === 'curated'
+        ? `/api/posts?type=curated${cursor ? `&cursor=${cursor}` : ''}`
         : `/api/posts?type=home${cursor ? `&cursor=${cursor}` : ''}`;
       const res = await fetch(endpoint);
       const data = await res.json();
-      
+
       if (cursor) {
         setPosts(prev => [...prev, ...(data.posts || [])]);
       } else {
@@ -118,11 +119,21 @@ export default function Home() {
       localReplyToId = undefined; // Don't set local replyToId for swarm posts
     }
 
-    const res = await fetch('/api/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, mediaIds, linkPreview, replyToId: localReplyToId, swarmReplyTo, isNsfw }),
-    });
+    if (!user || !did || !handle) {
+      console.error('User identity missing');
+      return;
+    }
+
+    const res = await signedAPI.createPost(
+      content,
+      mediaIds,
+      linkPreview,
+      localReplyToId,
+      swarmReplyTo,
+      isNsfw || false,
+      did,
+      handle
+    );
 
     if (res.ok) {
       const data = await res.json();
@@ -138,13 +149,21 @@ export default function Home() {
   };
 
   const handleLike = async (postId: string, currentLiked: boolean) => {
-    const method = currentLiked ? 'DELETE' : 'POST';
-    await fetch(`/api/posts/${postId}/like`, { method });
+    if (!did || !handle) return;
+    if (currentLiked) {
+      await signedAPI.unlikePost(postId, did, handle);
+    } else {
+      await signedAPI.likePost(postId, did, handle);
+    }
   };
 
   const handleRepost = async (postId: string, currentReposted: boolean) => {
-    const method = currentReposted ? 'DELETE' : 'POST';
-    await fetch(`/api/posts/${postId}/repost`, { method });
+    if (!did || !handle) return;
+    if (currentReposted) {
+      await signedAPI.unrepostPost(postId, did, handle);
+    } else {
+      await signedAPI.repostPost(postId, did, handle);
+    }
   };
 
   const handleDelete = (postId: string) => {
@@ -224,7 +243,7 @@ export default function Home() {
             <>
               <p>No posts from the swarm yet</p>
               <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                The curated feed shows posts from other nodes in the Synapsis network. 
+                The curated feed shows posts from other nodes in the Synapsis network.
                 Check back later as nodes are discovered, or switch to Following to see posts from people you follow.
               </p>
             </>

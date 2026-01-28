@@ -1,95 +1,79 @@
-/**
- * Chat Keys API
- * 
- * GET: Get current user's chat keys (public key + encrypted private key backup)
- * POST: Register/update chat keys with encrypted private key backup
- * 
- * The private key is encrypted CLIENT-SIDE with the user's password before
- * being sent to the server. The server cannot decrypt it.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users } from '@/db';
-import { eq } from 'drizzle-orm';
-import { getSession } from '@/lib/auth';
+import { db } from '@/db';
+import { chatDeviceBundles, chatOneTimeKeys } from '@/db/schema';
+import { requireSignedAction } from '@/lib/auth/verify-signature';
+import { eq, and } from 'drizzle-orm';
 
-export async function GET() {
-  try {
-    const session = await getSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      chatPublicKey: user.chatPublicKey,
-      // Return encrypted private key so client can decrypt with password
-      chatPrivateKeyEncrypted: user.chatPrivateKeyEncrypted,
-      hasKeys: !!user.chatPublicKey,
-    });
-  } catch (error) {
-    console.error('Get chat keys error:', error);
-    return NextResponse.json({ error: 'Failed to get chat keys' }, { status: 500 });
-  }
-}
-
+/**
+ * POST /api/chat/keys
+ * Publish a new Device Bundle and OTKs.
+ * 
+ * Payload: SignedAction < { 
+ *   deviceId: string, 
+ *   identityKey: string,
+ *   signedPreKey: { id, key, sig },
+ *   signature: string, (The ECDSA signature of the bundle itself)
+ *   oneTimeKeys: { id, key }[]
+ * } >
+ */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const body = await request.json();
 
-    const { chatPublicKey, chatPrivateKeyEncrypted } = await request.json();
+    // 1. Verify User Identity (ECDSA Root)
+    // The wrapper itself is a SignedAction with action="chat.keys.publish"
+    // This proves the user (DID) is authorizing this device registration.
+    const user = await requireSignedAction(body);
 
-    if (!chatPublicKey || typeof chatPublicKey !== 'string') {
-      return NextResponse.json({ error: 'chatPublicKey required' }, { status: 400 });
-    }
+    const { deviceId, identityKey, signedPreKey, signature, oneTimeKeys } = body.data;
 
-    // Validate it looks like a base64 SPKI key (should be ~120 chars for P-256)
-    if (chatPublicKey.length < 100 || chatPublicKey.length > 200) {
-      console.error('[Chat Keys API] Invalid public key length:', chatPublicKey.length);
-      return NextResponse.json({ 
-        error: `Invalid public key format: expected ~120 characters, got ${chatPublicKey.length}` 
-      }, { status: 400 });
-    }
+    // 2. Validate Bundle Signature (The bundle.signature must cover the fields)
+    // Actually, requireSignedAction already verified the payload signature.
+    // The "signature" field inside data is redundant if the whole thing is signed by DID?
+    // Or is "signature" the signature of the bundle bytes? 
+    // In our design, the SignedAction *is* the signature.
+    // So "signature" inside might be the "Self-Signature" of the X25519 Identity Key signing the structure?
+    // No, standard Signal: The Bundle is signed by Identity Key.
+    // Here, Identity Key is ECDSA. The SignedAction covers it.
+    // So we just trust the SignedAction.
 
-    // Additional validation: try to decode as base64
-    try {
-      const decoded = Buffer.from(chatPublicKey, 'base64');
-      if (decoded.length < 80 || decoded.length > 100) {
-        console.error('[Chat Keys API] Invalid decoded key size:', decoded.length);
-        return NextResponse.json({ 
-          error: `Invalid public key: decoded size ${decoded.length} bytes (expected ~91 bytes for P-256)` 
-        }, { status: 400 });
+    // 3. Upsert Bundle
+    await db.transaction(async (tx) => {
+      // Upsert device bundle
+      await tx.delete(chatDeviceBundles).where(
+        and(
+          eq(chatDeviceBundles.userId, user.id),
+          eq(chatDeviceBundles.deviceId, deviceId)
+        )
+      );
+
+      const [bundle] = await tx.insert(chatDeviceBundles).values({
+        userId: user.id,
+        did: user.did,
+        deviceId,
+        identityKey,
+        signedPreKey: JSON.stringify(signedPreKey),
+        signature, // We store the action signature or the explicit inner signature provided
+      }).returning();
+
+      // 4. Insert OTKs
+      if (oneTimeKeys && oneTimeKeys.length > 0) {
+        await tx.insert(chatOneTimeKeys).values(
+          oneTimeKeys.map((k: any) => ({
+            userId: user.id,
+            bundleId: bundle.id,
+            keyId: k.id,
+            publicKey: k.key
+          }))
+        ).onConflictDoNothing();
       }
-    } catch (e) {
-      console.error('[Chat Keys API] Failed to decode public key as base64:', e);
-      return NextResponse.json({ error: 'Public key is not valid base64' }, { status: 400 });
-    }
+    });
 
-    // chatPrivateKeyEncrypted should be a JSON string with encrypted data
-    if (chatPrivateKeyEncrypted && typeof chatPrivateKeyEncrypted !== 'string') {
-      return NextResponse.json({ error: 'Invalid encrypted private key format' }, { status: 400 });
-    }
+    return NextResponse.json({ success: true, count: oneTimeKeys?.length || 0 });
 
-    await db.update(users)
-      .set({ 
-        chatPublicKey,
-        chatPrivateKeyEncrypted: chatPrivateKeyEncrypted || null,
-      })
-      .where(eq(users.id, session.user.id));
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Register chat keys error:', error);
-    return NextResponse.json({ error: 'Failed to register chat keys' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Failed to publish keys:', error);
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }

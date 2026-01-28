@@ -13,7 +13,8 @@ import {
   generateKeyPair,
   exportPrivateKey,
   exportPublicKey,
-  base64UrlToBase64
+  base64UrlToBase64,
+  createSignedAction
 } from '@/lib/crypto/user-signing';
 
 export interface UserIdentity {
@@ -117,6 +118,16 @@ export function useUserIdentity() {
     setIsUnlocked(false);
   };
 
+  /**
+   * Sign a user action
+   */
+  const signUserAction = async (action: string, data: any) => {
+    if (!identity || !isUnlocked) {
+      throw new Error('Identity locked');
+    }
+    return await createSignedAction(action, data, identity.did, identity.handle);
+  };
+
   return {
     identity,
     isUnlocked,
@@ -124,5 +135,6 @@ export function useUserIdentity() {
     unlockIdentity,
     lockIdentity,
     clearIdentity,
+    signUserAction
   };
 }

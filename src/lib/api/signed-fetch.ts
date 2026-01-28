@@ -117,6 +117,7 @@ export const signedAPI = {
     mediaIds: string[],
     linkPreview: any,
     replyToId: string | undefined,
+    swarmReplyTo: any | undefined,
     isNsfw: boolean,
     userDid: string,
     userHandle: string
@@ -124,7 +125,7 @@ export const signedAPI = {
     return signedFetch(
       '/api/posts',
       'post',
-      { content, mediaIds, linkPreview, replyToId, isNsfw },
+      { content, mediaIds, linkPreview, replyToId, swarmReplyTo, isNsfw },
       userDid,
       userHandle
     );
@@ -154,6 +155,59 @@ export const signedAPI = {
       userDid,
       userHandle,
       { method: 'DELETE' }
+    );
+  },
+
+  /**
+   * Delete a post
+   */
+  async deletePost(postId: string, userDid: string, userHandle: string) {
+    return signedFetch(
+      `/api/posts/${postId}`,
+      'delete',
+      { postId },
+      userDid,
+      userHandle,
+      { method: 'DELETE' }
+    );
+  },
+
+  /**
+   * Submit a report
+   */
+  async report(targetType: string, targetId: string, reason: string, userDid: string, userHandle: string) {
+    return signedFetch(
+      '/api/reports',
+      'report',
+      { targetType, targetId, reason },
+      userDid,
+      userHandle
+    );
+  },
+
+  /**
+   * Block a user
+   */
+  async blockUser(handle: string, userDid: string, userHandle: string) {
+    return signedFetch(
+      `/api/users/${handle}/block`,
+      'block',
+      { handle },
+      userDid,
+      userHandle
+    );
+  },
+
+  /**
+   * Mute a node
+   */
+  async muteNode(domain: string, userDid: string, userHandle: string) {
+    return signedFetch(
+      '/api/settings/muted-nodes',
+      'mute_node',
+      { domain },
+      userDid,
+      userHandle
     );
   },
 };

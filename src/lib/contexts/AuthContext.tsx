@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useUserIdentity } from '@/lib/hooks/useUserIdentity';
+import { useChatEncryption } from '@/lib/hooks/useChatEncryption';
 
 export interface User {
     id: string;
@@ -23,6 +24,8 @@ interface AuthContextType {
     checkAdmin: () => Promise<void>;
     unlockIdentity: (password: string) => Promise<void>;
     logout: () => Promise<void>;
+    showUnlockPrompt: boolean;
+    setShowUnlockPrompt: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -35,13 +38,15 @@ const AuthContext = createContext<AuthContextType>({
     checkAdmin: async () => { },
     unlockIdentity: async () => { },
     logout: async () => { },
+    showUnlockPrompt: false,
+    setShowUnlockPrompt: () => { },
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
-    
+
     // Integrate useUserIdentity hook
     const {
         identity,
@@ -61,6 +66,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // Integrate chat encryption hook
+    const { ensureReady } = useChatEncryption();
+
+    const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+
     /**
      * Unlock the user's identity with their password
      */
@@ -68,8 +78,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!user?.privateKeyEncrypted) {
             throw new Error('No encrypted private key available');
         }
-        
+
         await unlockIdentityHook(user.privateKeyEncrypted, password);
+
+        // Initialize Chat Keys (Async, don't block UI but start it)
+        if (user.id) {
+            ensureReady(password, user.id).catch(err => {
+                console.error('Failed to initialize chat keys:', err);
+            });
+        }
+
+        setShowUnlockPrompt(false); // Close prompt on success
     };
 
     /**
@@ -79,10 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             // Call the logout API endpoint
             await fetch('/api/auth/logout', { method: 'POST' });
-            
+
             // Clear the user's identity (private key from localStorage)
             clearIdentity();
-            
+            setShowUnlockPrompt(false);
+
             // Clear the user state
             setUser(null);
             setIsAdmin(false);
@@ -100,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (res.ok) {
                     const data = await res.json();
                     setUser(data.user);
-                    
+
                     // Initialize identity if we have the required data
                     if (data.user?.did && data.user?.publicKey && data.user?.privateKeyEncrypted) {
                         await initializeIdentity({
@@ -110,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             privateKeyEncrypted: data.user.privateKeyEncrypted,
                         });
                     }
-                    
+
                     if (data.user) {
                         await checkAdmin();
                     }
@@ -130,16 +150,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ 
-            user, 
-            isAdmin, 
-            loading, 
+        <AuthContext.Provider value={{
+            user,
+            isAdmin,
+            loading,
             isIdentityUnlocked: isUnlocked,
             did: identity?.did || null,
             handle: identity?.handle || null,
             checkAdmin,
             unlockIdentity,
             logout,
+            showUnlockPrompt,
+            setShowUnlockPrompt,
         }}>
             {children}
         </AuthContext.Provider>

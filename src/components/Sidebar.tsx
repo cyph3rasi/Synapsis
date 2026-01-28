@@ -8,17 +8,16 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { LogOut, Settings2, Lock, Unlock } from 'lucide-react';
-import { IdentityUnlockPrompt } from './IdentityUnlockPrompt';
+// import { IdentityUnlockPrompt } from './IdentityUnlockPrompt'; // Moved to LayoutWrapper
 
 export function Sidebar() {
-    const { user, isAdmin, logout, isIdentityUnlocked } = useAuth();
+    const { user, isAdmin, logout, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
     const pathname = usePathname();
     const router = useRouter();
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
     const [unreadCount, setUnreadCount] = useState(0);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
     const [loggingOut, setLoggingOut] = useState(false);
-    const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
 
     useEffect(() => {
         fetch('/api/node')
@@ -190,7 +189,7 @@ export function Sidebar() {
                             <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatFullHandle(user.handle)}</div>
                         </div>
                     </div>
-                    
+
                     {/* Identity Status Indicator */}
                     <div
                         onClick={() => {
@@ -206,8 +205,8 @@ export function Sidebar() {
                             padding: '10px 12px',
                             marginBottom: '12px',
                             borderRadius: '8px',
-                            background: isIdentityUnlocked 
-                                ? 'rgba(34, 197, 94, 0.1)' 
+                            background: isIdentityUnlocked
+                                ? 'rgba(34, 197, 94, 0.1)'
                                 : 'rgba(251, 191, 36, 0.1)',
                             border: isIdentityUnlocked
                                 ? '1px solid rgba(34, 197, 94, 0.2)'
@@ -232,8 +231,8 @@ export function Sidebar() {
                             <Lock size={16} style={{ color: 'rgb(251, 191, 36)', flexShrink: 0 }} />
                         )}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ 
-                                fontSize: '13px', 
+                            <div style={{
+                                fontSize: '13px',
                                 fontWeight: 500,
                                 color: isIdentityUnlocked ? 'rgb(34, 197, 94)' : 'rgb(251, 191, 36)',
                                 overflow: 'hidden',
@@ -242,20 +241,20 @@ export function Sidebar() {
                             }}>
                                 {isIdentityUnlocked ? 'Identity Unlocked' : 'Identity Locked'}
                             </div>
-                            <div style={{ 
-                                fontSize: '11px', 
+                            <div style={{
+                                fontSize: '11px',
                                 color: 'var(--foreground-tertiary)',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap'
                             }}>
-                                {isIdentityUnlocked 
-                                    ? 'You can perform actions' 
+                                {isIdentityUnlocked
+                                    ? 'You can perform actions'
                                     : 'Click to unlock'}
                             </div>
                         </div>
                     </div>
-                    
+
                     <button
                         onClick={handleLogout}
                         disabled={loggingOut}
@@ -273,14 +272,8 @@ export function Sidebar() {
                     </button>
                 </div>
             )}
-            
-            {/* Identity Unlock Prompt Modal */}
-            {showUnlockPrompt && (
-                <IdentityUnlockPrompt
-                    onUnlock={() => setShowUnlockPrompt(false)}
-                    onCancel={() => setShowUnlockPrompt(false)}
-                />
-            )}
+
+            {/* Identity Unlock Prompt Modal is now handled in LayoutWrapper */}
         </aside>
     );
 }

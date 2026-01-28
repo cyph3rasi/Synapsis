@@ -8,11 +8,12 @@ import { PostCard } from '@/components/PostCard';
 import { Compose } from '@/components/Compose';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { Post } from '@/lib/types';
+import { signedAPI } from '@/lib/api/signed-fetch';
 
 export default function PostDetailPage() {
     const params = useParams();
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, did, handle: userHandle } = useAuth();
     const handle = params.handle as string;
     const id = params.id as string;
 
@@ -57,11 +58,18 @@ export default function PostDetailPage() {
             localReplyToId = undefined; // Can't use UUID foreign key for swarm posts
         }
 
-        const res = await fetch('/api/posts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, mediaIds, linkPreview, replyToId: localReplyToId, swarmReplyTo, isNsfw }),
-        });
+        if (!did || !userHandle) return;
+
+        const res = await signedAPI.createPost(
+            content,
+            mediaIds,
+            linkPreview,
+            localReplyToId,
+            swarmReplyTo,
+            isNsfw || false,
+            did,
+            userHandle
+        );
 
         if (res.ok) {
             const data = await res.json();
@@ -74,13 +82,21 @@ export default function PostDetailPage() {
     };
 
     const handleLike = async (postId: string, currentLiked: boolean) => {
-        const method = currentLiked ? 'DELETE' : 'POST';
-        await fetch(`/api/posts/${postId}/like`, { method });
+        if (!did || !userHandle) return;
+        if (currentLiked) {
+            await signedAPI.unlikePost(postId, did, userHandle);
+        } else {
+            await signedAPI.likePost(postId, did, userHandle);
+        }
     };
 
     const handleRepost = async (postId: string, currentReposted: boolean) => {
-        const method = currentReposted ? 'DELETE' : 'POST';
-        await fetch(`/api/posts/${postId}/repost`, { method });
+        if (!did || !userHandle) return;
+        if (currentReposted) {
+            await signedAPI.unrepostPost(postId, did, userHandle);
+        } else {
+            await signedAPI.repostPost(postId, did, userHandle);
+        }
     };
 
     const handleDelete = (postId: string) => {

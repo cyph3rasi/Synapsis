@@ -4,9 +4,10 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { IdentityUnlockPrompt } from './IdentityUnlockPrompt';
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
-    const { loading } = useAuth();
+    const { loading, showUnlockPrompt, setShowUnlockPrompt } = useAuth();
     const pathname = usePathname();
 
     // Paths that should NOT have the app layout
@@ -56,6 +57,14 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
                 {children}
             </main>
             {!hideRightSidebar && <RightSidebar />}
+
+            {/* Global Identity Unlock Prompt */}
+            {showUnlockPrompt && (
+                <IdentityUnlockPrompt
+                    onUnlock={() => setShowUnlockPrompt(false)}
+                    onCancel={() => setShowUnlockPrompt(false)}
+                />
+            )}
         </div>
     );
 }

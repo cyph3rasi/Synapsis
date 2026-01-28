@@ -11,6 +11,7 @@ import { useToast } from '@/lib/contexts/ToastContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import BlurredVideo from '@/components/BlurredVideo';
 import { formatFullHandle, NODE_DOMAIN } from '@/lib/utils/handle';
+import { signedAPI } from '@/lib/api/signed-fetch';
 
 // Component for link preview image that hides on error
 function LinkPreviewImage({ src, alt }: { src: string; alt: string }) {
@@ -43,7 +44,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent, parentPostAuthorId }: PostCardProps) {
-    const { user: currentUser } = useAuth();
+    const { user: currentUser, did, handle: currentUserHandle } = useAuth();
     const { showToast } = useToast();
     const router = useRouter();
     const [liked, setLiked] = useState(post.isLiked || false);
@@ -113,14 +114,16 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
         if (reporting) return;
         const reason = window.prompt('Why are you reporting this post?');
-        if (!reason) return;
+        if (!reason || !did || !currentUserHandle) return;
         setReporting(true);
         try {
-            const res = await fetch('/api/reports', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetType: 'post', targetId: post.id, reason }),
-            });
+            const res = await signedAPI.report(
+                'post',
+                post.id,
+                reason,
+                did,
+                currentUserHandle
+            );
             if (!res.ok) {
                 if (res.status === 401) {
                     showToast('Please log in to report.', 'error');
@@ -141,11 +144,10 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
         if (deleting) return;
         if (!window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) return;
+        if (!did || !currentUserHandle) return;
         setDeleting(true);
         try {
-            const res = await fetch(`/api/posts/${post.id}`, {
-                method: 'DELETE',
-            });
+            const res = await signedAPI.deletePost(post.id, did, currentUserHandle);
             if (res.ok) {
                 onDelete?.(post.id);
             } else {
@@ -164,15 +166,13 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
         setShowMenu(false);
 
-        if (!currentUser) {
+        if (!currentUser || !did || !currentUserHandle) {
             showToast('Please log in to block users', 'error');
             return;
         }
 
         try {
-            const res = await fetch(`/api/users/${post.author.handle}/block`, {
-                method: 'POST',
-            });
+            const res = await signedAPI.blockUser(post.author.handle, did, currentUserHandle);
             if (res.ok) {
                 showToast(`Blocked @${post.author.handle}`, 'success');
                 onHide?.(post.id);
@@ -189,7 +189,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
         setShowMenu(false);
 
-        if (!currentUser) {
+        if (!currentUser || !did || !currentUserHandle) {
             showToast('Please log in to mute users', 'error');
             return;
         }
@@ -197,9 +197,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         // For now, muting a user is the same as blocking but with different messaging
         // Could be expanded to just hide posts without breaking follows
         try {
-            const res = await fetch(`/api/users/${post.author.handle}/block`, {
-                method: 'POST',
-            });
+            const res = await signedAPI.blockUser(post.author.handle, did, currentUserHandle);
             if (res.ok) {
                 showToast(`Muted @${post.author.handle}`, 'success');
                 onHide?.(post.id);
@@ -216,7 +214,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
         setShowMenu(false);
 
-        if (!currentUser) {
+        if (!currentUser || !did || !currentUserHandle) {
             showToast('Please log in to mute nodes', 'error');
             return;
         }
@@ -232,11 +230,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         }
 
         try {
-            const res = await fetch('/api/settings/muted-nodes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ domain: nodeDomain }),
-            });
+            const res = await signedAPI.muteNode(nodeDomain, did, currentUserHandle);
             if (res.ok) {
                 showToast(`Muted node: ${nodeDomain}`, 'success');
                 onHide?.(post.id);

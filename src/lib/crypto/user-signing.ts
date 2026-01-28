@@ -126,7 +126,13 @@ export async function exportPublicKey(key: CryptoKey): Promise<string> {
  * Import Public Key from SPKI Base64 (for verification)
  */
 export async function importPublicKey(base64Key: string): Promise<CryptoKey> {
-  const binary = base64ToArrayBuffer(base64Key);
+  // Strip PEM headers and whitespace/newlines if present
+  const cleanKey = base64Key
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/[\s\n\r]/g, '');
+
+  const binary = base64ToArrayBuffer(cleanKey);
   return await cryptoSubtle.importKey(
     'spki',
     binary,
@@ -179,10 +185,14 @@ export function canonicalize(obj: any): string {
     if (obj instanceof RegExp) throw new Error('Serialization failed: RegExp objects not allowed');
 
     const keys = Object.keys(obj).sort();
-    const pairs = keys.map(key => {
+    const pairs: string[] = [];
+
+    for (const key of keys) {
+      if (obj[key] === undefined) continue;
       const val = canonicalize(obj[key]);
-      return `${JSON.stringify(key)}:${val}`;
-    });
+      pairs.push(`${JSON.stringify(key)}:${val}`);
+    }
+
     return `{${pairs.join(',')}}`;
   }
 
