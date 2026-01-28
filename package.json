@@ -10,8 +10,11 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
+    "db:generate:dev": "dotenv -e .env.dev -- drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:push:dev": "dotenv -e .env.dev -- drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:studio:dev": "dotenv -e .env.dev -- drizzle-kit studio",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
