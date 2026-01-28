@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { chatConversations, chatMessages, users } from '@/db/schema';
+import { chatConversations, chatMessages, users, handleRegistry } from '@/db/schema';
 import { requireAuth } from '@/lib/auth';
 import { eq, and } from 'drizzle-orm';
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
         if (recipientUser) {
             // LOCAL RECIPIENT
-            
+
             // Ensure conversations exist
             let recipientConv = await db.query.chatConversations.findFirst({
                 where: and(
@@ -105,8 +105,91 @@ export async function POST(request: NextRequest) {
 
             return NextResponse.json({ success: true });
         } else {
-            // REMOTE RECIPIENT - not implemented yet
-            return NextResponse.json({ error: 'Remote delivery not yet implemented' }, { status: 501 });
+            // REMOTE RECIPIENT
+            const { handleRegistry } = await import('@/db/schema'); // dynamic import or add to top
+
+            // 1. Resolve recipient node
+            const registryEntry = await db.query.handleRegistry.findFirst({
+                where: eq(handleRegistry.did, recipientDid)
+            });
+
+            if (!registryEntry) {
+                return NextResponse.json({ error: 'Recipient not found in registry' }, { status: 404 });
+            }
+
+            const targetDomain = registryEntry.nodeDomain;
+            const targetHandle = registryEntry.handle; // e.g. user@domain
+
+            // 2. Prepare Payload
+            const messageData = {
+                senderPublicKey,
+                recipientDid,
+                ciphertext,
+                nonce,
+            };
+            const encryptedContent = JSON.stringify(messageData);
+
+            const payload = {
+                senderDid: user.did,
+                senderHandle: user.handle,
+                senderDisplayName: user.displayName,
+                senderAvatarUrl: user.avatarUrl,
+                senderNodeDomain: process.env.NEXT_PUBLIC_NODE_DOMAIN || 'dev.syn.quest', // Current node domain
+                recipientDid,
+                encryptedContent,
+                sentAt: new Date().toISOString()
+            };
+
+            // 3. Send to Remote Node
+            try {
+                const protocol = targetDomain.includes('localhost') ? 'http' : 'https';
+                const res = await fetch(`${protocol}://${targetDomain}/api/chat/receive`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    console.error('Remote node rejected chat:', errText);
+                    return NextResponse.json({ error: `Remote delivery failed: ${res.statusText}` }, { status: 502 });
+                }
+            } catch (err: any) {
+                console.error('Failed to contact remote node:', err);
+                return NextResponse.json({ error: 'Failed to contact remote node' }, { status: 504 });
+            }
+
+            // 4. Store "Sent" copy locally
+            // Ensure conversation exists locally
+            let senderConv = await db.query.chatConversations.findFirst({
+                where: and(
+                    eq(chatConversations.participant1Id, user.id),
+                    eq(chatConversations.participant2Handle, targetHandle)
+                )
+            });
+
+            if (!senderConv) {
+                const [newConv] = await db.insert(chatConversations).values({
+                    participant1Id: user.id,
+                    participant2Handle: targetHandle,
+                    lastMessageAt: new Date(),
+                    lastMessagePreview: '[Encrypted]'
+                }).returning();
+                senderConv = newConv;
+            }
+
+            await db.insert(chatMessages).values({
+                conversationId: senderConv.id,
+                senderHandle: user.handle,
+                senderDisplayName: user.displayName,
+                senderAvatarUrl: user.avatarUrl,
+                senderNodeDomain: null, // It's ME, so null
+                senderDid: user.did,
+                encryptedContent: encryptedContent,
+                deliveredAt: new Date(),
+            });
+
+            return NextResponse.json({ success: true });
         }
 
     } catch (error: any) {
