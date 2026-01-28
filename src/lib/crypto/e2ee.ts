@@ -73,7 +73,7 @@ export async function importX25519PrivateKey(base64: string): Promise<CryptoKey>
         'pkcs8',
         binary,
         { name: 'X25519' },
-        false,
+        true, // Must be extractable for serialization
         ['deriveKey', 'deriveBits']
     );
 }
@@ -234,6 +234,9 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+    if (!base64 || typeof base64 !== 'string') {
+        throw new Error('Invalid base64 input: expected non-empty string');
+    }
     // Handle URL safe base64 if needed, but we assume standard
     const binary = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
     const bytes = new Uint8Array(binary.length);

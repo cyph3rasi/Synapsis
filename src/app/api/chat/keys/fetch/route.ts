@@ -12,14 +12,26 @@ export async function GET(request: NextRequest) {
 
     const handle = searchParams.get('handle');
 
-    // Helper to fetch and check
+    // Helper to fetch and check with timeout
     const tryFetch = async (url: string) => {
         console.log(`[Proxy] Fetching keys from: ${url}`);
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if (res.ok) return await res.json();
-        const text = await res.text();
-        console.warn(`[Proxy] Fetch failed for ${url} (${res.status}): ${text}`);
-        return null;
+        try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 5000); // 5s timeout
+            const res = await fetch(url, {
+                headers: { 'Accept': 'application/json' },
+                signal: controller.signal
+            });
+            clearTimeout(id);
+
+            if (res.ok) return await res.json();
+            const text = await res.text();
+            console.warn(`[Proxy] Fetch failed for ${url} (${res.status}): ${text}`);
+            return null;
+        } catch (err: any) {
+            console.warn(`[Proxy] Fetch error for ${url}: ${err.name} - ${err.message}`);
+            return null;
+        }
     };
 
     // 1. Try Primary DID

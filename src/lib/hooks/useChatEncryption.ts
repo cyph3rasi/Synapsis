@@ -8,7 +8,9 @@ import {
   storeDeviceKeys,
   isStorageUnlocked,
   storeEncrypted,
-  loadEncrypted
+  loadEncrypted,
+  deleteEncrypted,
+  clearAllSessions
 } from '@/lib/crypto/chat-storage';
 import {
   generateX25519KeyPair,
@@ -24,7 +26,9 @@ import {
   ratchetDecrypt,
   x3dhSender,
   x3dhReceiver,
-  RatchetState
+  RatchetState,
+  serializeRatchetState,
+  deserializeRatchetState
 } from '@/lib/crypto/ratchet';
 import { useUserIdentity } from './useUserIdentity';
 import { v4 as uuidv4 } from 'uuid';
@@ -54,6 +58,18 @@ export function useChatEncryption() {
       setIsLocked(!unlocked);
 
       if (unlocked) {
+        // One-time cleanup of corrupted sessions (migration fix)
+        if (!sessionStorage.getItem('synapsis_sessions_cleaned_v2')) {
+          try {
+            console.log('[Chat] Running one-time session cleanup...');
+            await clearAllSessions();
+            sessionStorage.setItem('synapsis_sessions_cleaned_v2', 'true');
+            console.log('[Chat] Session cleanup complete');
+          } catch (e) {
+            console.error('[Chat] Session cleanup failed:', e);
+          }
+        }
+
         try {
           const keys = await loadDeviceKeys();
           if (keys) {
@@ -281,13 +297,21 @@ export function useChatEncryption() {
     let bundles: any[];
     try {
       console.log(`[Chat] Fetching keys via proxy: ${proxyUrl}`);
-      const res = await fetch(proxyUrl);
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 8000); // 8s timeout (proxy has 5s)
+
+      const res = await fetch(proxyUrl, {
+        signal: controller.signal
+      });
+      clearTimeout(id);
+
       if (!res.ok) {
         const data = await res.json();
         console.error(`[Chat] Bundle fetch failed (${res.status}):`, data);
         throw new Error(`Recipient keys not found (Status: ${res.status})`);
       }
       bundles = await res.json();
+      console.log(`[Chat] Fetched ${bundles.length} device bundle(s):`, bundles);
     } catch (err: any) {
       console.error(`[Chat] Network error fetching bundles:`, err);
       throw new Error(`Failed to resolve recipient keys: ${err.message}`);
@@ -300,6 +324,8 @@ export function useChatEncryption() {
     const localKeys = await loadDeviceKeys();
     if (!localKeys) throw new Error('Keys lost');
 
+    console.log(`[Chat] Processing ${bundles.length} recipient device(s)...`);
+
     // 2. Loop through all devices
     for (const bundle of bundles) {
       // IMPORTANT: Use the DID from the bundle! 
@@ -311,12 +337,24 @@ export function useChatEncryption() {
 
       let state = sessionsRef.current.get(sessionKey);
       if (!state) {
-        state = await loadEncrypted<RatchetState>(sessionKey) || undefined;
+        const stored = await loadEncrypted<any>(sessionKey);
+        if (stored) {
+          try {
+            // If stored is old/broken (missing rootKey string), this throws.
+            state = await deserializeRatchetState(stored);
+          } catch (e) {
+            console.warn('[Chat] Found corrupted session state, resetting:', e);
+            // Delete the corrupted session from storage
+            await deleteEncrypted(sessionKey);
+            state = undefined;
+          }
+        }
       }
 
       let headerData: any = null;
 
       if (!state) {
+        console.log(`[Chat] Initializing new session for device ${bundle.deviceId}...`);
         // X3DH Init
         const remoteIdentityKey = await importX25519PublicKey(bundle.identityKey);
         const remoteSignedPreKey = await importX25519PublicKey(bundle.signedPreKey.key);
@@ -339,10 +377,13 @@ export function useChatEncryption() {
         };
       }
 
+      console.log(`[Chat] Encrypting message for device ${bundle.deviceId}...`);
       const { ciphertext, newState } = await ratchetEncrypt(state, content);
 
       sessionsRef.current.set(sessionKey, newState);
-      await storeEncrypted(sessionKey, newState);
+      // Serialize before storing
+      const serialized = await serializeRatchetState(newState);
+      await storeEncrypted(sessionKey, serialized);
 
       // Payload
       const payload = {
@@ -357,18 +398,29 @@ export function useChatEncryption() {
       const fullData = {
         recipientDid,
         recipientDeviceId: bundle.deviceId,
-        ciphertext: JSON.stringify(payload)
+        ciphertext: JSON.stringify(payload),
+        nodeDomain: nodeDomain || undefined, // Include for remote routing
+        recipientHandle: recipientHandle || undefined // Include for conversation creation
       };
 
       const action = await signUserAction('chat.deliver', fullData);
 
-      await fetch('/api/chat/send', {
+      const sendRes = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(action)
       });
+
+      if (!sendRes.ok) {
+        const errorData = await sendRes.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[Chat] Send failed:', errorData);
+        throw new Error(`Failed to send message: ${errorData.error || sendRes.statusText}`);
+      }
+
+      console.log(`[Chat] Message sent successfully to device ${bundle.deviceId}`);
     }
 
+    console.log('[Chat] All messages sent successfully');
   }, [isReady, identity, signUserAction]);
 
   /**
@@ -397,7 +449,16 @@ export function useChatEncryption() {
       const sessionKey = `session:${senderDid}:${senderDeviceId}`;
       let state = sessionsRef.current.get(sessionKey);
       if (!state) {
-        state = await loadEncrypted<RatchetState>(sessionKey) || undefined;
+        const stored = await loadEncrypted<any>(sessionKey);
+        if (stored) {
+          try {
+            state = await deserializeRatchetState(stored);
+          } catch (e) {
+            console.warn('[Chat] Corrupted session for decryption, treating as new/lost:', e);
+            // Delete the corrupted session from storage
+            await deleteEncrypted(sessionKey);
+          }
+        }
       }
 
       // 3. X3DH Receiver Init if needed

@@ -98,6 +98,17 @@ async function getItem(key: string): Promise<string | undefined> {
     });
 }
 
+async function deleteItem(key: string): Promise<void> {
+    if (!dbInstance) throw new Error('Database locked');
+    return new Promise((resolve, reject) => {
+        const tx = dbInstance!.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
 // ----------------------------------------------------------------------------
 // 3. Encrypted Read/Write
 // ----------------------------------------------------------------------------
@@ -133,6 +144,41 @@ export async function loadEncrypted<T>(key: string): Promise<T | null> {
         console.error(`Failed to decrypt key ${key}:`, error);
         return null;
     }
+}
+
+/**
+ * Deletes an encrypted item from storage.
+ */
+export async function deleteEncrypted(key: string): Promise<void> {
+    await deleteItem(key);
+}
+
+/**
+ * Clears all session data (useful for recovery from corruption).
+ */
+export async function clearAllSessions(): Promise<void> {
+    if (!dbInstance) throw new Error('Database locked');
+    
+    return new Promise((resolve, reject) => {
+        const tx = dbInstance!.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.openCursor();
+        
+        req.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest).result;
+            if (cursor) {
+                // Only delete session keys, not device keys
+                if (cursor.key.toString().startsWith('session:')) {
+                    cursor.delete();
+                }
+                cursor.continue();
+            } else {
+                resolve();
+            }
+        };
+        
+        req.onerror = () => reject(req.error);
+    });
 }
 
 // ----------------------------------------------------------------------------

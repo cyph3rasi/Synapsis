@@ -302,25 +302,32 @@ export default function ChatPage() {
             const data = await res.json();
             if (!data.user?.did) {
                 alert('User not found or V2 not enabled.');
+                setSending(false);
                 return;
             }
+
+            console.log('[Chat UI] Starting chat with:', data.user);
 
             // Send "Hello" to init session
             await sendMessage(data.user.did, '👋', data.user.nodeDomain, data.user.handle);
 
+            console.log('[Chat UI] Message sent, reloading conversations');
+
             setShowNewChat(false);
             setNewChatHandle('');
-            loadConversations(false);
+            await loadConversations(false);
             // Select the new conversation (we might need to find it)
             // For now just reload list.
         } catch (e: any) {
-            console.error('Start chat failed:', e);
+            console.error('[Chat UI] Start chat failed:', e);
             if (e.message.includes('Recipient keys not found')) {
                 alert('This user has not set up secure chat yet. They need to log in to enable end-to-end encryption.');
             } else {
                 alert('Failed to start chat: ' + e.message);
             }
-        } finally { setSending(false); }
+        } finally { 
+            setSending(false); 
+        }
     };
 
     const handleDeleteConversation = async (deleteFor: 'self' | 'both') => {

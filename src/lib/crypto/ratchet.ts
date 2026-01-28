@@ -13,6 +13,7 @@ import {
     encrypt as aeadEncrypt,
     decrypt as aeadDecrypt,
     importX25519PublicKey,
+    importX25519PrivateKey,
     exportKey,
     generateX25519KeyPair,
     base64ToArrayBuffer,
@@ -327,4 +328,63 @@ export async function ratchetDecrypt(
     const plaintext = await aeadDecrypt(mk, message.ciphertext, message.iv, associatedData);
 
     return { plaintext, newState: state };
+}
+
+// ----------------------------------------------------------------------------
+// 6. Serialization Helpers (CRITICAL: CryptoKeys and Buffers don't JSON stringify)
+// ----------------------------------------------------------------------------
+
+export interface SerializedRatchetState {
+    dhPair: { pub: string, priv: string };
+    remoteDhPub: string;
+    rootKey: string;
+    chainKeySend: string;
+    chainKeyRecv: string;
+    ns: number;
+    nr: number;
+    pn: number;
+}
+
+export async function serializeRatchetState(state: RatchetState): Promise<SerializedRatchetState> {
+    return {
+        dhPair: {
+            pub: await exportKey(state.dhPair.publicKey),
+            priv: await exportKey(state.dhPair.privateKey)
+        },
+        remoteDhPub: await exportKey(state.remoteDhPub),
+        rootKey: arrayBufferToBase64(state.rootKey),
+        chainKeySend: arrayBufferToBase64(state.chainKeySend),
+        chainKeyRecv: arrayBufferToBase64(state.chainKeyRecv),
+        ns: state.ns,
+        nr: state.nr,
+        pn: state.pn
+    };
+}
+
+export async function deserializeRatchetState(data: SerializedRatchetState): Promise<RatchetState> {
+    // Validate integrity - check all required fields exist (but allow empty strings for buffers that can be empty)
+    if (!data || 
+        !data.rootKey || 
+        !data.dhPair || 
+        !data.dhPair.pub || 
+        !data.dhPair.priv ||
+        !data.remoteDhPub ||
+        data.chainKeySend === undefined || data.chainKeySend === null ||
+        data.chainKeyRecv === undefined || data.chainKeyRecv === null) {
+        throw new Error('Invalid serialized state: missing required fields');
+    }
+
+    return {
+        dhPair: {
+            publicKey: await importX25519PublicKey(data.dhPair.pub),
+            privateKey: await importX25519PrivateKey(data.dhPair.priv)
+        },
+        remoteDhPub: await importX25519PublicKey(data.remoteDhPub),
+        rootKey: base64ToArrayBuffer(data.rootKey),
+        chainKeySend: data.chainKeySend ? base64ToArrayBuffer(data.chainKeySend) : new Uint8Array(0).buffer,
+        chainKeyRecv: data.chainKeyRecv ? base64ToArrayBuffer(data.chainKeyRecv) : new Uint8Array(0).buffer,
+        ns: data.ns,
+        nr: data.nr,
+        pn: data.pn
+    };
 }
