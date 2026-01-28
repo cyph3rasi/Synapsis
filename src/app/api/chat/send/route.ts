@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
             const remoteUrl = `https://${targetNodeDomain}/api/swarm/chat/inbox`;
             
             try {
+                console.log('[Chat Send] Forwarding to remote:', remoteUrl, 'Envelope:', JSON.stringify(body, null, 2));
                 const response = await fetch(remoteUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -109,8 +110,30 @@ export async function POST(request: NextRequest) {
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.error('[Chat Send] Remote delivery failed:', errorData);
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch {
+                        errorData = { raw: errorText };
+                    }
+                    console.error('[Chat Send] Remote delivery failed:', response.status, errorData);
+                    
+                    // Check if remote node doesn't support V2 (returns V1 validation errors)
+                    const isV1ValidationError = errorData.details && 
+                        Array.isArray(errorData.details) && 
+                        errorData.details.some((d: any) => 
+                            d.path && ['messageId', 'senderHandle', 'senderNodeDomain', 'recipientHandle', 'encryptedContent', 'timestamp'].includes(d.path[0])
+                        );
+                    
+                    if (isV1ValidationError) {
+                        return NextResponse.json({ 
+                            error: 'Remote node needs update',
+                            details: 'The recipient node is running an older version that does not support the V2 chat protocol. Please ask the node administrator to update to the latest version.',
+                            remoteError: errorData 
+                        }, { status: 400 });
+                    }
+                    
                     return NextResponse.json({ 
                         error: 'Remote delivery failed',
                         details: errorData 

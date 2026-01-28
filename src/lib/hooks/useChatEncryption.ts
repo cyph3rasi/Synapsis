@@ -412,8 +412,14 @@ export function useChatEncryption() {
       });
 
       if (!sendRes.ok) {
-        const errorData = await sendRes.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('[Chat] Send failed:', errorData);
+        const errorText = await sendRes.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        console.error('[Chat] Send failed:', sendRes.status, errorData);
         throw new Error(`Failed to send message: ${errorData.error || sendRes.statusText}`);
       }
 

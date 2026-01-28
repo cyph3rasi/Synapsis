@@ -29,6 +29,49 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('[Swarm Inbox] Received body keys:', Object.keys(body), 'action:', body.action);
+    
+    // Check if this is a V2 encrypted envelope (has 'action' and 'data' fields)
+    // MUST check BEFORE Zod validation to avoid validation errors
+    if (body.action === 'chat.deliver' && body.data) {
+      // V2 E2EE Message - store in chatInbox
+      const { recipientDid, recipientDeviceId, ciphertext } = body.data;
+      
+      if (!recipientDid || !ciphertext) {
+        return NextResponse.json({ error: 'Invalid V2 payload' }, { status: 400 });
+      }
+
+      // Find recipient by DID
+      const recipient = await db.query.users.findFirst({
+        where: eq(users.did, recipientDid)
+      });
+
+      if (!recipient) {
+        return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
+      }
+
+      // Import chatInbox schema
+      const { chatInbox } = await import('@/db/schema');
+      
+      // Store in V2 inbox
+      await db.insert(chatInbox).values({
+        senderDid: body.did, // From signed envelope
+        recipientDid,
+        recipientDeviceId: recipientDeviceId || null,
+        envelope: JSON.stringify(body),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      });
+
+      console.log(`[Swarm Chat V2] Received encrypted message for ${recipientDid}`);
+
+      return NextResponse.json({
+        success: true,
+        message: 'V2 message received',
+        version: 2
+      });
+    }
+    
+    // V1 Legacy Message Format - validate with Zod
     const data = chatMessageSchema.parse(body) as SwarmChatMessagePayload;
 
     // Find the recipient (local user)
