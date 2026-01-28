@@ -278,7 +278,7 @@ export default function ChatPage() {
                 if (!did) throw new Error('User not found');
             }
 
-            await sendMessage(did, newMessage, nodeDomain);
+            await sendMessage(did, newMessage, nodeDomain, selectedConversation.participant2.handle);
 
             // Legacy UI expects message reload.
             setNewMessage('');
@@ -306,7 +306,7 @@ export default function ChatPage() {
             }
 
             // Send "Hello" to init session
-            await sendMessage(data.user.did, '👋', data.user.nodeDomain);
+            await sendMessage(data.user.did, '👋', data.user.nodeDomain, data.user.handle);
 
             setShowNewChat(false);
             setNewChatHandle('');

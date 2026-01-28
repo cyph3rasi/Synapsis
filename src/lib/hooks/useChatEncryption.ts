@@ -57,24 +57,44 @@ export function useChatEncryption() {
         try {
           const keys = await loadDeviceKeys();
           if (keys) {
+            // Keys exist locally.
             setIsReady(true);
             setStatus('ready');
+
+            // CRITICAL REPAIR:
+            // Just because we have keys doesn't mean the server does.
+            // We run a non-blocking check to ensure we aren't a "Zombie".
+            // We only do this check if we haven't verified it this session yet.
+            if (identity?.did && !sessionStorage.getItem('synapsis_keys_verified')) {
+              fetch(`/.well-known/synapsis/chat/${identity.did}`).then(async (res) => {
+                if (res.status === 404) {
+                  console.warn('[Chat] Zombie State Detected during init. Republishing keys...');
+                  // Extract publish logic (duplicated for now to ensure safety without massive refactor)
+                  try {
+                    const deviceId = localStorage.getItem('synapsis_device_id') || uuidv4();
+                    const bundlePayload = {
+                      deviceId,
+                      identityKey: await exportKey(keys.identity.publicKey),
+                      signedPreKey: { id: 1, key: await exportKey(keys.signedPreKey.publicKey) },
+                      oneTimeKeys: await Promise.all(keys.otks.map(async (k: any, i: number) => ({ id: 100 + i, key: await exportKey(k.publicKey) })))
+                    };
+                    const signedAction = await signUserAction('chat.keys.publish', bundlePayload);
+                    await fetch('/api/chat/keys', { method: 'POST', body: JSON.stringify(signedAction) });
+                    console.log('[Chat] Self-repair successful.');
+                    sessionStorage.setItem('synapsis_keys_verified', 'true');
+                  } catch (e) {
+                    console.error('[Chat] Self-repair failed:', e);
+                  }
+                } else if (res.ok) {
+                  sessionStorage.setItem('synapsis_keys_verified', 'true');
+                }
+              }).catch(e => console.error('Verification check failed', e));
+            }
+
           } else if (status === 'idle' && identity?.did) {
             // Keys missing but storage unlocked (and we have identity).
             // Attempt to generate/restore keys.
             console.log('[Chat] Storage unlocked but keys missing. Attempting generation...');
-            // We pass a placeholder password because storage is already unlocked.
-            // We need the user ID. We can extract it from the DID or if identity has 'id'? 
-            // identity interface in useUserIdentity: { did, handle, publicKey, isUnlocked }
-            // It lacks 'id' (GUID). 
-            // BUT ensureReady takes 'userId'. 
-            // We used 'targetUser.id' in AuthContext.
-            // We might need to fetch 'me' or assume DID is enough? 
-            // ensureReady uses userId for... unlockChatStorage(pass, userId).
-            // If unlocked, we don't use userId?
-            // Let's check ensureReady usage of userId. => It is passed to unlockChatStorage.
-            // If unlocked, it skips unlockChatStorage.
-            // So userId is ignored if unlocked. Safe to pass placeholder.
             ensureReady('ALREADY_UNLOCKED', 'placeholder-user-id').catch(err => {
               console.error('[Chat] Auto-generation failed:', err);
             });
@@ -102,30 +122,23 @@ export function useChatEncryption() {
       }
       let keys = await loadDeviceKeys();
 
-      // Check for legacy or V2 mix
-      // If we find V2 keys, good.
-
-      if (!keys) {
-        setStatus('generating_keys');
-        const identityKey = await generateX25519KeyPair();
-        const signedPreKey = await generatePreKey();
-        const otks = await Promise.all(Array.from({ length: 5 }).map(() => generatePreKey()));
-
-        const deviceId = uuidv4();
-        localStorage.setItem('synapsis_device_id', deviceId);
-
-        await storeDeviceKeys(identityKey, signedPreKey, otks);
+      // Helper to publish keys
+      const publishKeys = async (k: any) => {
+        const deviceId = localStorage.getItem('synapsis_device_id') || uuidv4();
+        if (!localStorage.getItem('synapsis_device_id')) {
+          localStorage.setItem('synapsis_device_id', deviceId);
+        }
 
         const bundlePayload = {
           deviceId,
-          identityKey: await exportKey(identityKey.publicKey),
+          identityKey: await exportKey(k.identity.publicKey),
           signedPreKey: {
             id: 1,
-            key: await exportKey(signedPreKey.publicKey),
+            key: await exportKey(k.signedPreKey.publicKey),
           },
-          oneTimeKeys: await Promise.all(otks.map(async (k, i) => ({
+          oneTimeKeys: await Promise.all(k.otks.map(async (ko: any, i: number) => ({
             id: 100 + i,
-            key: await exportKey(k.publicKey)
+            key: await exportKey(ko.publicKey)
           })))
         };
 
@@ -138,8 +151,36 @@ export function useChatEncryption() {
         });
 
         if (!res.ok) throw new Error('Failed to publish keys');
+        console.log('[Chat] Keys published successfully');
+      };
+
+      if (!keys) {
+        setStatus('generating_keys');
+        const identityKey = await generateX25519KeyPair();
+        const signedPreKey = await generatePreKey();
+        const otks = await Promise.all(Array.from({ length: 5 }).map(() => generatePreKey()));
 
         keys = { identity: identityKey, signedPreKey, otks };
+        await storeDeviceKeys(identityKey, signedPreKey, otks);
+        await publishKeys(keys);
+      } else {
+        // Self-Repair: Check if server actually has our keys. 
+        // If the user is in a "Zombie State" (local keys but server 404), we must republish.
+        try {
+          // Check only if we have a DID
+          if (identity?.did) {
+            const checkRes = await fetch(`/.well-known/synapsis/chat/${identity.did}`);
+            if (checkRes.status === 404) {
+              console.warn('[Chat] Detected Zombie State: Local keys exist but server returned 404. Republishing...');
+              await publishKeys(keys);
+            } else {
+              // Also check if OUR deviceId is in the bundle list? 
+              // For now, 404 check is the critical fix for the reported issue.
+            }
+          }
+        } catch (repairErr) {
+          console.error('[Chat] Self-repair check failed:', repairErr);
+        }
       }
 
       // Restore session cache? 
@@ -154,7 +195,7 @@ export function useChatEncryption() {
     }
   }, [signUserAction]);
 
-  const sendMessage = useCallback(async (recipientDid: string, content: string, nodeDomain?: string) => {
+  const sendMessage = useCallback(async (recipientDid: string, content: string, nodeDomain?: string, recipientHandle?: string) => {
     if (!isReady || !identity) throw new Error('Chat not ready');
 
     // 1. Fetch Recipient Bundles (via Proxy to avoid CORS)
@@ -162,6 +203,9 @@ export function useChatEncryption() {
     let proxyUrl = `/api/chat/keys/fetch?did=${encodeURIComponent(recipientDid)}`;
     if (nodeDomain) {
       proxyUrl += `&nodeDomain=${encodeURIComponent(nodeDomain)}`;
+    }
+    if (recipientHandle) {
+      proxyUrl += `&handle=${encodeURIComponent(recipientHandle)}`;
     }
 
     let bundles: any[];
@@ -188,7 +232,12 @@ export function useChatEncryption() {
 
     // 2. Loop through all devices
     for (const bundle of bundles) {
-      const sessionKey = `session:${recipientDid}:${bundle.deviceId}`;
+      // IMPORTANT: Use the DID from the bundle! 
+      // This handles the "Aliasing" case where we asked for did:synapsis but got did:web keys.
+      // The session should be bound to the DID that signed the keys.
+      const targetDid = bundle.did || recipientDid;
+
+      const sessionKey = `session:${targetDid}:${bundle.deviceId}`;
 
       let state = sessionsRef.current.get(sessionKey);
       if (!state) {
@@ -207,7 +256,7 @@ export function useChatEncryption() {
         const { sk, ephemeralKey } = await x3dhSender(
           localKeys.identity,
           { identityKey: remoteIdentityKey, signedPreKey: remoteSignedPreKey, oneTimeKey: remoteOtk },
-          `SynapsisV2${[identity.did, recipientDid].sort().join('')}${[localDeviceId, bundle.deviceId].sort().join('')}`
+          `SynapsisV2${[identity.did, targetDid].sort().join('')}${[localDeviceId, bundle.deviceId].sort().join('')}`
         );
 
         state = await initSender(sk, remoteSignedPreKey);

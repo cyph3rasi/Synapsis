@@ -10,47 +10,49 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Missing DID' }, { status: 400 });
     }
 
-    // Determine target URL
-    let bundleUrl = '';
+    const handle = searchParams.get('handle');
 
+    // Helper to fetch and check
+    const tryFetch = async (url: string) => {
+        console.log(`[Proxy] Fetching keys from: ${url}`);
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (res.ok) return await res.json();
+        const text = await res.text();
+        console.warn(`[Proxy] Fetch failed for ${url} (${res.status}): ${text}`);
+        return null;
+    };
+
+    // 1. Try Primary DID
+    let primaryUrl = '';
     // If did:web, extracting domain is easy
     if (did.startsWith('did:web:')) {
         const parts = did.split(':');
         if (parts.length >= 4) {
             const domain = parts[2];
             const protocol = domain.includes('localhost') ? 'http' : 'https';
-            bundleUrl = `${protocol}://${domain}/.well-known/synapsis/chat/${did}`;
+            primaryUrl = `${protocol}://${domain}/.well-known/synapsis/chat/${did}`;
         }
-    }
-
-    // If did:synapsis or did:web without built-in logic, check explicit domain
-    if (!bundleUrl && nodeDomain) {
+    } else if (nodeDomain) {
         const protocol = nodeDomain.includes('localhost') ? 'http' : 'https';
-        bundleUrl = `${protocol}://${nodeDomain}/.well-known/synapsis/chat/${did}`;
+        primaryUrl = `${protocol}://${nodeDomain}/.well-known/synapsis/chat/${did}`;
     }
 
-    if (!bundleUrl) {
-        return NextResponse.json({ error: 'Cannot determine remote node URL. Missing nodeDomain?' }, { status: 400 });
+    if (primaryUrl) {
+        const data = await tryFetch(primaryUrl);
+        if (data) return NextResponse.json(data);
     }
 
-    try {
-        console.log(`[Proxy] Fetching keys from: ${bundleUrl}`);
-        const res = await fetch(bundleUrl, {
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
+    // 2. Try Fallback: did:web (if handle and domain provided)
+    // The remote user might be indexed by did:web even if we know them as did:synapsis
+    if (nodeDomain && handle) {
+        const didWeb = `did:web:${nodeDomain}:${handle}`;
+        const protocol = nodeDomain.includes('localhost') ? 'http' : 'https';
+        const fallbackUrl = `${protocol}://${nodeDomain}/.well-known/synapsis/chat/${didWeb}`;
 
-        if (!res.ok) {
-            const text = await res.text();
-            console.error(`[Proxy] Remote fetch failed (${res.status}): ${text}`);
-            return NextResponse.json({ error: `Remote error: ${res.status}` }, { status: res.status });
-        }
-
-        const data = await res.json();
-        return NextResponse.json(data);
-    } catch (error: any) {
-        console.error('[Proxy] Fetch error:', error);
-        return NextResponse.json({ error: 'Failed to fetch remote keys' }, { status: 500 });
+        console.log(`[Proxy] Primary failed. Trying fallback: ${didWeb}`);
+        const data = await tryFetch(fallbackUrl);
+        if (data) return NextResponse.json(data);
     }
+
+    return NextResponse.json({ error: 'Remote keys not found (checked primary and fallback)' }, { status: 404 });
 }
