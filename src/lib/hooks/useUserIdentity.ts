@@ -144,7 +144,7 @@ export function useUserIdentity() {
         const saltString = `synapsis-chat-storage-${identity.did}`;
         // Generate a fixed-length salt from the DID
         // Hash to 32 bytes, then take first 16 bytes for salt
-        const fullHash = sodium.crypto_generichash(32, saltString);
+        const fullHash = sodium.crypto_generichash(32, saltString, null);
         const salt = fullHash.slice(0, sodium.crypto_pwhash_SALTBYTES);
         
         console.log('[Identity] Deriving storage key...');
