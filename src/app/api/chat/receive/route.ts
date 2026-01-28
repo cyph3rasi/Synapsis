@@ -102,8 +102,7 @@ export async function POST(request: NextRequest) {
             target: handleRegistry.handle,
             set: {
                 did: senderDid,
-                nodeDomain: senderNodeDomain,
-                lastSeenAt: new Date()
+                nodeDomain: senderNodeDomain
             }
         });
 
