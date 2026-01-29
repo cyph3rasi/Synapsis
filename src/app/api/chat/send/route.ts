@@ -165,7 +165,10 @@ export async function POST(request: NextRequest) {
                 const protocol = targetDomain.includes('localhost') ? 'http' : 'https';
                 const res = await fetch(`${protocol}://${targetDomain}/api/chat/receive`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Swarm-Source-Domain': process.env.NEXT_PUBLIC_NODE_DOMAIN || ''
+                    },
                     body: JSON.stringify(signedAction) // Forward the user's signed intent
                 });
 

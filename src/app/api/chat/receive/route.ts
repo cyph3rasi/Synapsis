@@ -39,11 +39,17 @@ export async function POST(request: NextRequest) {
                 const parts = handle.split('@');
                 senderNodeDomain = parts[parts.length - 1];
             } else {
-                // Try handle registry (though we likely don't have it if we don't have the user)
-                const registryEntry = await db.query.handleRegistry.findFirst({
-                    where: eq(handleRegistry.did, did)
-                });
-                if (registryEntry) senderNodeDomain = registryEntry.nodeDomain;
+                // Try to get from header first
+                const sourceDomainHeader = request.headers.get('X-Swarm-Source-Domain');
+                if (sourceDomainHeader) {
+                    senderNodeDomain = sourceDomainHeader;
+                } else {
+                    // Try handle registry (though we likely don't have it if we don't have the user)
+                    const registryEntry = await db.query.handleRegistry.findFirst({
+                        where: eq(handleRegistry.did, did)
+                    });
+                    if (registryEntry) senderNodeDomain = registryEntry.nodeDomain;
+                }
             }
 
             if (senderNodeDomain) {
