@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
-import { eq, desc, and, lt, isNull } from 'drizzle-orm';
+import { eq, desc, and, lt, isNull, sql } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 
@@ -56,14 +56,50 @@ export async function GET(request: NextRequest) {
       limit,
     });
 
+
+
+    // Collect all unique sender DIDs/Handles
+    const senderDids = new Set<string>();
+    const senderHandles = new Set<string>(); // Fallback
+
+    messages.forEach(m => {
+      if (m.senderDid) senderDids.add(m.senderDid);
+      else if (m.senderHandle) senderHandles.add(m.senderHandle);
+    });
+
+    // Fetch users
+    const usersByDid: Record<string, any> = {};
+    const usersByHandle: Record<string, any> = {};
+
+    if (senderDids.size > 0) {
+      const found = await db.query.users.findMany({
+        where: sql`${users.did} IN ${Array.from(senderDids)}`
+      });
+      found.forEach(u => usersByDid[u.did] = u);
+    }
+
+    // Also fetch local users by handle if needed
+    if (senderHandles.size > 0) {
+      const found = await db.query.users.findMany({
+        where: sql`${users.handle} IN ${Array.from(senderHandles)}`
+      });
+      found.forEach(u => usersByHandle[u.handle] = u);
+    }
+
     const messagesMapped = messages.map((msg) => {
       const isSentByMe = msg.senderHandle === session.user.handle;
+
+      // Resolve fresh user data
+      const user = msg.senderDid ? usersByDid[msg.senderDid] : usersByHandle[msg.senderHandle];
+
+      const displayName = user?.displayName || msg.senderDisplayName || msg.senderHandle;
+      const avatarUrl = user?.avatarUrl || msg.senderAvatarUrl;
 
       return {
         id: msg.id,
         senderHandle: msg.senderHandle,
-        senderDisplayName: msg.senderDisplayName,
-        senderAvatarUrl: msg.senderAvatarUrl,
+        senderDisplayName: displayName,
+        senderAvatarUrl: avatarUrl,
         senderDid: msg.senderDid,
         content: msg.content,
         deliveredAt: msg.deliveredAt,

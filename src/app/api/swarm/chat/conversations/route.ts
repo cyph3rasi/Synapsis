@@ -61,6 +61,16 @@ export async function GET(request: NextRequest) {
           where: eq(users.handle, participant2Handle),
         });
 
+        // If not found, check if it's a local user with a domain suffix
+        if (!cachedUser && participant2Handle.includes('@')) {
+          const [handlePart, domainPart] = participant2Handle.split('@');
+          if (!domainPart || domainPart === process.env.NEXT_PUBLIC_NODE_DOMAIN) {
+            cachedUser = await db.query.users.findFirst({
+              where: eq(users.handle, handlePart),
+            });
+          }
+        }
+
         // LAZY LOAD: If remote and not cached, try to fetch it now
         if (!cachedUser && isRemote) {
           try {
