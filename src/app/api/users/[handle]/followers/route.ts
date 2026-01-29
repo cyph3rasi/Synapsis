@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { db, follows, users, remoteFollowers } from '@/db';
 import { eq } from 'drizzle-orm';
 import { hydrateSwarmUsers } from '@/lib/swarm/user-hydration';
