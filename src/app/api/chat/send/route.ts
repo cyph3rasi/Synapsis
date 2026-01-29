@@ -163,22 +163,30 @@ export async function POST(request: NextRequest) {
             // 2. Send to Remote Node (Forward the Signed Action)
             try {
                 const protocol = targetDomain.includes('localhost') ? 'http' : 'https';
+                const sourceDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || '';
+
+                console.log(`[Remote Send] Debug:`, {
+                    targetDomain,
+                    targetUrl: `${protocol}://${targetDomain}/api/chat/receive`,
+                    sourceDomainEnv: sourceDomain,
+                });
+
                 const res = await fetch(`${protocol}://${targetDomain}/api/chat/receive`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Swarm-Source-Domain': process.env.NEXT_PUBLIC_NODE_DOMAIN || ''
+                        'X-Swarm-Source-Domain': sourceDomain
                     },
                     body: JSON.stringify(signedAction) // Forward the user's signed intent
                 });
 
                 if (!res.ok) {
                     const errText = await res.text();
-                    console.error('Remote node rejected chat:', errText);
-                    return NextResponse.json({ error: `Remote delivery failed: ${res.statusText}` }, { status: 502 });
+                    console.error(`[Remote Send] Remote node rejected chat (${res.status}):`, errText);
+                    return NextResponse.json({ error: `Remote delivery failed: ${res.statusText} - ${errText}` }, { status: 502 });
                 }
             } catch (err: any) {
-                console.error('Failed to contact remote node:', err);
+                console.error('[Remote Send] Failed to contact remote node:', err);
                 return NextResponse.json({ error: 'Failed to contact remote node' }, { status: 504 });
             }
 
