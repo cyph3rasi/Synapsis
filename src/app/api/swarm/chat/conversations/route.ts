@@ -57,15 +57,42 @@ export async function GET(request: NextRequest) {
         };
 
         // Try to get cached user info
-        const cachedUser = await db.query.users.findFirst({
+        let cachedUser = await db.query.users.findFirst({
           where: eq(users.handle, participant2Handle),
         });
+
+        // LAZY LOAD: If remote and not cached, try to fetch it now
+        if (!cachedUser && isRemote) {
+          try {
+            const [rHandle, rDomain] = participant2Handle.split('@');
+            const { fetchSwarmUserProfile } = await import('@/lib/swarm/interactions');
+            const profileData = await fetchSwarmUserProfile(rHandle, rDomain, 0);
+
+            if (profileData?.profile) {
+              const { upsertRemoteUser } = await import('@/lib/swarm/user-cache');
+              await upsertRemoteUser({
+                handle: participant2Handle,
+                displayName: profileData.profile.displayName,
+                avatarUrl: profileData.profile.avatarUrl || null,
+                did: profileData.profile.did || '',
+                isBot: profileData.profile.isBot || false,
+              });
+
+              // Re-query to get the new cached user
+              cachedUser = await db.query.users.findFirst({
+                where: eq(users.handle, participant2Handle),
+              }) as any;
+            }
+          } catch (e) {
+            console.error(`[Lazy Load] Failed for ${participant2Handle}:`, e);
+          }
+        }
 
         if (cachedUser) {
           participant2Info = {
             handle: cachedUser.handle,
-            displayName: cachedUser.displayName || cachedUser.handle,
-            avatarUrl: cachedUser.avatarUrl,
+            displayName: (cachedUser as any).displayName || cachedUser.handle,
+            avatarUrl: (cachedUser as any).avatarUrl || null,
           };
         }
 
@@ -73,7 +100,7 @@ export async function GET(request: NextRequest) {
           ...conv,
           participant2: {
             ...participant2Info,
-            isBot: cachedUser?.isBot || false,
+            isBot: (cachedUser as any)?.isBot || false,
           },
           unreadCount: Number(unreadCount[0]?.count || 0),
         };

@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { db, follows, users } from '@/db';
+import { db, follows, users, remoteFollowers } from '@/db';
 import { eq } from 'drizzle-orm';
+import { hydrateSwarmUsers } from '@/lib/swarm/user-hydration';
 
 type RouteContext = { params: Promise<{ handle: string }> };
 
@@ -46,7 +46,8 @@ export async function GET(request: Request, context: RouteContext) {
                     isRemote: true,
                     isBot: f.isBot,
                 }));
-                return NextResponse.json({ followers, nextCursor: null });
+                const hydratedFollowers = await hydrateSwarmUsers(followers);
+                return NextResponse.json({ followers: hydratedFollowers, nextCursor: null });
             }
             // If swarm fetch fails, return empty
             return NextResponse.json({ followers: [], nextCursor: null });
@@ -80,7 +81,7 @@ export async function GET(request: Request, context: RouteContext) {
             .where(eq(follows.followingId, user.id))
             .limit(limit);
 
-        const allFollowers = userFollowers.map(f => ({
+        const localFollowers = userFollowers.map(f => ({
             id: f.follower.id,
             handle: f.follower.handle,
             displayName: f.follower.displayName,
@@ -90,13 +91,30 @@ export async function GET(request: Request, context: RouteContext) {
             isRemote: false,
         }));
 
-        // Hydrate remote users with fresh data from swarm (if we had local storage for remote followers, we'd merge them here)
-        // Since we don't store remote followers locally for local users (only incoming follows), 
-        // we mainly need this if we were merging remote lists which we only do in the swarm endpoint.
-        // However, let's keep it consistent in case we add remote followers storage.
+        // Get remote followers
+        const userRemoteFollowers = await db.query.remoteFollowers.findMany({
+            where: eq(remoteFollowers.userId, user.id),
+            limit,
+        });
+
+        const remoteFollowersList = userRemoteFollowers.map(f => ({
+            id: f.actorUrl,
+            handle: f.handle || 'unknown',
+            displayName: f.handle?.split('@')[0] || 'Unknown',
+            avatarUrl: null,
+            bio: null,
+            isBot: false,
+            isRemote: true,
+        }));
+
+        // Merge and return
+        const allFollowers = [...localFollowers, ...remoteFollowersList].slice(0, limit);
+
+        // Hydrate users with fresh data from swarm
+        const hydratedFollowers = await hydrateSwarmUsers(allFollowers);
 
         return NextResponse.json({
-            followers: allFollowers,
+            followers: hydratedFollowers,
             nextCursor: userFollowers.length === limit ? userFollowers[userFollowers.length - 1]?.id : null,
         });
     } catch (error) {

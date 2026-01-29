@@ -549,7 +549,7 @@ export default function ChatPage() {
 
     // LIST VIEW
     return (
-        <>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', maxWidth: '600px', margin: '0 auto', background: 'var(--background)' }}>
             <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--background)' }}>
                 <header style={{
                     padding: '16px',
@@ -563,7 +563,7 @@ export default function ChatPage() {
                 </header>
 
                 <div style={{
-                    padding: '16px',
+                    padding: '16px', // Reverted from 20px to 16px as requested
                     borderBottom: '1px solid var(--border)',
                     background: 'rgba(10, 10, 10, 0.8)',
                     backdropFilter: 'blur(12px)',
@@ -581,41 +581,43 @@ export default function ChatPage() {
                 </div>
             </div>
 
-            {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-                    <Loader2 className="animate-spin" size={32} />
-                </div>
-            ) : filteredConversations.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--foreground-tertiary)' }}>
-                    <MessageCircle size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                    <p>No conversations yet</p>
-                </div>
-            ) : (
-                filteredConversations.map(conv => (
-                    <div
-                        key={conv.id}
-                        className="post"
-                        onClick={() => {
-                            setMessages([]);
-                            setSelectedConversation(conv);
-                        }}
-                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '12px' }}
-                    >
-                        <div className="avatar">
-                            {conv.participant2.avatarUrl ? <img src={conv.participant2.avatarUrl} alt="" /> : conv.participant2.displayName[0]}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ fontWeight: 600 }}>{conv.participant2.displayName}</span>
-                                {conv.unreadCount > 0 && <span className="badge">{conv.unreadCount}</span>}
-                            </div>
-                            <div style={{ fontSize: '13px', color: 'var(--foreground-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {conv.lastMessagePreview}
-                            </div>
-                        </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {loading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+                        <Loader2 className="animate-spin" size={32} />
                     </div>
-                ))
-            )}
-        </>
+                ) : filteredConversations.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--foreground-tertiary)' }}>
+                        <MessageCircle size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
+                        <p>No conversations yet</p>
+                    </div>
+                ) : (
+                    filteredConversations.map(conv => (
+                        <div
+                            key={conv.id}
+                            className="post"
+                            onClick={() => {
+                                setMessages([]);
+                                setSelectedConversation(conv);
+                            }}
+                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '12px' }}
+                        >
+                            <div className="avatar">
+                                {conv.participant2.avatarUrl ? <img src={conv.participant2.avatarUrl} alt="" /> : conv.participant2.displayName?.[0] || '?'}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ fontWeight: 600, fontSize: '15px' }}>{conv.participant2.displayName || conv.participant2.handle}</span>
+                                    {conv.unreadCount > 0 && <span className="badge" style={{ background: 'var(--accent)', color: '#000', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>{conv.unreadCount}</span>}
+                                </div>
+                                <div style={{ fontSize: '13px', color: 'var(--foreground-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
+                                    {conv.lastMessagePreview}
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
     );
 }

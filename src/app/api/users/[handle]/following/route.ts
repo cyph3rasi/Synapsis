@@ -47,7 +47,8 @@ export async function GET(request: Request, context: RouteContext) {
                     isRemote: true,
                     isBot: f.isBot,
                 }));
-                return NextResponse.json({ following, nextCursor: null });
+                const hydratedFollowing = await hydrateSwarmUsers(following);
+                return NextResponse.json({ following: hydratedFollowing, nextCursor: null });
             }
             // If swarm fetch fails, return empty
             return NextResponse.json({ following: [], nextCursor: null });

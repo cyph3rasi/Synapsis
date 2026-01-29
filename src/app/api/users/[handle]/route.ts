@@ -46,6 +46,16 @@ export async function GET(request: Request, context: RouteContext) {
                     if (profileData?.profile) {
                         const profile = profileData.profile;
 
+                        // CACHE: Upsert the remote user into our local database
+                        const { upsertRemoteUser } = await import('@/lib/swarm/user-cache');
+                        await upsertRemoteUser({
+                            handle: `${profile.handle}@${remoteDomain}`,
+                            displayName: profile.displayName,
+                            avatarUrl: profile.avatarUrl || null,
+                            did: profile.did || '',
+                            isBot: profile.isBot || false
+                        });
+
                         return NextResponse.json({
                             user: {
                                 id: `swarm:${remoteDomain}:${profile.handle}`,

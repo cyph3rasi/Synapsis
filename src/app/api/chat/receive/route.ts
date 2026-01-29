@@ -64,6 +64,16 @@ export async function POST(request: NextRequest) {
                                 publicKey = remoteProfile.publicKey;
                                 senderDisplayName = remoteProfile.displayName || handle;
                                 senderAvatarUrl = remoteProfile.avatarUrl;
+
+                                // CACHE: Upsert the remote user into our local database
+                                const { upsertRemoteUser } = await import('@/lib/swarm/user-cache');
+                                await upsertRemoteUser({
+                                    handle: handle, // already full handle if remote
+                                    displayName: senderDisplayName,
+                                    avatarUrl: senderAvatarUrl || null,
+                                    did: did || '',
+                                    isBot: remoteProfile.isBot || false
+                                });
                             }
                         }
                     } else {
