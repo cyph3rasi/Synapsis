@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon } from '@/components/Icons';
 import { MessageSquare, Check } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function PrivacySettingsPage() {
     const router = useRouter();
@@ -12,6 +13,8 @@ export default function PrivacySettingsPage() {
     const [saving, setSaving] = useState(false);
     const [dmPrivacy, setDmPrivacy] = useState<'everyone' | 'following' | 'none'>('everyone');
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
 
     useEffect(() => {
         fetch('/api/auth/me')
@@ -27,15 +30,23 @@ export default function PrivacySettingsPage() {
     }, []);
 
     const handleSave = async (newValue: 'everyone' | 'following' | 'none') => {
+        // If identity is locked, prompt to unlock and return
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true);
+            return;
+        }
+
         setDmPrivacy(newValue);
         setSaving(true);
         setStatus(null);
 
         try {
+            const signedPayload = await signUserAction('update_profile', { dmPrivacy: newValue });
+
             const res = await fetch('/api/auth/me', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dmPrivacy: newValue }),
+                body: JSON.stringify(signedPayload),
             });
 
             if (res.ok) {
@@ -44,6 +55,11 @@ export default function PrivacySettingsPage() {
             } else {
                 const data = await res.json();
                 setStatus({ type: 'error', message: data.error || 'Failed to save settings' });
+
+                // If error due to identity lock
+                if (data.error === 'Invalid signature or identity') {
+                    setShowUnlockPrompt(true);
+                }
             }
         } catch (error) {
             setStatus({ type: 'error', message: 'An error occurred' });

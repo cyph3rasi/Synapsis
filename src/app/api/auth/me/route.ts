@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSession, requireAuth } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { db, users } from '@/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireSignedAction, type SignedAction } from '@/lib/auth/verify-signature';
 
 const updateProfileSchema = z.object({
     displayName: z.string().min(1).max(50).optional(),
@@ -52,9 +53,20 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'Database not available' }, { status: 503 });
         }
 
-        const currentUser = await requireAuth();
-        const body = await request.json();
-        const data = updateProfileSchema.parse(body);
+        // Parse signed action
+        const signedAction: SignedAction = await request.json();
+
+        // Verify signature and get user
+        // This ensures the request was signed by the user's private key
+        const currentUser = await requireSignedAction(signedAction);
+
+        // Ensure the action type is correct for profile updates
+        if (signedAction.action !== 'update_profile') {
+            return NextResponse.json({ error: 'Invalid action type' }, { status: 400 });
+        }
+
+        // Parse inner data
+        const data = updateProfileSchema.parse(signedAction.data);
 
         const updateData: {
             displayName?: string;
@@ -119,8 +131,13 @@ export async function PATCH(request: Request) {
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: 'Invalid input', details: error.issues }, { status: 400 });
         }
-        if (error instanceof Error && error.message === 'Authentication required') {
-            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        if (error instanceof Error) {
+            if (error.message === 'Authentication required') {
+                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+            }
+            if (error.message === 'Invalid signature' || error.message === 'User not found') {
+                return NextResponse.json({ error: 'Invalid signature or identity' }, { status: 403 });
+            }
         }
         console.error('Profile update error:', error);
         return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });

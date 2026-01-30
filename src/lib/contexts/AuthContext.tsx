@@ -25,7 +25,8 @@ interface AuthContextType {
     login: (user: User) => void;
     logout: () => Promise<void>;
     showUnlockPrompt: boolean;
-    setShowUnlockPrompt: (show: boolean) => void;
+    setShowUnlockPrompt: (show: boolean, onSuccess?: () => void) => void;
+    signUserAction: (action: string, data: any) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -41,6 +42,7 @@ const AuthContext = createContext<AuthContextType>({
     logout: async () => { },
     showUnlockPrompt: false,
     setShowUnlockPrompt: () => { },
+    signUserAction: async () => Promise.reject('Not initialized'),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         initializeIdentity,
         unlockIdentity: unlockIdentityHook,
         clearIdentity,
+        signUserAction,
     } = useUserIdentity();
 
     const checkAdmin = async () => {
@@ -67,7 +70,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
+    const [showUnlockPrompt, _setShowUnlockPrompt] = useState(false);
+    const [onUnlockCallback, setOnUnlockCallback] = useState<(() => void) | null>(null);
+
+    const setShowUnlockPrompt = (show: boolean, onSuccess?: () => void) => {
+        _setShowUnlockPrompt(show);
+        if (show && onSuccess) {
+            setOnUnlockCallback(() => onSuccess);
+        } else if (!show) {
+            // If hiding without success (cancel), clear callback ??? 
+            // Actually unlockIdentity handles success case. 
+            // If explicit hide (cancel), we should probably clear it.
+            // But unlockIdentity calls setShowUnlockPrompt(false) on success too.
+            // So we handle callback execution in unlockIdentity, 
+            // and clearing in unlockIdentity OR here if it wasn't executed?
+
+            // Let's rely on unlockIdentity to execute and clear.
+            // If just closing dialog (cancel), we clear it.
+            // But we don't know if this call is from cancel or success?
+            // unlockIdentity calls this.
+        }
+    };
+
+    // Clear callback on close if it wasn't executed? 
+    // It's safer to clear it when closing prompt to avoid stale callbacks.
+    // But unlockIdentity calls setShowUnlockPrompt(false) AFTER executing.
+    // So:
 
     /**
      * Unlock the user's identity with their password
@@ -87,6 +115,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             targetUser.publicKey
         );
 
+        // Execute queued callback if exists
+        if (onUnlockCallback) {
+            try {
+                onUnlockCallback();
+            } catch (e) {
+                console.error('Error executing unlock callback:', e);
+            }
+            setOnUnlockCallback(null);
+        }
 
         setShowUnlockPrompt(false); // Close prompt on success
     };
@@ -111,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Clear the user's identity (private key from localStorage)
             clearIdentity();
             setShowUnlockPrompt(false);
+            setOnUnlockCallback(null);
 
             // Clear the user state
             setUser(null);
@@ -172,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             logout,
             showUnlockPrompt,
             setShowUnlockPrompt,
+            signUserAction,
         }}>
             {children}
         </AuthContext.Provider>

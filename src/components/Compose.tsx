@@ -6,6 +6,7 @@ import { Post, Attachment } from '@/lib/types';
 import { ImageIcon, AlertTriangle, Film } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import { formatFullHandle } from '@/lib/utils/handle';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface MediaAttachment extends Attachment {
     mimeType?: string;
@@ -20,6 +21,7 @@ interface ComposeProps {
 }
 
 export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What's happening?", isReply }: ComposeProps) {
+    const { isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
     const [content, setContent] = useState('');
     const [isPosting, setIsPosting] = useState(false);
     const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
@@ -43,8 +45,8 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     setCanPostNsfw(true);
                 }
             })
-            .catch(() => {});
-        
+            .catch(() => { });
+
         fetch('/api/node')
             .then(res => res.ok ? res.json() : null)
             .then(data => {
@@ -52,7 +54,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     setIsNsfwNode(true);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
 
     // Detect URLs in content
@@ -89,6 +91,12 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
 
     const handleSubmit = async () => {
         if (!content.trim() || isPosting || isUploading) return;
+
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true, () => handleSubmit());
+            return;
+        }
+
         setIsPosting(true);
         await onPost(content, attachments.map((item) => item.id).filter(Boolean), linkPreview, replyingTo?.id, isNsfw);
         setContent('');
@@ -237,7 +245,16 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     )}
                 </div>
                 <div className="compose-actions">
-                    <label className="compose-media-button" title="Add media">
+                    <label
+                        className="compose-media-button"
+                        title="Add media"
+                        onClick={(e) => {
+                            if (!isIdentityUnlocked) {
+                                e.preventDefault();
+                                setShowUnlockPrompt(true);
+                            }
+                        }}
+                    >
                         {isUploading ? '...' : <ImageIcon size={20} />}
                         <input
                             type="file"

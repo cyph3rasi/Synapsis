@@ -44,7 +44,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent, parentPostAuthorId }: PostCardProps) {
-    const { user: currentUser, did, handle: currentUserHandle } = useAuth();
+    const { user: currentUser, did, handle: currentUserHandle, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
     const { showToast } = useToast();
     const router = useRouter();
     const [liked, setLiked] = useState(post.isLiked || false);
@@ -89,6 +89,12 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
     const handleLike = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true, () => handleLike(e));
+            return;
+        }
+
         const currentLiked = liked;
         setLiked(!currentLiked);
         onLike?.(post.id, currentLiked); // Pass current state before toggle
@@ -97,6 +103,12 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
     const handleRepost = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true, () => handleRepost(e));
+            return;
+        }
+
         const currentReposted = reposted;
         setReposted(!currentReposted);
         onRepost?.(post.id, currentReposted); // Pass current state before toggle

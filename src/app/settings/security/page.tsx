@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@/components/Icons';
 import { Shield, Lock, Check, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function SecuritySettingsPage() {
     const [currentPassword, setCurrentPassword] = useState('');
@@ -12,6 +13,7 @@ export default function SecuritySettingsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,18 +36,35 @@ export default function SecuritySettingsPage() {
             return;
         }
 
+        // If identity is locked, prompt to unlock and return
+        // Note: It seems redundant since they entered the password,
+        // but this ensures the KEY is loaded in memory.
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true);
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
+            // Sign the password change action
+            // This proves we have the key unlocked (which required knowing the password)
+            const signedPayload = await signUserAction('change_password', { currentPassword, newPassword });
+
             const res = await fetch('/api/account/password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ currentPassword, newPassword }),
+                body: JSON.stringify(signedPayload),
             });
 
             const data = await res.json();
 
             if (!res.ok) {
+                // If error due to identity lock
+                if (data.error === 'Invalid signature or identity' || data.error === 'User not found') {
+                    setShowUnlockPrompt(true);
+                    throw new Error('Identity verification failed. Please unlock your identity.');
+                }
                 throw new Error(data.error || 'Failed to change password');
             }
 

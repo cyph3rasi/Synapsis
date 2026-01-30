@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
-import { eq, desc, and, lt, isNull, sql } from 'drizzle-orm';
+import { eq, desc, and, lt, isNull, sql, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
 
 
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     if (senderDids.size > 0) {
       const found = await db.query.users.findMany({
-        where: sql`${users.did} IN ${Array.from(senderDids)}`
+        where: inArray(users.did, Array.from(senderDids))
       });
       found.forEach(u => usersByDid[u.did] = u);
     }
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     // Also fetch local users by handle if needed
     if (senderHandles.size > 0) {
       const found = await db.query.users.findMany({
-        where: sql`${users.handle} IN ${Array.from(senderHandles)}`
+        where: inArray(users.handle, Array.from(senderHandles))
       });
       found.forEach(u => usersByHandle[u.handle] = u);
     }

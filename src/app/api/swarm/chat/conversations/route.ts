@@ -71,8 +71,8 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // LAZY LOAD: If remote and not cached, try to fetch it now
-        if (!cachedUser && isRemote) {
+        // LAZY LOAD: If remote and (not cached OR missing avatar), try to fetch it now
+        if (isRemote && (!cachedUser || !cachedUser.avatarUrl)) {
           try {
             const [rHandle, rDomain] = participant2Handle.split('@');
             const { fetchSwarmUserProfile } = await import('@/lib/swarm/interactions');

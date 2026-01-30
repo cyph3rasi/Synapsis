@@ -10,6 +10,7 @@ import { requireAuth, verifyPassword, hashPassword } from '@/lib/auth';
 import { db, users } from '@/db';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { requireSignedAction, type SignedAction } from '@/lib/auth/verify-signature';
 
 /**
  * Decrypt the private key using the OLD password
@@ -70,9 +71,17 @@ function encryptPrivateKey(privateKey: string, password: string): { encrypted: s
 
 export async function POST(req: NextRequest) {
     try {
-        const user = await requireAuth();
-        const body = await req.json();
-        const { currentPassword, newPassword } = body;
+        // Parse signed action
+        const signedAction: SignedAction = await req.json();
+
+        // Verify signature and get user
+        const user = await requireSignedAction(signedAction);
+
+        if (signedAction.action !== 'change_password') {
+            return NextResponse.json({ error: 'Invalid action type' }, { status: 400 });
+        }
+
+        const { currentPassword, newPassword } = signedAction.data;
 
         if (!currentPassword || !newPassword) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });

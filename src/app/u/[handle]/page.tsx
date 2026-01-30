@@ -7,9 +7,10 @@ import { ArrowLeftIcon, CalendarIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
-import { Rocket, MoreHorizontal, Mail } from 'lucide-react';
+import { Rocket, MoreHorizontal, Mail, Camera } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { Bot } from 'lucide-react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface BotOwner {
     id: string;
@@ -78,6 +79,7 @@ export default function ProfilePage() {
     const params = useParams();
     const router = useRouter();
     const handle = (params.handle as string)?.replace(/^@/, '') || '';
+    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
     const [posts, setPosts] = useState<Post[]>([]);
@@ -110,6 +112,74 @@ export default function ProfilePage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+
+    const avatarInputRef = useRef<HTMLInputElement>(null);
+    const headerInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'avatarUrl' | 'headerUrl') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Reset inputs so change event fires again for same file
+        e.target.value = '';
+
+        setIsSaving(true);
+        try {
+            // 1. Upload the file
+            const formData = new FormData();
+            formData.append('file', file);
+            const uploadRes = await fetch('/api/uploads', {
+                method: 'POST',
+                body: formData,
+            });
+            const uploadData = await uploadRes.json();
+
+            if (!uploadData.url) throw new Error('Upload failed');
+            const imageUrl = uploadData.url;
+
+            // 2. Update local form state immediately for UI feedback
+            setProfileForm(prev => ({ ...prev, [field]: imageUrl }));
+
+            // 3. Auto-save the profile change
+            if (!isIdentityUnlocked) {
+                setShowUnlockPrompt(true);
+                throw new Error('Please unlock your identity to save the changes.');
+            }
+
+            // Create partial update payload
+            const updatePayload: any = { [field]: imageUrl };
+
+            // Sign the action
+            const signedPayload = await signUserAction('update_profile', updatePayload);
+
+            const saveRes = await fetch('/api/auth/me', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(signedPayload),
+            });
+
+            const saveData = await saveRes.json();
+
+            if (!saveRes.ok) {
+                // If error due to identity lock
+                if (saveData.error === 'Invalid signature or identity') {
+                    setShowUnlockPrompt(true);
+                    throw new Error('Identity verification failed. Please try again after unlocking.');
+                }
+                throw new Error(saveData.error || 'Failed to update profile');
+            }
+
+            // Update user state with the returned updated user
+            setUser(saveData.user);
+            // We do NOT exit edit mode automatically, allowing them to edit other fields
+
+        } catch (err) {
+            console.error(err);
+            setSaveError(err instanceof Error ? err.message : 'Upload failed');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     useEffect(() => {
         setIsEditing(false);
@@ -303,6 +373,11 @@ export default function ProfilePage() {
     const handleFollow = async () => {
         if (!currentUser) return;
 
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true, () => handleFollow());
+            return;
+        }
+
         const method = isFollowing ? 'DELETE' : 'POST';
         const res = await fetch(`/api/users/${handle}/follow`, { method });
 
@@ -317,6 +392,11 @@ export default function ProfilePage() {
 
     const handleBlock = async () => {
         if (!currentUser) return;
+
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true, () => handleBlock());
+            return;
+        }
 
         const method = isBlocked ? 'DELETE' : 'POST';
         const res = await fetch(`/api/users/${handle}/block`, { method });
@@ -333,14 +413,24 @@ export default function ProfilePage() {
 
     const handleSaveProfile = async () => {
         if (!isOwnProfile) return;
+
+        // If identity is locked, prompt to unlock and return
+        if (!isIdentityUnlocked) {
+            setShowUnlockPrompt(true);
+            return;
+        }
+
         setIsSaving(true);
         setSaveError(null);
 
         try {
+            // Sign the profile update action
+            const signedPayload = await signUserAction('update_profile', profileForm);
+
             const res = await fetch('/api/auth/me', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(profileForm),
+                body: JSON.stringify(signedPayload),
             });
 
             const data = await res.json();
@@ -353,7 +443,14 @@ export default function ProfilePage() {
             setIsEditing(false);
         } catch (error) {
             console.error('Profile update failed', error);
-            setSaveError('Unable to update profile. Please try again.');
+            setSaveError(error instanceof Error && error.message.includes('Identity locked')
+                ? 'Please unlock your identity to save changes.'
+                : 'Unable to update profile. Please try again.');
+
+            // If the error was due to lock state (race condition), prompt unlock
+            if (error instanceof Error && error.message.includes('Identity locked')) {
+                setShowUnlockPrompt(true);
+            }
         } finally {
             setIsSaving(false);
         }
@@ -465,12 +562,47 @@ export default function ProfilePage() {
             {/* Profile Header */}
             <div style={{ borderBottom: '1px solid var(--border)' }}>
                 {/* Banner */}
-                <div style={{
-                    height: '150px',
-                    background: user.headerUrl
-                        ? `url(${user.headerUrl}) center/cover`
-                        : 'linear-gradient(135deg, var(--accent-muted) 0%, var(--background-tertiary) 100%)',
-                }} />
+                {/* Banner */}
+                <div
+                    style={{
+                        height: '150px',
+                        background: (isEditing ? profileForm.headerUrl : user.headerUrl)
+                            ? `url(${isEditing ? profileForm.headerUrl : user.headerUrl}) center/cover`
+                            : 'linear-gradient(135deg, var(--accent-muted) 0%, var(--background-tertiary) 100%)',
+                        position: 'relative',
+                        cursor: isEditing ? 'pointer' : 'default',
+                    }}
+                    onClick={() => {
+                        if (isEditing) {
+                            if (!isIdentityUnlocked) {
+                                setShowUnlockPrompt(true);
+                            } else {
+                                headerInputRef.current?.click();
+                            }
+                        }
+                    }}
+                >
+                    {isEditing && (
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white'
+                        }}>
+                            <Camera size={32} />
+                            <input
+                                ref={headerInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleUpload(e, 'headerUrl')}
+                                style={{ display: 'none' }}
+                            />
+                        </div>
+                    )}
+                </div>
 
                 {/* Avatar & Actions */}
                 <div style={{ padding: '0 16px' }}>
@@ -479,17 +611,53 @@ export default function ProfilePage() {
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
                     }}>
-                        <div className="avatar avatar-lg" style={{
-                            width: '96px',
-                            height: '96px',
-                            fontSize: '36px',
-                            border: '4px solid var(--background)',
-                            marginTop: '-48px',
-                        }}>
-                            {user.avatarUrl ? (
-                                <img src={user.avatarUrl} alt={user.displayName || user.handle} />
+                        <div
+                            className="avatar avatar-lg"
+                            style={{
+                                width: '96px',
+                                height: '96px',
+                                fontSize: '36px',
+                                border: '4px solid var(--background)',
+                                marginTop: '-48px',
+                                position: 'relative',
+                                cursor: isEditing ? 'pointer' : 'default',
+                            }}
+                            onClick={() => {
+                                if (isEditing) {
+                                    if (!isIdentityUnlocked) {
+                                        setShowUnlockPrompt(true);
+                                    } else {
+                                        avatarInputRef.current?.click();
+                                    }
+                                }
+                            }}
+                        >
+                            {(isEditing ? profileForm.avatarUrl : user.avatarUrl) ? (
+                                <img src={(isEditing ? profileForm.avatarUrl : user.avatarUrl) || ''} alt={user.displayName || user.handle} />
                             ) : (
                                 (user.displayName || user.handle).charAt(0).toUpperCase()
+                            )}
+
+                            {isEditing && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background: 'rgba(0,0,0,0.3)',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'white'
+                                }}>
+                                    <Camera size={24} />
+                                    <input
+                                        ref={avatarInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleUpload(e, 'avatarUrl')}
+                                        style={{ display: 'none' }}
+                                    />
+                                </div>
                             )}
                         </div>
 
@@ -704,88 +872,7 @@ export default function ProfilePage() {
                                         maxLength={100}
                                     />
                                 </div>
-                                <div>
-                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Avatar</label>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                                            {isSaving ? 'Uploading...' : 'Choose File'}
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (!file) return;
-                                                    setIsSaving(true);
-                                                    try {
-                                                        const formData = new FormData();
-                                                        formData.append('file', file);
-                                                        const res = await fetch('/api/uploads', {
-                                                            method: 'POST',
-                                                            body: formData,
-                                                        });
-                                                        const data = await res.json();
-                                                        if (data.url) {
-                                                            setProfileForm(prev => ({ ...prev, avatarUrl: data.url }));
-                                                        }
-                                                    } catch (err) {
-                                                        console.error(err);
-                                                        setSaveError('Upload failed');
-                                                    } finally {
-                                                        setIsSaving(false);
-                                                    }
-                                                }}
-                                                disabled={isSaving}
-                                                style={{ display: 'none' }}
-                                            />
-                                        </label>
-                                        {profileForm.avatarUrl && (
-                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                <img src={profileForm.avatarUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>Header</label>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                                            {isSaving ? 'Uploading...' : 'Choose File'}
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (!file) return;
-                                                    setIsSaving(true);
-                                                    try {
-                                                        const formData = new FormData();
-                                                        formData.append('file', file);
-                                                        const res = await fetch('/api/uploads', {
-                                                            method: 'POST',
-                                                            body: formData,
-                                                        });
-                                                        const data = await res.json();
-                                                        if (data.url) {
-                                                            setProfileForm(prev => ({ ...prev, headerUrl: data.url }));
-                                                        }
-                                                    } catch (err) {
-                                                        console.error(err);
-                                                        setSaveError('Upload failed');
-                                                    } finally {
-                                                        setIsSaving(false);
-                                                    }
-                                                }}
-                                                disabled={isSaving}
-                                                style={{ display: 'none' }}
-                                            />
-                                        </label>
-                                        {profileForm.headerUrl && (
-                                            <div style={{ width: '80px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                                <img src={profileForm.headerUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                {/* File inputs removed, now click-to-upload on visual elements */}
                                 {saveError && (
                                     <div style={{ color: 'var(--error)', fontSize: '13px' }}>{saveError}</div>
                                 )}

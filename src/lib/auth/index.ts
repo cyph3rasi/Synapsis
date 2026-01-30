@@ -10,6 +10,7 @@ import { generateKeyPair } from '@/lib/crypto/keys';
 import { encryptPrivateKey, serializeEncryptedKey } from '@/lib/crypto/private-key';
 import { cookies } from 'next/headers';
 import { upsertHandleEntries } from '@/lib/federation/handles';
+import { generateAndUploadAvatar } from '@/lib/auth/avatar';
 
 const SESSION_COOKIE_NAME = 'synapsis_session';
 const SESSION_EXPIRY_DAYS = 30;
@@ -157,17 +158,23 @@ export async function registerUser(
     const did = generateDID();
     const passwordHash = await hashPassword(password);
 
+    const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+
+    // Generate avatar using full handle (@user@domain) for global uniqueness
+    const fullHandle = `${handle.toLowerCase()}@${nodeDomain}`;
+    const avatarUrl = await generateAndUploadAvatar(fullHandle);
+
     const [user] = await db.insert(users).values({
         did,
         handle: handle.toLowerCase(),
         email: email.toLowerCase(),
         passwordHash,
         displayName: displayName || handle,
+        avatarUrl,
         publicKey,
         privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey),
     }).returning();
 
-    const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
     await upsertHandleEntries([{
         handle: user.handle,
         did: user.did,
