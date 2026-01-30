@@ -44,7 +44,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, isDetail, showThread = true, isThreadParent, parentPostAuthorId }: PostCardProps) {
-    const { user: currentUser, did, handle: currentUserHandle, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
+    const { user: currentUser, did, handle: currentUserHandle, isIdentityUnlocked } = useAuth();
     const { showToast } = useToast();
     const router = useRouter();
     const [liked, setLiked] = useState(post.isLiked || false);
@@ -91,7 +91,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
 
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true, () => handleLike(e));
+            showToast('Please log in to like posts', 'error');
             return;
         }
 
@@ -105,7 +105,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
         e.stopPropagation();
 
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true, () => handleRepost(e));
+            showToast('Please log in to repost', 'error');
             return;
         }
 

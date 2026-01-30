@@ -79,7 +79,7 @@ export default function ProfilePage() {
     const params = useParams();
     const router = useRouter();
     const handle = (params.handle as string)?.replace(/^@/, '') || '';
-    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
+    const { isIdentityUnlocked, signUserAction } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
     const [posts, setPosts] = useState<Post[]>([]);
@@ -142,8 +142,7 @@ export default function ProfilePage() {
 
             // 3. Auto-save the profile change
             if (!isIdentityUnlocked) {
-                setShowUnlockPrompt(true);
-                throw new Error('Please unlock your identity to save the changes.');
+                throw new Error('Session expired. Please log in again.');
             }
 
             // Create partial update payload
@@ -161,11 +160,6 @@ export default function ProfilePage() {
             const saveData = await saveRes.json();
 
             if (!saveRes.ok) {
-                // If error due to identity lock
-                if (saveData.error === 'Invalid signature or identity') {
-                    setShowUnlockPrompt(true);
-                    throw new Error('Identity verification failed. Please try again after unlocking.');
-                }
                 throw new Error(saveData.error || 'Failed to update profile');
             }
 
@@ -374,7 +368,7 @@ export default function ProfilePage() {
         if (!currentUser) return;
 
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true, () => handleFollow());
+            alert('Session expired. Please log in again.');
             return;
         }
 
@@ -394,7 +388,7 @@ export default function ProfilePage() {
         if (!currentUser) return;
 
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true, () => handleBlock());
+            alert('Session expired. Please log in again.');
             return;
         }
 
@@ -414,9 +408,8 @@ export default function ProfilePage() {
     const handleSaveProfile = async () => {
         if (!isOwnProfile) return;
 
-        // If identity is locked, prompt to unlock and return
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true);
+            setSaveError('Session expired. Please log in again.');
             return;
         }
 
@@ -443,14 +436,7 @@ export default function ProfilePage() {
             setIsEditing(false);
         } catch (error) {
             console.error('Profile update failed', error);
-            setSaveError(error instanceof Error && error.message.includes('Identity locked')
-                ? 'Please unlock your identity to save changes.'
-                : 'Unable to update profile. Please try again.');
-
-            // If the error was due to lock state (race condition), prompt unlock
-            if (error instanceof Error && error.message.includes('Identity locked')) {
-                setShowUnlockPrompt(true);
-            }
+            setSaveError(error instanceof Error ? error.message : 'Unable to update profile. Please try again.');
         } finally {
             setIsSaving(false);
         }
@@ -574,11 +560,7 @@ export default function ProfilePage() {
                     }}
                     onClick={() => {
                         if (isEditing) {
-                            if (!isIdentityUnlocked) {
-                                setShowUnlockPrompt(true);
-                            } else {
-                                headerInputRef.current?.click();
-                            }
+                            headerInputRef.current?.click();
                         }
                     }}
                 >
@@ -624,11 +606,7 @@ export default function ProfilePage() {
                             }}
                             onClick={() => {
                                 if (isEditing) {
-                                    if (!isIdentityUnlocked) {
-                                        setShowUnlockPrompt(true);
-                                    } else {
-                                        avatarInputRef.current?.click();
-                                    }
+                                    avatarInputRef.current?.click();
                                 }
                             }}
                         >

@@ -14,7 +14,7 @@ export default function PrivacySettingsPage() {
     const [dmPrivacy, setDmPrivacy] = useState<'everyone' | 'following' | 'none'>('everyone');
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
-    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
+    const { isIdentityUnlocked, signUserAction } = useAuth();
 
     useEffect(() => {
         fetch('/api/auth/me')
@@ -30,9 +30,8 @@ export default function PrivacySettingsPage() {
     }, []);
 
     const handleSave = async (newValue: 'everyone' | 'following' | 'none') => {
-        // If identity is locked, prompt to unlock and return
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true);
+            setStatus({ type: 'error', message: 'Session expired. Please log in again.' });
             return;
         }
 
@@ -55,11 +54,6 @@ export default function PrivacySettingsPage() {
             } else {
                 const data = await res.json();
                 setStatus({ type: 'error', message: data.error || 'Failed to save settings' });
-
-                // If error due to identity lock
-                if (data.error === 'Invalid signature or identity') {
-                    setShowUnlockPrompt(true);
-                }
             }
         } catch (error) {
             setStatus({ type: 'error', message: 'An error occurred' });

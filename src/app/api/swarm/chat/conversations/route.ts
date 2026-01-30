@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           handle: participant2Handle,
           displayName: participant2Handle,
           avatarUrl: null as string | null,
+          did: '' as string,
         };
 
         // Try to get cached user info
@@ -103,6 +104,7 @@ export async function GET(request: NextRequest) {
             handle: cachedUser.handle,
             displayName: (cachedUser as any).displayName || cachedUser.handle,
             avatarUrl: (cachedUser as any).avatarUrl || null,
+            did: (cachedUser as any).did || '',
           };
         }
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { Lock, Shield } from 'lucide-react';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { Lock } from 'lucide-react';
 
 interface IdentityLockScreenProps {
     title?: string;
@@ -10,12 +9,10 @@ interface IdentityLockScreenProps {
 }
 
 export function IdentityLockScreen({
-    title = 'Identity Required',
-    description = 'Accessing settings requires your identity to be unlocked. Your private keys are used to sign changes to prove they came from you.',
+    title = 'Session Expired',
+    description = 'Your session has expired. Please log in again to continue.',
     icon
 }: IdentityLockScreenProps) {
-    const { setShowUnlockPrompt } = useAuth();
-
     return (
         <div style={{
             display: 'flex',
@@ -41,12 +38,11 @@ export function IdentityLockScreen({
             </p>
 
             <button
-                onClick={() => setShowUnlockPrompt(true)}
+                onClick={() => window.location.href = '/login'}
                 className="btn btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-                <Shield size={16} />
-                Unlock Identity
+                Go to Login
             </button>
         </div>
     );

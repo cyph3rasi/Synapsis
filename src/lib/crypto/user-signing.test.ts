@@ -2,145 +2,127 @@
  * User Signing Tests
  * 
  * Tests for user-level cryptographic signing functionality
- * Validates: Requirements US-1.2, US-1.4, US-6.3, US-6.4
+ * Validates: Key management, signing, and verification
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { 
-  getUserPrivateKey, 
-  setUserPrivateKey, 
+  keyStore,
+  hasUserPrivateKey,
   clearUserPrivateKey,
-  hasUserPrivateKey 
+  generateKeyPair,
+  exportPublicKey,
+  canonicalize
 } from './user-signing';
 
-// Mock localStorage for Node environment
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-
-  return {
-    getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => {
-      store[key] = value;
-    },
-    removeItem: (key: string) => {
-      delete store[key];
-    },
-    clear: () => {
-      store = {};
-    },
-  };
-})();
-
-// Set up global mocks
-global.localStorage = localStorageMock as any;
-global.window = { localStorage: localStorageMock } as any;
-
-describe('User Private Key Management', () => {
-  // Clean up localStorage before and after each test
+describe('User Signing', () => {
   beforeEach(() => {
-    localStorage.clear();
+    // Clear the key store before each test
+    keyStore.clear();
   });
 
-  afterEach(() => {
-    localStorage.clear();
-  });
-
-  describe('setUserPrivateKey and getUserPrivateKey', () => {
-    it('should store and retrieve private key from localStorage', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
+  describe('keyStore', () => {
+    it('should store and retrieve identity', () => {
+      const identity = {
+        did: 'did:web:example.com:alice',
+        handle: 'alice',
+        publicKey: 'test-public-key'
+      };
       
-      // Store the key
-      setUserPrivateKey(testKey);
+      keyStore.setIdentity(identity);
+      const retrieved = keyStore.getIdentity();
       
-      // Retrieve the key
-      const retrievedKey = getUserPrivateKey();
-      
-      // Verify it matches
-      expect(retrievedKey).toBe(testKey);
+      expect(retrieved).toEqual(identity);
     });
 
-    it('should return null when no key is stored', () => {
-      const retrievedKey = getUserPrivateKey();
-      expect(retrievedKey).toBeNull();
-    });
-
-    it('should overwrite existing key when setting a new one', () => {
-      const firstKey = '-----BEGIN PRIVATE KEY-----\nfirst-key\n-----END PRIVATE KEY-----';
-      const secondKey = '-----BEGIN PRIVATE KEY-----\nsecond-key\n-----END PRIVATE KEY-----';
-      
-      // Store first key
-      setUserPrivateKey(firstKey);
-      expect(getUserPrivateKey()).toBe(firstKey);
-      
-      // Store second key
-      setUserPrivateKey(secondKey);
-      expect(getUserPrivateKey()).toBe(secondKey);
-    });
-  });
-
-  describe('clearUserPrivateKey', () => {
-    it('should remove private key from localStorage', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
-      
-      // Store the key
-      setUserPrivateKey(testKey);
-      expect(getUserPrivateKey()).toBe(testKey);
-      
-      // Clear the key
-      clearUserPrivateKey();
-      
-      // Verify it's removed
-      expect(getUserPrivateKey()).toBeNull();
-    });
-
-    it('should be idempotent (safe to call multiple times)', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
-      
-      // Store and clear
-      setUserPrivateKey(testKey);
-      clearUserPrivateKey();
-      
-      // Clear again (should not throw)
-      expect(() => clearUserPrivateKey()).not.toThrow();
-      expect(getUserPrivateKey()).toBeNull();
-    });
-
-    it('should work when no key was stored', () => {
-      // Clear when nothing is stored (should not throw)
-      expect(() => clearUserPrivateKey()).not.toThrow();
-      expect(getUserPrivateKey()).toBeNull();
+    it('should return null when no identity is set', () => {
+      expect(keyStore.getIdentity()).toBeNull();
     });
   });
 
   describe('hasUserPrivateKey', () => {
-    it('should return true when key is stored', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
-      setUserPrivateKey(testKey);
-      expect(hasUserPrivateKey()).toBe(true);
-    });
-
     it('should return false when no key is stored', () => {
       expect(hasUserPrivateKey()).toBe(false);
     });
 
     it('should return false after key is cleared', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
-      setUserPrivateKey(testKey);
-      expect(hasUserPrivateKey()).toBe(true);
-      
       clearUserPrivateKey();
       expect(hasUserPrivateKey()).toBe(false);
     });
   });
 
-  describe('localStorage key name', () => {
-    it('should use the correct localStorage key', () => {
-      const testKey = '-----BEGIN PRIVATE KEY-----\ntest-key-content\n-----END PRIVATE KEY-----';
-      setUserPrivateKey(testKey);
+  describe('clearUserPrivateKey', () => {
+    it('should be idempotent (safe to call multiple times)', () => {
+      expect(() => clearUserPrivateKey()).not.toThrow();
+      expect(hasUserPrivateKey()).toBe(false);
+    });
+  });
+
+  describe('generateKeyPair', () => {
+    it('should generate a valid ECDSA P-256 key pair', async () => {
+      const keyPair = await generateKeyPair();
       
-      // Verify the key is stored with the correct name
-      const storedValue = localStorage.getItem('synapsis_user_private_key');
-      expect(storedValue).toBe(testKey);
+      expect(keyPair).toHaveProperty('privateKey');
+      expect(keyPair).toHaveProperty('publicKey');
+      expect(keyPair.privateKey.type).toBe('private');
+      expect(keyPair.publicKey.type).toBe('public');
+      expect(keyPair.privateKey.algorithm.name).toBe('ECDSA');
+      expect(keyPair.publicKey.algorithm.name).toBe('ECDSA');
+    });
+  });
+
+  describe('exportPublicKey', () => {
+    it('should export public key as base64', async () => {
+      const keyPair = await generateKeyPair();
+      const exported = await exportPublicKey(keyPair.publicKey);
+      
+      expect(typeof exported).toBe('string');
+      expect(exported.length).toBeGreaterThan(0);
+      // Should be valid base64
+      expect(() => atob(exported)).not.toThrow();
+    });
+  });
+
+  describe('canonicalize', () => {
+    it('should canonicalize objects with sorted keys', () => {
+      const obj1 = { b: 1, a: 2 };
+      const obj2 = { a: 2, b: 1 };
+      
+      expect(canonicalize(obj1)).toBe('{"a":2,"b":1}');
+      expect(canonicalize(obj2)).toBe('{"a":2,"b":1}');
+      expect(canonicalize(obj1)).toBe(canonicalize(obj2));
+    });
+
+    it('should handle nested objects', () => {
+      const obj = { z: { a: 1, b: 2 }, y: 'test' };
+      expect(canonicalize(obj)).toBe('{"y":"test","z":{"a":1,"b":2}}');
+    });
+
+    it('should handle arrays', () => {
+      const obj = { arr: [3, 1, 2] };
+      expect(canonicalize(obj)).toBe('{"arr":[3,1,2]}');
+    });
+
+    it('should throw on invalid types', () => {
+      expect(() => canonicalize({ d: new Date() })).toThrow(/Date objects not allowed/);
+      expect(() => canonicalize({ n: NaN })).toThrow(/Number is not finite/);
+      expect(() => canonicalize({ n: Infinity })).toThrow(/Number is not finite/);
+    });
+
+    it('should handle strings correctly', () => {
+      expect(canonicalize('hello')).toBe('"hello"');
+      expect(canonicalize('with"quotes')).toBe('"with\\"quotes"');
+    });
+
+    it('should handle numbers', () => {
+      expect(canonicalize(42)).toBe('42');
+      expect(canonicalize(3.14)).toBe('3.14');
+    });
+
+    it('should handle booleans and null', () => {
+      expect(canonicalize(true)).toBe('true');
+      expect(canonicalize(false)).toBe('false');
+      expect(canonicalize(null)).toBe('null');
     });
   });
 });

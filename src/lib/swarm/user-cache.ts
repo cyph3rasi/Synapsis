@@ -12,11 +12,13 @@ export interface RemoteProfile {
 
 /**
  * Upsert a remote user into the local database for caching/display purposes.
+ * 
+ * @throws Error if database operation fails (after logging)
  */
-export async function upsertRemoteUser(profile: RemoteProfile) {
-    try {
-        if (!db) return;
+export async function upsertRemoteUser(profile: RemoteProfile): Promise<void> {
+    if (!db) return;
 
+    try {
         // Check if user already exists
         const existing = await db.query.users.findFirst({
             where: eq(users.did, profile.did),
@@ -50,5 +52,6 @@ export async function upsertRemoteUser(profile: RemoteProfile) {
         }
     } catch (error) {
         console.error(`[User Cache] Failed to upsert ${profile.handle}:`, error);
+        throw error;
     }
 }

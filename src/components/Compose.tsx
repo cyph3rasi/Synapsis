@@ -21,7 +21,7 @@ interface ComposeProps {
 }
 
 export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What's happening?", isReply }: ComposeProps) {
-    const { isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
+    const { isIdentityUnlocked } = useAuth();
     const [content, setContent] = useState('');
     const [isPosting, setIsPosting] = useState(false);
     const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
@@ -92,8 +92,9 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
     const handleSubmit = async () => {
         if (!content.trim() || isPosting || isUploading) return;
 
+        // With persistence, identity should be unlocked. If not, user needs to re-login
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true, () => handleSubmit());
+            alert('Your session has expired. Please log in again.');
             return;
         }
 
@@ -248,12 +249,6 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
                     <label
                         className="compose-media-button"
                         title="Add media"
-                        onClick={(e) => {
-                            if (!isIdentityUnlocked) {
-                                e.preventDefault();
-                                setShowUnlockPrompt(true);
-                            }
-                        }}
                     >
                         {isUploading ? '...' : <ImageIcon size={20} />}
                         <input

@@ -13,7 +13,7 @@ export default function SecuritySettingsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
-    const { isIdentityUnlocked, setShowUnlockPrompt, signUserAction } = useAuth();
+    const { isIdentityUnlocked, signUserAction } = useAuth();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,11 +36,9 @@ export default function SecuritySettingsPage() {
             return;
         }
 
-        // If identity is locked, prompt to unlock and return
-        // Note: It seems redundant since they entered the password,
-        // but this ensures the KEY is loaded in memory.
+        // With persistence, identity should be unlocked
         if (!isIdentityUnlocked) {
-            setShowUnlockPrompt(true);
+            setError('Your session has expired. Please log in again.');
             return;
         }
 
@@ -60,11 +58,6 @@ export default function SecuritySettingsPage() {
             const data = await res.json();
 
             if (!res.ok) {
-                // If error due to identity lock
-                if (data.error === 'Invalid signature or identity' || data.error === 'User not found') {
-                    setShowUnlockPrompt(true);
-                    throw new Error('Identity verification failed. Please unlock your identity.');
-                }
                 throw new Error(data.error || 'Failed to change password');
             }
 

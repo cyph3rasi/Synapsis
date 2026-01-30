@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useUserIdentity } from '@/lib/hooks/useUserIdentity';
 
 export interface User {
@@ -18,15 +18,18 @@ interface AuthContextType {
     isAdmin: boolean;
     loading: boolean;
     isIdentityUnlocked: boolean;
+    isRestoring: boolean;  // True while checking persistence
     did: string | null;
     handle: string | null;
     checkAdmin: () => Promise<void>;
     unlockIdentity: (password: string, explicitUser?: User) => Promise<void>;
     login: (user: User) => void;
     logout: () => Promise<void>;
-    showUnlockPrompt: boolean;
-    setShowUnlockPrompt: (show: boolean, onSuccess?: () => void) => void;
+    lockIdentity: () => Promise<void>;  // New: manual lock
     signUserAction: (action: string, data: any) => Promise<any>;
+    requiresUnlock: boolean;  // True if user has encrypted key but not unlocked
+    showUnlockPrompt: boolean;
+    setShowUnlockPrompt: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -34,33 +37,39 @@ const AuthContext = createContext<AuthContextType>({
     isAdmin: false,
     loading: true,
     isIdentityUnlocked: false,
+    isRestoring: false,
     did: null,
     handle: null,
     checkAdmin: async () => { },
     unlockIdentity: async () => { },
     login: () => { },
     logout: async () => { },
+    lockIdentity: async () => { },
+    signUserAction: async () => Promise.reject('Not initialized'),
+    requiresUnlock: false,
     showUnlockPrompt: false,
     setShowUnlockPrompt: () => { },
-    signUserAction: async () => Promise.reject('Not initialized'),
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [showUnlockPrompt, setShowUnlockPrompt] = useState(false);
 
-    // Integrate useUserIdentity hook
+    // Integrate useUserIdentity hook with persistence
     const {
         identity,
         isUnlocked,
+        isRestoring,
         initializeIdentity,
         unlockIdentity: unlockIdentityHook,
+        lockIdentity: lockIdentityHook,
         clearIdentity,
         signUserAction,
     } = useUserIdentity();
 
-    const checkAdmin = async () => {
+    const checkAdmin = useCallback(async () => {
         try {
             const res = await fetch('/api/admin/me');
             const data = await res.json();
@@ -68,39 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch {
             setIsAdmin(false);
         }
-    };
-
-    const [showUnlockPrompt, _setShowUnlockPrompt] = useState(false);
-    const [onUnlockCallback, setOnUnlockCallback] = useState<(() => void) | null>(null);
-
-    const setShowUnlockPrompt = (show: boolean, onSuccess?: () => void) => {
-        _setShowUnlockPrompt(show);
-        if (show && onSuccess) {
-            setOnUnlockCallback(() => onSuccess);
-        } else if (!show) {
-            // If hiding without success (cancel), clear callback ??? 
-            // Actually unlockIdentity handles success case. 
-            // If explicit hide (cancel), we should probably clear it.
-            // But unlockIdentity calls setShowUnlockPrompt(false) on success too.
-            // So we handle callback execution in unlockIdentity, 
-            // and clearing in unlockIdentity OR here if it wasn't executed?
-
-            // Let's rely on unlockIdentity to execute and clear.
-            // If just closing dialog (cancel), we clear it.
-            // But we don't know if this call is from cancel or success?
-            // unlockIdentity calls this.
-        }
-    };
-
-    // Clear callback on close if it wasn't executed? 
-    // It's safer to clear it when closing prompt to avoid stale callbacks.
-    // But unlockIdentity calls setShowUnlockPrompt(false) AFTER executing.
-    // So:
+    }, []);
 
     /**
      * Unlock the user's identity with their password
+     * Persists the key for auto-unlock on refresh
      */
-    const unlockIdentity = async (password: string, explicitUser?: User) => {
+    const unlockIdentity = useCallback(async (password: string, explicitUser?: User) => {
         const targetUser = explicitUser || user;
 
         if (!targetUser?.privateKeyEncrypted) {
@@ -115,50 +98,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             targetUser.publicKey
         );
 
-        // Execute queued callback if exists
-        if (onUnlockCallback) {
-            try {
-                onUnlockCallback();
-            } catch (e) {
-                console.error('Error executing unlock callback:', e);
-            }
-            setOnUnlockCallback(null);
-        }
-
         setShowUnlockPrompt(false); // Close prompt on success
-    };
+    }, [user, unlockIdentityHook]);
+
+    /**
+     * Manually lock the identity (user wants to secure their session)
+     */
+    const lockIdentity = useCallback(async () => {
+        await lockIdentityHook();
+    }, [lockIdentityHook]);
 
     /**
      * Manually set the user state (called after successful login)
      */
-    const login = (userData: User) => {
+    const login = useCallback((userData: User) => {
         setUser(userData);
-        // We re-check admin status just in case
         checkAdmin();
-    };
+        
+        // Initialize identity - will try to auto-restore if possible
+        if (userData.did && userData.publicKey) {
+            initializeIdentity({
+                did: userData.did,
+                handle: userData.handle,
+                publicKey: userData.publicKey,
+                privateKeyEncrypted: userData.privateKeyEncrypted,
+            });
+        }
+    }, [checkAdmin, initializeIdentity]);
 
     /**
      * Logout the user and clear their identity
      */
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
-            // Call the logout API endpoint
             await fetch('/api/auth/logout', { method: 'POST' });
-
-            // Clear the user's identity (private key from localStorage)
-            clearIdentity();
+            await clearIdentity();
             setShowUnlockPrompt(false);
-            setOnUnlockCallback(null);
-
-            // Clear the user state
             setUser(null);
             setIsAdmin(false);
         } catch (error) {
             console.error('[Auth] Logout failed:', error);
             throw error;
         }
-    };
+    }, [clearIdentity]);
 
+    // Load auth state on mount
     useEffect(() => {
         const loadAuth = async () => {
             setLoading(true);
@@ -168,8 +152,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     const data = await res.json();
                     setUser(data.user);
 
-                    // Initialize identity if we have the required data
-                    if (data.user?.did && data.user?.publicKey && data.user?.privateKeyEncrypted) {
+                    // Initialize identity - will auto-restore if persisted
+                    if (data.user?.did && data.user?.publicKey) {
                         await initializeIdentity({
                             did: data.user.did,
                             handle: data.user.handle,
@@ -183,18 +167,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }
                 } else {
                     setUser(null);
-                    clearIdentity();
+                    await clearIdentity();
                 }
             } catch {
                 setUser(null);
-                clearIdentity();
+                await clearIdentity();
             } finally {
                 setLoading(false);
             }
         };
 
         loadAuth();
-    }, []);
+    }, [checkAdmin, initializeIdentity, clearIdentity]);
+
+    // Determine if unlock is required (has encrypted key but not unlocked)
+    const requiresUnlock = !!user?.privateKeyEncrypted && !isUnlocked && !isRestoring;
 
     return (
         <AuthContext.Provider value={{
@@ -202,15 +189,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isAdmin,
             loading,
             isIdentityUnlocked: isUnlocked,
+            isRestoring,
             did: identity?.did || null,
             handle: identity?.handle || null,
             checkAdmin,
             unlockIdentity,
             login,
             logout,
+            lockIdentity,
+            signUserAction,
+            requiresUnlock,
             showUnlockPrompt,
             setShowUnlockPrompt,
-            signUserAction,
         }}>
             {children}
         </AuthContext.Provider>

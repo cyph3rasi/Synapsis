@@ -153,64 +153,80 @@ export async function getNodesSince(since: Date, limit = 100): Promise<SwarmNode
 
 /**
  * Mark a node as having failed contact
+ * 
+ * @throws Error if database operation fails (after logging)
  */
 export async function markNodeFailure(domain: string): Promise<void> {
   if (!db) return;
 
-  const node = await db.query.swarmNodes.findFirst({
-    where: eq(swarmNodes.domain, domain),
-  });
+  try {
+    const node = await db.query.swarmNodes.findFirst({
+      where: eq(swarmNodes.domain, domain),
+    });
 
-  if (!node) return;
+    if (!node) return;
 
-  const newFailures = node.consecutiveFailures + 1;
-  const newTrust = Math.max(
-    SWARM_CONFIG.minTrustScore,
-    node.trustScore + SWARM_CONFIG.trustScoreOnFailure
-  );
-  const isActive = newFailures < SWARM_CONFIG.maxConsecutiveFailures;
+    const newFailures = node.consecutiveFailures + 1;
+    const newTrust = Math.max(
+      SWARM_CONFIG.minTrustScore,
+      node.trustScore + SWARM_CONFIG.trustScoreOnFailure
+    );
+    const isActive = newFailures < SWARM_CONFIG.maxConsecutiveFailures;
 
-  await db.update(swarmNodes)
-    .set({
-      consecutiveFailures: newFailures,
-      trustScore: newTrust,
-      isActive,
-      updatedAt: new Date(),
-    })
-    .where(eq(swarmNodes.domain, domain));
+    await db.update(swarmNodes)
+      .set({
+        consecutiveFailures: newFailures,
+        trustScore: newTrust,
+        isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(swarmNodes.domain, domain));
+  } catch (error) {
+    console.error(`[Swarm] Failed to mark node failure for ${domain}:`, error);
+    throw error;
+  }
 }
 
 /**
  * Mark a node as successfully contacted
+ * 
+ * @throws Error if database operation fails (after logging)
  */
 export async function markNodeSuccess(domain: string): Promise<void> {
   if (!db) return;
 
-  const node = await db.query.swarmNodes.findFirst({
-    where: eq(swarmNodes.domain, domain),
-  });
+  try {
+    const node = await db.query.swarmNodes.findFirst({
+      where: eq(swarmNodes.domain, domain),
+    });
 
-  if (!node) return;
+    if (!node) return;
 
-  const newTrust = Math.min(
-    SWARM_CONFIG.maxTrustScore,
-    node.trustScore + SWARM_CONFIG.trustScoreOnSuccess
-  );
+    const newTrust = Math.min(
+      SWARM_CONFIG.maxTrustScore,
+      node.trustScore + SWARM_CONFIG.trustScoreOnSuccess
+    );
 
-  await db.update(swarmNodes)
-    .set({
-      consecutiveFailures: 0,
-      trustScore: newTrust,
-      isActive: true,
-      lastSeenAt: new Date(),
-      lastSyncAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(swarmNodes.domain, domain));
+    await db.update(swarmNodes)
+      .set({
+        consecutiveFailures: 0,
+        trustScore: newTrust,
+        isActive: true,
+        lastSeenAt: new Date(),
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(swarmNodes.domain, domain));
+  } catch (error) {
+    console.error(`[Swarm] Failed to mark node success for ${domain}:`, error);
+    throw error;
+  }
 }
 
 /**
  * Log a sync operation
+ * 
+ * @throws Error if database operation fails (after logging)
  */
 export async function logSync(
   remoteDomain: string,
@@ -219,17 +235,22 @@ export async function logSync(
 ): Promise<void> {
   if (!db) return;
 
-  await db.insert(swarmSyncLog).values({
-    remoteDomain,
-    direction,
-    nodesReceived: result.nodesReceived,
-    nodesSent: result.nodesSent,
-    handlesReceived: result.handlesReceived,
-    handlesSent: result.handlesSent,
-    success: result.success,
-    errorMessage: result.error,
-    durationMs: result.durationMs,
-  });
+  try {
+    await db.insert(swarmSyncLog).values({
+      remoteDomain,
+      direction,
+      nodesReceived: result.nodesReceived,
+      nodesSent: result.nodesSent,
+      handlesReceived: result.handlesReceived,
+      handlesSent: result.handlesSent,
+      success: result.success,
+      errorMessage: result.error,
+      durationMs: result.durationMs,
+    });
+  } catch (error) {
+    console.error(`[Swarm] Failed to log sync for ${remoteDomain}:`, error);
+    throw error;
+  }
 }
 
 /**

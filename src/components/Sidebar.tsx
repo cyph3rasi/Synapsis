@@ -7,11 +7,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
 import { formatFullHandle } from '@/lib/utils/handle';
-import { LogOut, Settings2, Lock, Unlock } from 'lucide-react';
+import { LogOut, Settings2, Unlock } from 'lucide-react';
 // import { IdentityUnlockPrompt } from './IdentityUnlockPrompt'; // Moved to LayoutWrapper
 
 export function Sidebar() {
-    const { user, isAdmin, logout, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
+    const { user, isAdmin, logout, isIdentityUnlocked, lockIdentity } = useAuth();
     const pathname = usePathname();
     const router = useRouter();
     const [customLogoUrl, setCustomLogoUrl] = useState<string | null | undefined>(undefined);
@@ -192,70 +192,54 @@ export function Sidebar() {
                         </div>
                     </div>
 
-                    {/* Identity Status Indicator */}
-                    <div
-                        onClick={() => {
-                            if (!isIdentityUnlocked) {
-                                setShowUnlockPrompt(true);
-                            }
-                        }}
-                        title={isIdentityUnlocked ? 'Identity unlocked - you can perform actions' : 'Identity locked - click to unlock'}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 12px',
-                            marginBottom: '12px',
-                            borderRadius: '8px',
-                            background: isIdentityUnlocked
-                                ? 'rgba(34, 197, 94, 0.1)'
-                                : 'rgba(251, 191, 36, 0.1)',
-                            border: isIdentityUnlocked
-                                ? '1px solid rgba(34, 197, 94, 0.2)'
-                                : '1px solid rgba(251, 191, 36, 0.2)',
-                            cursor: isIdentityUnlocked ? 'default' : 'pointer',
-                            transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                            if (!isIdentityUnlocked) {
-                                e.currentTarget.style.background = 'rgba(251, 191, 36, 0.15)';
-                            }
-                        }}
-                        onMouseLeave={(e) => {
-                            if (!isIdentityUnlocked) {
-                                e.currentTarget.style.background = 'rgba(251, 191, 36, 0.1)';
-                            }
-                        }}
-                    >
-                        {isIdentityUnlocked ? (
+                    {/* Identity Status - Only show when unlocked with option to lock */}
+                    {isIdentityUnlocked && (
+                        <div
+                            onClick={() => lockIdentity()}
+                            title="Click to lock your identity"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '10px 12px',
+                                marginBottom: '12px',
+                                borderRadius: '8px',
+                                background: 'rgba(34, 197, 94, 0.1)',
+                                border: '1px solid rgba(34, 197, 94, 0.2)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.1)';
+                            }}
+                        >
                             <Unlock size={16} style={{ color: 'rgb(34, 197, 94)', flexShrink: 0 }} />
-                        ) : (
-                            <Lock size={16} style={{ color: 'rgb(251, 191, 36)', flexShrink: 0 }} />
-                        )}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                                fontSize: '13px',
-                                fontWeight: 500,
-                                color: isIdentityUnlocked ? 'rgb(34, 197, 94)' : 'rgb(251, 191, 36)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                            }}>
-                                {isIdentityUnlocked ? 'Identity Unlocked' : 'Identity Locked'}
-                            </div>
-                            <div style={{
-                                fontSize: '11px',
-                                color: 'var(--foreground-tertiary)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                            }}>
-                                {isIdentityUnlocked
-                                    ? 'You can perform actions'
-                                    : 'Click to unlock'}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    color: 'rgb(34, 197, 94)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    Identity Unlocked
+                                </div>
+                                <div style={{
+                                    fontSize: '11px',
+                                    color: 'var(--foreground-tertiary)',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    Click to lock
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <button
                         onClick={handleLogout}

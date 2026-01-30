@@ -109,6 +109,8 @@ export async function processGossip(
 
 /**
  * Send gossip to a specific node
+ * 
+ * SECURITY: Signs the gossip payload with the node's private key
  */
 export async function gossipToNode(
   targetDomain: string,
@@ -119,6 +121,16 @@ export async function gossipToNode(
   try {
     const payload = await buildGossipPayload(since);
 
+    // SECURITY: Sign the gossip payload with our private key
+    const { signPayload, getNodePrivateKey } = await import('./signature');
+    const privateKey = await getNodePrivateKey();
+    const signature = signPayload(payload, privateKey);
+
+    const signedPayload = {
+      ...payload,
+      signature,
+    };
+
     const baseUrl = targetDomain.startsWith('http') ? targetDomain : `https://${targetDomain}`;
     const url = `${baseUrl}/api/swarm/gossip`;
 
@@ -128,7 +140,7 @@ export async function gossipToNode(
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(signedPayload),
     });
 
     const durationMs = Date.now() - startTime;

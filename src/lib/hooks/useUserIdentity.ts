@@ -1,12 +1,19 @@
 /**
  * User Identity Hook
  * 
- * Manages the user's cryptographic identity using in-memory storage.
- * strict: NO localStorage for decrypted keys.
+ * Manages the user's cryptographic identity with persistent storage.
+ * Keys are encrypted at rest in IndexedDB and automatically restored
+ * across page refreshes and tabs.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { decryptPrivateKey } from '@/lib/crypto/private-key-client';
+import {
+  persistUnlockedKey,
+  tryRestoreKey,
+  clearPersistentKey,
+  hasPersistentKey,
+} from '@/lib/crypto/key-persistence';
 import {
   keyStore,
   importPrivateKey,
@@ -27,89 +34,102 @@ export interface UserIdentity {
 export function useUserIdentity() {
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(true);
 
-  // Check status on mount / updates
-  // Check status on mount / updates and poll for changes in singleton
+  // Check status on mount and try to restore from persistence
   useEffect(() => {
-    const check = () => {
-      const hasKey = !!keyStore.getPrivateKey();
-      setIsUnlocked(hasKey);
-
-      // Auto-sync identity if available in singleton but missing in local state
-      const globalIdentity = keyStore.getIdentity();
-      if (globalIdentity) {
-        setIdentity(prev => {
-          // Avoid rerenders if same
-          if (prev && prev.did === globalIdentity.did && prev.isUnlocked === hasKey) return prev;
-          return { ...globalIdentity, isUnlocked: hasKey };
-        });
-      } else {
-        // If global cleared, clear local
-        setIdentity(prev => prev ? null : null);
+    const checkAndRestore = async () => {
+      setIsRestoring(true);
+      try {
+        // First check if already in memory (hot reload scenario)
+        const hasKey = !!keyStore.getPrivateKey();
+        const globalIdentity = keyStore.getIdentity();
+        
+        if (hasKey && globalIdentity) {
+          setIdentity({ ...globalIdentity, isUnlocked: true });
+          setIsUnlocked(true);
+          setIsRestoring(false);
+          return;
+        }
+        
+        // Try to restore from persistent storage
+        const restoredKeyBytes = await tryRestoreKey();
+        if (restoredKeyBytes && globalIdentity) {
+          // Import the restored key as non-extractable
+          const cryptoKey = await importPrivateKey(restoredKeyBytes);
+          keyStore.setPrivateKey(cryptoKey);
+          setIdentity({ ...globalIdentity, isUnlocked: true });
+          setIsUnlocked(true);
+          console.log('[Identity] Auto-restored from persistent storage');
+        } else if (globalIdentity) {
+          // Have identity info but no key - locked state
+          setIdentity({ ...globalIdentity, isUnlocked: false });
+          setIsUnlocked(false);
+        }
+      } catch (error) {
+        console.error('[Identity] Error during restore:', error);
+      } finally {
+        setIsRestoring(false);
       }
     };
 
-    check();
-    // Poll fast to ensure UI updates are snappy
-    const interval = setInterval(check, 500);
-    return () => clearInterval(interval);
+    checkAndRestore();
   }, []);
 
   /**
-   * Initialize identity from user data & password
+   * Initialize identity from user data
+   * Call this when user data is loaded from the server
    */
-  const initializeIdentity = async (userData: {
+  const initializeIdentity = useCallback(async (userData: {
     did: string;
     handle: string;
     publicKey: string;
-    privateKeyEncrypted: string;
-  }, password?: string) => {
-
-    // If password provided, attempt unlock
-    // Save to singleton
+    privateKeyEncrypted?: string;
+  }) => {
     const coreIdentity = {
       did: userData.did,
       handle: userData.handle,
       publicKey: userData.publicKey
     };
     keyStore.setIdentity(coreIdentity);
-
-    // If password provided, attempt unlock
-    if (password) {
-      await unlockIdentity(userData.privateKeyEncrypted, password);
+    
+    // Try to auto-restore if we have persisted key
+    const restoredKeyBytes = await tryRestoreKey();
+    if (restoredKeyBytes) {
+      const cryptoKey = await importPrivateKey(restoredKeyBytes);
+      keyStore.setPrivateKey(cryptoKey);
+      setIdentity({ ...coreIdentity, isUnlocked: true });
+      setIsUnlocked(true);
     } else {
-      // Just set public identity info if locked
-      setIdentity({
-        ...coreIdentity,
-        isUnlocked: !!keyStore.getPrivateKey()
-      });
+      setIdentity({ ...coreIdentity, isUnlocked: false });
+      setIsUnlocked(false);
     }
-  };
+  }, []);
 
   /**
    * Unlock the identity with a password
+   * Also persists the key for auto-unlock on refresh
    */
-  const unlockIdentity = async (privateKeyEncrypted: string, password: string, userDid?: string, userHandle?: string, userPublicKey?: string) => {
+  const unlockIdentity = useCallback(async (
+    privateKeyEncrypted: string, 
+    password: string, 
+    userDid?: string, 
+    userHandle?: string, 
+    userPublicKey?: string
+  ) => {
     try {
       console.log('[Identity] Unlocking with DID:', userDid, 'Handle:', userHandle);
 
-      // Set identity first if provided (needed for storage key derivation)
+      // Set identity first if provided
       if (userDid && userHandle && userPublicKey) {
         keyStore.setIdentity({
           did: userDid,
           handle: userHandle,
           publicKey: userPublicKey
         });
-        console.log('[Identity] Identity set in keyStore');
-      } else {
-        console.warn('[Identity] Missing user info for identity setup');
       }
 
-      // 1. Decrypt the PEM/String from server (which is actually a base64 encoded PKCS8 export usually?)
-      // Wait, existing implementation returns a string.
-      // We need to verify what `decryptPrivateKey` returns.
-      // Assuming it returns the decrypted string (Base64 of PKCS8)
-
+      // Decrypt the private key
       const privateKeyPemOrBase64 = await decryptPrivateKey(privateKeyEncrypted, password);
 
       // Clean up if it's PEM to get Base64
@@ -121,53 +141,56 @@ export function useUserIdentity() {
           .replace(/\s/g, '');
       }
 
-      // 2. Import into CryptoKey
-      // We need ArrayBuffer
+      // Import into CryptoKey (non-extractable for security)
       const binaryDer = Buffer.from(privateKeyBase64, 'base64');
-      const cryptoKey = await importPrivateKey(binaryDer); // This is P-256 specific now
+      const cryptoKey = await importPrivateKey(binaryDer);
 
-      // 3. Store in Memory
+      // Store in memory
       keyStore.setPrivateKey(cryptoKey);
-      console.log('[Identity] Private key stored in memory');
+      
+      // PERSIST: Save raw key bytes for auto-restore on refresh
+      // We pass the raw bytes because the CryptoKey is non-extractable
+      await persistUnlockedKey(privateKeyBase64, password);
+      
+      console.log('[Identity] Private key stored in memory and persisted');
 
-      // 4. Update State
-      setIdentity(prev => prev ? { ...prev, isUnlocked: true } : null); // We need the other data...
+      // Update State
+      const globalIdentity = keyStore.getIdentity();
+      if (globalIdentity) {
+        setIdentity({ ...globalIdentity, isUnlocked: true });
+      }
       setIsUnlocked(true);
-
-
-
-      // If we didn't have identity wrapper set yet, we might need it.
-      // Usually initializeIdentity handles both.
 
     } catch (error) {
       console.error('[Identity] Failed to unlock identity:', error);
       throw new Error('Failed to unlock identity. Incorrect password?');
     }
-  };
+  }, []);
 
   /**
-   * Lock the identity
+   * Lock the identity (manual lock, keeps identity info)
    */
-  const lockIdentity = () => {
+  const lockIdentity = useCallback(async () => {
     keyStore.clear();
+    await clearPersistentKey();
     setIsUnlocked(false);
     setIdentity(prev => prev ? { ...prev, isUnlocked: false } : null);
-  };
+  }, []);
 
   /**
    * Clear the identity (logout)
    */
-  const clearIdentity = () => {
+  const clearIdentity = useCallback(async () => {
     keyStore.clear();
+    await clearPersistentKey();
     setIdentity(null);
     setIsUnlocked(false);
-  };
+  }, []);
 
   /**
    * Sign a user action
    */
-  const signUserAction = async (action: string, data: any) => {
-    // Re-check global state directly to be safe
+  const signUserAction = useCallback(async (action: string, data: any) => {
     const pk = keyStore.getPrivateKey();
     const id = keyStore.getIdentity();
 
@@ -175,13 +198,14 @@ export function useUserIdentity() {
       console.error('[Identity] Sign failed. Identity:', id, 'HasKey:', !!pk);
       throw new Error('Identity locked');
     }
-    // Use the fetched identity to ensure sync
+    
     return await createSignedAction(action, data, id.did, id.handle);
-  };
+  }, []);
 
   return {
     identity,
     isUnlocked,
+    isRestoring,  // New: lets UI know if we're checking persistence
     initializeIdentity,
     unlockIdentity,
     lockIdentity,

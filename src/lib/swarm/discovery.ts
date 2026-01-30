@@ -64,10 +64,22 @@ export async function buildAnnouncement(): Promise<SwarmAnnouncement> {
 
 /**
  * Announce this node to a remote node
+ * 
+ * SECURITY: Signs the announcement with the node's private key
  */
 export async function announceToNode(targetDomain: string): Promise<{ success: boolean; error?: string }> {
   try {
     const announcement = await buildAnnouncement();
+    
+    // SECURITY: Sign the announcement with our private key
+    const { signPayload, getNodePrivateKey } = await import('./signature');
+    const privateKey = await getNodePrivateKey();
+    const signature = signPayload(announcement, privateKey);
+    
+    const signedAnnouncement = {
+      ...announcement,
+      signature,
+    };
     
     const baseUrl = targetDomain.startsWith('http') ? targetDomain : `https://${targetDomain}`;
     const url = `${baseUrl}/api/swarm/announce`;
@@ -78,7 +90,7 @@ export async function announceToNode(targetDomain: string): Promise<{ success: b
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(announcement),
+      body: JSON.stringify(signedAnnouncement),
     });
 
     if (!response.ok) {
