@@ -53,7 +53,8 @@ export async function GET(request: Request, context: RouteContext) {
                             displayName: profile.displayName,
                             avatarUrl: profile.avatarUrl || null,
                             did: profile.did || '',
-                            isBot: profile.isBot || false
+                            isBot: profile.isBot || false,
+                            publicKey: profile.publicKey,
                         });
 
                         return NextResponse.json({

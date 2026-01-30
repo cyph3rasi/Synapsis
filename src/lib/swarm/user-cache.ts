@@ -7,6 +7,7 @@ export interface RemoteProfile {
     avatarUrl?: string | null;
     did: string;
     isBot?: boolean;
+    publicKey?: string;
 }
 
 /**
@@ -23,39 +24,27 @@ export async function upsertRemoteUser(profile: RemoteProfile) {
 
         if (existing) {
             // Update metadata if changed
-            let avatarUrl = profile.avatarUrl || existing.avatarUrl;
-
-            // If still no avatar, generate one and save it "permanently"
-            if (!avatarUrl) {
-                const { generateAndUploadAvatar } = await import('@/lib/auth/avatar');
-                avatarUrl = await generateAndUploadAvatar(profile.handle);
-            }
+            // Self-healing: Update public key if missing
+            const shouldUpdateKey = profile.publicKey && !existing.publicKey;
 
             await db.update(users)
                 .set({
                     displayName: profile.displayName || existing.displayName,
-                    avatarUrl: avatarUrl,
+                    avatarUrl: profile.avatarUrl || existing.avatarUrl,
                     isBot: profile.isBot ?? existing.isBot,
+                    publicKey: shouldUpdateKey ? profile.publicKey : undefined, // Only update if needed
                     updatedAt: new Date(),
                 })
                 .where(eq(users.id, existing.id));
         } else {
-            let avatarUrl = profile.avatarUrl;
-
-            // If no avatar provided, generate one
-            if (!avatarUrl) {
-                const { generateAndUploadAvatar } = await import('@/lib/auth/avatar');
-                avatarUrl = await generateAndUploadAvatar(profile.handle);
-            }
-
             // Create new placeholder user
             await db.insert(users).values({
                 did: profile.did,
                 handle: profile.handle, // user@domain
                 displayName: profile.displayName || profile.handle,
-                avatarUrl: avatarUrl,
+                avatarUrl: profile.avatarUrl || null,
                 isBot: profile.isBot || false,
-                publicKey: '', // We don't necessarily have their public key yet, but DMs often do
+                publicKey: profile.publicKey || '', // Cache provided key or default to empty
                 // Note: nodeId is null for remote placeholders unless we specifically link it
             });
         }
