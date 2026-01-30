@@ -331,6 +331,7 @@ export interface SwarmUserProfile {
   botOwnerHandle?: string; // Handle of the bot's owner (e.g., "user" or "user@domain")
   nodeDomain: string;
   chatPublicKey?: string;
+  publicKey?: string;
   did?: string;
 }
 
