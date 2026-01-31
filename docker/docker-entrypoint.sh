@@ -1,30 +1,32 @@
 #!/bin/sh
 # Synapsis Docker Entrypoint Script
-# Handles database migrations, seeding, and application startup
+# Handles database migrations and application startup
 
 set -e
 
 echo "========================================"
 echo "  Synapsis - Starting Application"
 echo "========================================"
+echo "  Time: $(date)"
+echo "  Working Dir: $(pwd)"
+echo "  Database URL: ${DATABASE_URL%%:*}://***@***"
+echo "========================================"
 
 # Function to wait for database
 wait_for_db() {
+    echo ""
     echo "⏳ Waiting for PostgreSQL..."
     
-    # Extract connection details from DATABASE_URL
-    # Format: postgresql://user:password@host:port/database
+    # Extract host and port from DATABASE_URL
     DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
     DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-    
-    # Default values
     DB_HOST=${DB_HOST:-postgres}
     DB_PORT=${DB_PORT:-5432}
     
     max_retries=30
     retry_count=0
     
-    while ! nc -z "$DB_HOST" "$DB_PORT"; do
+    while ! nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; do
         retry_count=$((retry_count + 1))
         if [ $retry_count -ge $max_retries ]; then
             echo "❌ Failed to connect to database after $max_retries attempts"
@@ -41,33 +43,36 @@ wait_for_db() {
 run_migrations() {
     echo ""
     echo "🔄 Running database migrations..."
+    echo "   Current directory: $(pwd)"
+    echo "   Drizzle directory contents:"
+    ls -la drizzle/ 2>/dev/null || echo "   (drizzle dir not found or empty)"
     
-    # Run drizzle-kit push to create/update database schema
-    # This creates tables if they don't exist
-    npx drizzle-kit push --force 2>&1 || {
-        echo "⚠️  Migration push returned non-zero (may be already up to date or error)"
-        echo "   Continuing anyway..."
+    # Run migrations using npm script
+    # This uses the drizzle.config.ts which should be in the app root
+    echo "   Executing: npm run db:push"
+    npm run db:push 2>&1 || {
+        echo "⚠️  Migration command exited with error (may be already up to date)"
     }
     
-    echo "✅ Migration check complete"
+    echo "✅ Migration step complete"
 }
 
-# Wait for database to be ready
+# Wait for database
 wait_for_db
 
 # Run migrations
 run_migrations
 
-# Display startup info
+# Final startup message
 echo ""
 echo "========================================"
 echo "  🚀 Starting Synapsis Server"
 echo "========================================"
 echo "  Environment: $NODE_ENV"
 echo "  Port: $PORT"
-echo "  Database: Connected"
+echo "  Node Version: $(node --version)"
 echo "========================================"
 echo ""
 
-# Execute the main command (passed as arguments)
+# Execute the main command
 exec "$@"
