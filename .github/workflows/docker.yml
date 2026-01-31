@@ -1,14 +1,17 @@
 name: Build and Push Docker Image to GHCR
 
 on:
+  # Manual trigger only - you decide when to build
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (default: latest)'
+        required: false
+        default: 'latest'
+  # Also build on version tags
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
 
 env:
   REGISTRY: ghcr.io
@@ -42,14 +45,12 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha,prefix=,suffix=,format=short
-            # Always tag main branch as latest
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Use input tag for manual runs, 'latest' for tag pushes
+            type=raw,value=${{ inputs.tag || 'latest' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
