@@ -64,16 +64,15 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy node_modules from builder (includes all deps needed for migrations)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+
 # Copy drizzle migrations, config, and schema (needed for migrations)
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/src/db/schema.ts ./src/db/schema.ts
-
-# Install drizzle-kit and pg (postgres driver) for migrations
-# Must be installed locally (not just globally) for drizzle.config.ts to find them
-RUN npm install drizzle-kit pg --save && npm cache clean --force
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/docker/docker-entrypoint.sh ./
