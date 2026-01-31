@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Empty turbopack config to silence the warning
+  // Enable standalone output for Docker deployment
+  // This creates a minimal server.js that doesn't require full node_modules
+  output: 'standalone',
+  
+  // Turbopack configuration
   turbopack: {},
 };
 
