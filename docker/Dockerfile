@@ -86,8 +86,9 @@ USER nextjs
 EXPOSE 3000
 
 # Health check - longer start period to allow migrations to run
+# Using 127.0.0.1 instead of localhost to avoid IPv6 issues
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+    CMD node -e "require('http').get('http://127.0.0.1:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # Set the entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]
