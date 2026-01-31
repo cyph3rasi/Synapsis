@@ -15,8 +15,8 @@ WORKDIR /app
 # Copy package files for efficient layer caching
 COPY package.json package-lock.json* ./
 
-# Install production dependencies only (using ci for reproducible builds)
-RUN npm ci --only=production --ignore-scripts && npm cache clean --force
+# Install all dependencies (production + dev all in dependencies now)
+RUN npm ci --ignore-scripts && npm cache clean --force
 
 # ============================================
 # Stage 2: Builder
@@ -64,14 +64,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy node_modules from builder (includes all deps needed for migrations)
+# Copy node_modules from builder (includes ALL dependencies)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # Copy drizzle migrations, config, and schema (needed for migrations)
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
-COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/src/db/schema.ts ./src/db/schema.ts
 
 # Copy entrypoint script
