@@ -72,8 +72,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/src/db/schema.ts ./src/db/schema.ts
 
 # Install drizzle-kit and pg (postgres driver) for migrations
-# These are needed at runtime for the entrypoint to run migrations
-RUN npm install -g drizzle-kit pg && npm cache clean --force
+# Must be installed locally (not just globally) for drizzle.config.ts to find them
+RUN npm install drizzle-kit pg --save && npm cache clean --force
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/docker/docker-entrypoint.sh ./
