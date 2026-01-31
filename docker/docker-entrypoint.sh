@@ -43,41 +43,20 @@ run_migrations() {
     echo "🔄 Running database migrations..."
     
     # Run drizzle-kit push to create/update database schema
-    drizzle-kit push --force || {
-        echo "⚠️  Migration completed or already up to date"
+    # This creates tables if they don't exist
+    npx drizzle-kit push --force 2>&1 || {
+        echo "⚠️  Migration push returned non-zero (may be already up to date or error)"
+        echo "   Continuing anyway..."
     }
     
     echo "✅ Migration check complete"
 }
-
-# Function to check/create initial admin user
-check_admin_setup() {
-    echo ""
-    echo "👤 Checking admin setup..."
-    
-    # This is a placeholder - you can add logic here to ensure
-    # at least one admin user exists on first run
-    # For now, we rely on the application to handle this
-    
-    echo "✅ Admin check complete (handled by application)"
-}
-
-# Install netcat for database connectivity check if not present
-if ! command -v nc >/dev/null 2>&1; then
-    echo "📦 Installing netcat for database checks..."
-    # Note: In Alpine, nc is typically included in busybox
-    # If not, we'll proceed anyway and let the app handle connection
-    echo "   (Skipping - using application-level retry logic)"
-fi
 
 # Wait for database to be ready
 wait_for_db
 
 # Run migrations
 run_migrations
-
-# Check admin setup
-check_admin_setup
 
 # Display startup info
 echo ""

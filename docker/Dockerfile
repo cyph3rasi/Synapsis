@@ -65,13 +65,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy drizzle migrations and config
-COPY --from=builder --chown=nextjs:nodejs /app/src/db/migrations ./src/db/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./
 
-# Install drizzle-kit globally for migrations (needed at runtime)
-RUN npm install -g drizzle-kit && npm cache clean --force
+# Install drizzle-kit and pg (postgres driver) for migrations
+# These are needed at runtime for the entrypoint to run migrations
+RUN npm install -g drizzle-kit pg && npm cache clean --force
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/docker/docker-entrypoint.sh ./
@@ -83,8 +84,8 @@ USER nextjs
 # Expose the application port
 EXPOSE 3000
 
-# Health check to ensure container is running properly
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check - longer start period to allow migrations to run
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # Set the entrypoint
