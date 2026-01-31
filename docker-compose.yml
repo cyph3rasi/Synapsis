@@ -1,11 +1,13 @@
-# Synapsis - Docker Compose
-# One-command deployment: docker-compose up -d
-# 
+# Synapsis - Docker Compose (Production)
 # Uses pre-built image from GitHub Container Registry
-# Users just download this file + Caddyfile + .env, no git clone needed
+#
+# Quick Start:
+# 1. Download this file, Caddyfile, and .env.example
+# 2. Copy .env.example to .env and fill in your values
+# 3. Run: docker compose up -d
 #
 # Services:
-# - Synapsis Next.js application (pre-built image)
+# - Synapsis Next.js application (from GHCR)
 # - PostgreSQL database (persistent storage)
 # - Caddy reverse proxy with automatic SSL
 
@@ -33,28 +35,48 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
 
   # ============================================
-  # Synapsis Application (Pre-built Image)
+  # Synapsis Application (from GHCR)
   # ============================================
   app:
     image: ghcr.io/cyph3rasi/synapsis:latest
     container_name: synapsis-app
     restart: unless-stopped
     environment:
+      # Database connection
       DATABASE_URL: postgresql://${DB_USER:-synapsis}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-synapsis}
+      
+      # Authentication
       AUTH_SECRET: ${AUTH_SECRET}
+      
+      # Domain configuration
       NEXT_PUBLIC_NODE_DOMAIN: ${DOMAIN:-localhost}
+      
+      # Admin emails
       ADMIN_EMAILS: ${ADMIN_EMAILS}
+      
+      # S3 Storage configuration
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
       STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
       STORAGE_BUCKET: ${STORAGE_BUCKET}
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
       STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL}
+      
+      # Optional settings
       BOT_MAX_PER_USER: ${BOT_MAX_PER_USER:-5}
+      
+      # Node environment
       NODE_ENV: production
     volumes:
+      # Uploads directory (if using local file storage)
       - uploads_data:/app/uploads
     networks:
       - synapsis-network
@@ -67,6 +89,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
 
   # ============================================
   # Caddy Reverse Proxy (Automatic SSL)

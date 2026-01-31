@@ -109,9 +109,39 @@ Synapsis operates on the **Swarm** — a native peer-to-peer network designed sp
 
 ---
 
-## Run Your Own Node
+## 🚀 Run Your Own Node
 
-For complete setup instructions, visit the official documentation:
+### Quick Start (Docker - Recommended)
+
+Deploy your own Synapsis node in minutes using Docker:
+
+```bash
+# 1. Create directory and download files
+mkdir -p /opt/synapsis && cd /opt/synapsis
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/Caddyfile
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/.env.example
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your domain, database password, auth secret, etc.
+
+# 3. Start your node
+docker compose up -d
+```
+
+Your node will be available at `https://your-domain.com` with automatic SSL.
+
+**Updating:**
+```bash
+docker compose pull && docker compose up -d
+```
+
+For detailed instructions, see [docker/README.md](docker/README.md).
+
+### Documentation
+
+For complete setup instructions, visit:
 
 **📚 [docs.synapsis.social/run-your-own-node](https://docs.synapsis.social/run-your-own-node)**
 
