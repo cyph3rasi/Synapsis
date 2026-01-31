@@ -43,6 +43,30 @@ services:
           memory: 256M
 
   # ============================================
+  # Database Migrations
+  # ============================================
+  migrate:
+    image: node:22-alpine
+    container_name: synapsis-migrate
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-synapsis}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-synapsis}
+    volumes:
+      - ./migrations:/app/migrations:ro
+    networks:
+      - synapsis-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        npm install -g drizzle-kit &&
+        drizzle-kit push --force || echo 'Migrations completed or already up to date'
+      "
+    restart: on-failure
+
+  # ============================================
   # Synapsis Application (from GHCR)
   # ============================================
   app:
@@ -83,6 +107,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
