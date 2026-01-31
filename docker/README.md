@@ -1,24 +1,31 @@
 # Synapsis Docker Production Deployment
 
-One-command Docker deployment for Synapsis that solves the "user modifies file and breaks git sync" problem.
+One-command Docker deployment for Synapsis using pre-built images from GitHub Container Registry.
 
 ## 🚀 Quick Start
 
 ```bash
-cd /var/www/Synapsis/docker
+# 1. Create a directory for your Synapsis instance
+mkdir -p /opt/synapsis
+cd /opt/synapsis
 
-# 1. Copy and edit environment variables
+# 2. Download the required files
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/Caddyfile
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/.env.example
+
+# 3. Set up environment variables
 cp .env.example .env
 nano .env  # Edit all required values
 
-# 2. Start the stack
-docker-compose up -d
+# 4. Start the stack
+docker compose up -d
 
-# 3. Check logs
-docker-compose logs -f
+# 5. Check logs
+docker compose logs -f
 ```
 
-Your Synapsis instance will be available at `http://localhost` (or your configured domain).
+Your Synapsis instance will be available at `https://your-domain.com` (Caddy automatically handles SSL).
 
 ---
 
@@ -44,7 +51,7 @@ newgrp docker
 
 # Verify
 docker --version
-docker-compose --version
+docker compose version
 ```
 
 ---
@@ -56,8 +63,8 @@ docker-compose --version
 Copy `.env.example` to `.env` and configure:
 
 ```bash
-cd /var/www/Synapsis/docker
 cp .env.example .env
+nano .env
 ```
 
 **Required settings:**
@@ -67,66 +74,36 @@ cp .env.example .env
 - `ADMIN_EMAILS` - Admin user email(s)
 - `STORAGE_*` - S3-compatible storage credentials
 
-### 2. SSL/HTTPS Setup
+### 2. DNS Setup
 
-#### Option A: Let's Encrypt (Recommended)
-
-1. Start with HTTP first:
-```bash
-docker-compose up -d
+Point your domain's A record to your server's IP address:
+```
+A  synapsis.example.com  →  YOUR_SERVER_IP
 ```
 
-2. Obtain SSL certificates:
-```bash
-docker run -it --rm \
-  -v ./certbot_data:/etc/letsencrypt \
-  -v ./certbot_www:/var/www/certbot \
-  -p 80:80 \
-  certbot/certbot certonly \
-  --standalone \
-  -d your-domain.com
-```
-
-3. Enable SSL configuration:
-```bash
-cd nginx/conf.d
-mv default.conf default.conf.http
-mv default.conf.ssl default.conf
-# Edit default.conf and replace ${DOMAIN} with your actual domain
-docker-compose restart nginx
-```
-
-4. Uncomment the certbot service in docker-compose.yml for auto-renewal.
-
-#### Option B: Custom SSL Certificates
-
-Place your certificates in `./certbot_data/live/your-domain.com/`:
-- `fullchain.pem`
-- `privkey.pem`
+Caddy will automatically obtain and renew SSL certificates via Let's Encrypt.
 
 ---
 
 ## 🔄 Updates
 
-### Standard Update Process
+Updating is now simple - just pull the latest image:
 
 ```bash
-cd /var/www/Synapsis/docker
+cd /opt/synapsis
 
-# 1. Pull latest changes
-git pull origin main
+# Pull the latest image
+docker compose pull
 
-# 2. Rebuild and restart
-docker-compose down
-docker-compose pull  # If using pre-built images
-docker-compose up -d --build
+# Restart with new image
+docker compose up -d
 
-# 3. Run migrations (if needed)
-docker-compose exec app npx drizzle-kit push
+# Run migrations if needed
+docker compose exec app npx drizzle-kit push
 
-# 4. Verify
-docker-compose ps
-docker-compose logs -f app
+# Verify
+docker compose ps
+docker compose logs -f app
 ```
 
 ### One-Command Update Script
@@ -134,12 +111,17 @@ docker-compose logs -f app
 Create `update.sh`:
 ```bash
 #!/bin/bash
-cd /var/www/Synapsis/docker
-git pull origin main
-docker-compose down
-docker-compose up -d --build
-docker-compose exec -T app npx drizzle-kit push || true
+cd /opt/synapsis
+docker compose pull
+docker compose up -d
+docker compose exec -T app npx drizzle-kit push || true
 echo "✅ Update complete!"
+```
+
+Make it executable and run:
+```bash
+chmod +x update.sh
+./update.sh
 ```
 
 ---
@@ -147,20 +129,14 @@ echo "✅ Update complete!"
 ## 📁 Directory Structure
 
 ```
-/var/www/Synapsis/docker/
-├── docker-compose.yml      # Main orchestration file
-├── Dockerfile              # Multi-stage build
-├── docker-entrypoint.sh    # Startup script
+/opt/synapsis/
+├── docker-compose.yml      # Main orchestration file (downloaded from GitHub)
+├── Caddyfile               # Caddy reverse proxy config
 ├── .env                    # Your environment variables
-├── .env.example            # Template
-├── .dockerignore           # Build exclusions
-├── nginx/
-│   ├── nginx.conf          # Main Nginx config
-│   └── conf.d/
-│       ├── default.conf          # HTTP config
-│       └── default.conf.ssl      # HTTPS config
-└── README.md               # This file
+└── update.sh               # Optional update script
 ```
+
+**Note:** You no longer need to clone the entire Git repository. Just download the three files above.
 
 ---
 
@@ -168,45 +144,45 @@ echo "✅ Update complete!"
 
 ### View Logs
 ```bash
-docker-compose logs -f app      # Application logs
-docker-compose logs -f nginx    # Nginx logs
-docker-compose logs -f postgres # Database logs
-docker-compose logs -f          # All logs
+docker compose logs -f app      # Application logs
+docker compose logs -f caddy    # Caddy logs
+docker compose logs -f postgres # Database logs
+docker compose logs -f          # All logs
 ```
 
 ### Database Operations
 ```bash
 # Access database shell
-docker-compose exec postgres psql -U synapsis -d synapsis
+docker compose exec postgres psql -U synapsis -d synapsis
 
 # Backup database
-docker-compose exec postgres pg_dump -U synapsis synapsis > backup.sql
+docker compose exec postgres pg_dump -U synapsis synapsis > backup.sql
 
 # Restore database
-docker-compose exec -T postgres psql -U synapsis -d synapsis < backup.sql
+docker compose exec -T postgres psql -U synapsis -d synapsis < backup.sql
 
 # Run migrations manually
-docker-compose exec app npx drizzle-kit push
+docker compose exec app npx drizzle-kit push
 ```
 
 ### Container Management
 ```bash
 # Restart services
-docker-compose restart app
-docker-compose restart nginx
+docker compose restart app
+docker compose restart caddy
 
 # Stop everything
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (⚠️ destroys data!)
-docker-compose down -v
+docker compose down -v
 
 # View running containers
-docker-compose ps
+docker compose ps
 
 # Enter container shell
-docker-compose exec app sh
-docker-compose exec postgres sh
+docker compose exec app sh
+docker compose exec postgres sh
 ```
 
 ---
@@ -215,10 +191,10 @@ docker-compose exec postgres sh
 
 This Docker setup includes:
 
-- **Immutable source code** - Application runs from image, not bind-mounted files
+- **Immutable source code** - Application runs from pre-built image
 - **Non-root execution** - App runs as unprivileged user
 - **Network isolation** - Services communicate via internal Docker network
-- **Rate limiting** - Nginx protects against brute force attacks
+- **Automatic HTTPS** - Caddy handles SSL certificates
 - **Security headers** - X-Frame-Options, X-Content-Type-Options, etc.
 - **Resource limits** - Memory constraints on all containers
 - **Health checks** - Automatic container health monitoring
@@ -230,28 +206,28 @@ This Docker setup includes:
 ### Container won't start
 ```bash
 # Check for configuration errors
-docker-compose config
+docker compose config
 
 # View detailed logs
-docker-compose logs app --tail=100
+docker compose logs app --tail=100
 ```
 
 ### Database connection failed
 ```bash
 # Check database is healthy
-docker-compose ps
+docker compose ps
 
 # Verify environment variables
-docker-compose exec app env | grep DATABASE
+docker compose exec app env | grep DATABASE
 ```
 
 ### SSL certificate issues
 ```bash
-# Test SSL configuration
-docker-compose exec nginx nginx -t
+# Check Caddy logs
+docker compose logs caddy
 
-# Check certificate files
-ls -la certbot_data/live/
+# Test Caddy configuration
+docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 ```
 
 ### Port already in use
@@ -262,13 +238,22 @@ sudo netstat -tlnp | grep :80
 # Change ports in docker-compose.yml if needed
 ```
 
+### Image pull fails
+```bash
+# Check if image exists
+docker pull ghcr.io/cyph3rasi/synapsis:latest
+
+# View available tags at:
+# https://github.com/cyph3rasi/synapsis/pkgs/container/synapsis
+```
+
 ---
 
 ## 📊 Monitoring
 
 ### Health Checks
-- App: `http://your-domain/api/health`
-- Nginx: `http://your-domain/nginx-health`
+- App: `https://your-domain.com/api/health`
+- Caddy: Built into the Caddyfile
 
 ### Resource Usage
 ```bash
@@ -285,7 +270,7 @@ docker system df
 
 ### Automated Backup Script
 
-Create `/var/www/Synapsis/docker/backup.sh`:
+Create `/opt/synapsis/backup.sh`:
 ```bash
 #!/bin/bash
 BACKUP_DIR="/var/backups/synapsis"
@@ -293,7 +278,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p $BACKUP_DIR
 
 # Database backup
-docker-compose exec -T postgres pg_dump -U synapsis synapsis > "$BACKUP_DIR/db_$DATE.sql"
+docker compose exec -T postgres pg_dump -U synapsis synapsis > "$BACKUP_DIR/db_$DATE.sql"
 
 # Uploads backup
 tar -czf "$BACKUP_DIR/uploads_$DATE.tar.gz" -C /var/lib/docker/volumes/synapsis_uploads_data/_data .
@@ -306,17 +291,34 @@ echo "✅ Backup complete: $DATE"
 
 Add to crontab:
 ```bash
-0 2 * * * /var/www/Synapsis/docker/backup.sh >> /var/log/synapsis-backup.log 2>&1
+0 2 * * * /opt/synapsis/backup.sh >> /var/log/synapsis-backup.log 2>&1
 ```
+
+---
+
+## 🏗️ Building from Source (Advanced)
+
+If you prefer to build the image locally instead of using the pre-built one:
+
+```bash
+# Clone the repository
+git clone https://github.com/cyph3rasi/synapsis.git
+cd synapsis/docker
+
+# Build and run
+docker compose -f docker-compose.build.yml up -d --build
+```
+
+See `docker-compose.yml` in the docker/ directory for the build configuration.
 
 ---
 
 ## 📞 Support
 
 For issues or questions:
-1. Check logs: `docker-compose logs -f`
-2. Review configuration: `docker-compose config`
-3. Consult the main Synapsis documentation
+1. Check logs: `docker compose logs -f`
+2. Review configuration: `docker compose config`
+3. Consult the main Synapsis documentation: https://docs.synapsis.social
 
 ---
 

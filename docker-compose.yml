@@ -1,0 +1,139 @@
+# Synapsis - Docker Compose (Production)
+# Uses pre-built image from GitHub Container Registry
+#
+# Quick Start:
+# 1. Download this file, Caddyfile, and .env.example
+# 2. Copy .env.example to .env and fill in your values
+# 3. Run: docker compose up -d
+#
+# Services:
+# - Synapsis Next.js application (from GHCR)
+# - PostgreSQL database (persistent storage)
+# - Caddy reverse proxy with automatic SSL
+
+version: "3.8"
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: synapsis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-synapsis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_NAME:-synapsis}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - synapsis-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-synapsis} -d ${DB_NAME:-synapsis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # ============================================
+  # Synapsis Application (from GHCR)
+  # ============================================
+  app:
+    image: ghcr.io/cyph3rasi/synapsis:latest
+    container_name: synapsis-app
+    restart: unless-stopped
+    environment:
+      # Database connection
+      DATABASE_URL: postgresql://${DB_USER:-synapsis}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-synapsis}
+      
+      # Authentication
+      AUTH_SECRET: ${AUTH_SECRET}
+      
+      # Domain configuration
+      NEXT_PUBLIC_NODE_DOMAIN: ${DOMAIN:-localhost}
+      
+      # Admin emails
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
+      
+      # S3 Storage configuration
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL}
+      
+      # Optional settings
+      BOT_MAX_PER_USER: ${BOT_MAX_PER_USER:-5}
+      
+      # Node environment
+      NODE_ENV: production
+    volumes:
+      # Uploads directory (if using local file storage)
+      - uploads_data:/app/uploads
+    networks:
+      - synapsis-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # ============================================
+  # Caddy Reverse Proxy (Automatic SSL)
+  # ============================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: synapsis-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - synapsis-network
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+
+# ============================================
+# Persistent Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  synapsis-network:
+    driver: bridge
