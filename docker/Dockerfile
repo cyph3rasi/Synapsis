@@ -43,7 +43,7 @@ RUN npm run build
 # Stage 3: Production Runner
 # ============================================
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl
+RUN apk add --no-cache libc6-compat openssl netcat-openbsd
 
 WORKDIR /app
 
@@ -64,10 +64,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy drizzle migrations for runtime database updates
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
+# Copy drizzle migrations and config
+COPY --from=builder --chown=nextjs:nodejs /app/src/db/migrations ./src/db/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json ./
+
+# Install drizzle-kit globally for migrations (needed at runtime)
+RUN npm install -g drizzle-kit && npm cache clean --force
 
 # Copy entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/docker/docker-entrypoint.sh ./

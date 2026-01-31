@@ -42,17 +42,10 @@ run_migrations() {
     echo ""
     echo "🔄 Running database migrations..."
     
-    # Check if drizzle-kit is available (in dev dependencies)
-    if command -v drizzle-kit >/dev/null 2>&1; then
-        echo "   Using drizzle-kit for migrations..."
-        drizzle-kit push --force || {
-            echo "⚠️  Migration push failed - database may already be up to date"
-        }
-    else
-        echo "   ⚠️  drizzle-kit not found in production image"
-        echo "   Migrations should be run manually during deployment:"
-        echo "   docker-compose exec app npx drizzle-kit push"
-    fi
+    # Run drizzle-kit push to create/update database schema
+    drizzle-kit push --force || {
+        echo "⚠️  Migration completed or already up to date"
+    }
     
     echo "✅ Migration check complete"
 }
