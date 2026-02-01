@@ -17,7 +17,7 @@ import {
   BotHandleTakenError,
   BotValidationError,
 } from '@/lib/bots/botManager';
-import { generateAndUploadAvatarToUserStorage } from '@/lib/storage/s3';
+import { generateAndUploadAvatarToUserStorage, decryptS3Credentials } from '@/lib/storage/s3';
 
 // Schema for creating a bot
 const createBotSchema = z.object({
@@ -68,14 +68,20 @@ export async function POST(request: Request) {
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
         const botHandle = `${data.handle.toLowerCase()}@${nodeDomain}`;
         
-        botAvatarUrl = await generateAndUploadAvatarToUserStorage(
-          botHandle,
-          user.storageEndpoint ?? undefined,
-          user.storageRegion || 'auto',
-          user.storageBucket,
+        // Decrypt the storage credentials
+        const { accessKeyId, secretAccessKey } = decryptS3Credentials(
           user.storageAccessKeyEncrypted,
           user.storageSecretKeyEncrypted,
           data.ownerPassword
+        );
+        
+        botAvatarUrl = await generateAndUploadAvatarToUserStorage(
+          botHandle,
+          user.storageEndpoint,
+          user.storageRegion || 'auto',
+          user.storageBucket,
+          accessKeyId,
+          secretAccessKey
         );
       } catch (err) {
         console.error('[Bot API] Failed to generate bot avatar:', err);

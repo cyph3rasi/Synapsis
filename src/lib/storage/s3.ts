@@ -25,7 +25,7 @@ interface StorageUploadResult {
 /**
  * Decrypt S3 credentials from encrypted storage
  */
-function decryptS3Credentials(
+export function decryptS3Credentials(
   encryptedAccessKey: string,
   encryptedSecretKey: string,
   password: string
