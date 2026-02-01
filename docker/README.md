@@ -27,7 +27,6 @@ Your node is live at `https://your-domain.com` with automatic SSL.
 | **Server** | 2GB RAM, 2 CPU cores, 20GB SSD (minimum) |
 | **Domain** | A domain or subdomain pointing to your server |
 | **Docker** | Version 24.0+ with Docker Compose 2.20+ |
-| **Storage** | S3-compatible service (AWS S3, MinIO, Wasabi, Backblaze B2, etc.) |
 
 **Install Docker (Ubuntu/Debian):**
 ```bash
@@ -48,7 +47,6 @@ Edit `.env` and set these required values:
 | `DB_PASSWORD` | Strong password for PostgreSQL |
 | `AUTH_SECRET` | Run: `openssl rand -hex 32` |
 | `ADMIN_EMAILS` | Your email address |
-| `STORAGE_*` | Your S3-compatible storage credentials |
 
 **Port Configuration:**
 - `PORT=auto` (default) — Automatically finds an available port between 3000-3020
@@ -130,6 +128,23 @@ docker pull ghcr.io/cyph3rasi/synapsis:latest
 # Check available tags at:
 # https://github.com/cyph3rasi/synapsis/pkgs/container/synapsis
 ```
+
+---
+
+## 🖼️ Enabling Image Uploads
+
+To enable image uploads, configure S3-compatible storage in your `.env`:
+
+```env
+STORAGE_ENDPOINT=https://s3.your-provider.com
+STORAGE_REGION=us-east-1
+STORAGE_BUCKET=your-bucket
+STORAGE_ACCESS_KEY=your-access-key
+STORAGE_SECRET_KEY=your-secret-key
+STORAGE_PUBLIC_BASE_URL=https://cdn.your-domain.com
+```
+
+Then restart: `docker compose down && docker compose up -d`
 
 ---
 
