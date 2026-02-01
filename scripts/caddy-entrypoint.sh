@@ -1,0 +1,40 @@
+#!/bin/sh
+# Caddy Entrypoint Script for Synapsis
+# Reads the dynamic port from the shared file and starts Caddy
+
+set -e
+
+SHARED_PORT_FILE="/var/run/synapsis/port"
+DEFAULT_PORT=3000
+
+# Wait for the port file to exist (with timeout)
+echo "⏳ Waiting for Synapsis app to announce its port..."
+TIMEOUT=60
+ELAPSED=0
+
+while [ ! -f "$SHARED_PORT_FILE" ] && [ $ELAPSED -lt $TIMEOUT ]; do
+    sleep 1
+    ELAPSED=$((ELAPSED + 1))
+done
+
+if [ -f "$SHARED_PORT_FILE" ]; then
+    APP_PORT=$(cat "$SHARED_PORT_FILE")
+    echo "✅ Found Synapsis app on port: $APP_PORT"
+else
+    echo "⚠️ Port file not found after ${TIMEOUT}s, using default port: $DEFAULT_PORT"
+    APP_PORT=$DEFAULT_PORT
+fi
+
+export APP_PORT
+
+# Validate that APP_PORT is a number
+if ! echo "$APP_PORT" | grep -qE '^[0-9]+$'; then
+    echo "❌ Invalid port number: $APP_PORT"
+    exit 1
+fi
+
+echo "🌐 Starting Caddy reverse proxy to app:$APP_PORT..."
+echo ""
+
+# Start Caddy with the environment variable set
+exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

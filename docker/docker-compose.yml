@@ -52,16 +52,16 @@ services:
     environment:
       # Database connection
       DATABASE_URL: postgresql://${DB_USER:-synapsis}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-synapsis}
-      
+
       # Authentication
       AUTH_SECRET: ${AUTH_SECRET}
-      
+
       # Domain configuration
       NEXT_PUBLIC_NODE_DOMAIN: ${DOMAIN:-localhost}
-      
+
       # Admin emails
       ADMIN_EMAILS: ${ADMIN_EMAILS}
-      
+
       # S3 Storage configuration
       STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
       STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
@@ -69,15 +69,20 @@ services:
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
       STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL}
-      
+
       # Optional settings
       BOT_MAX_PER_USER: ${BOT_MAX_PER_USER:-5}
-      
+
+      # Port configuration (auto or specific port)
+      PORT: ${PORT:-3000}
+
       # Node environment
       NODE_ENV: production
     volumes:
       # Uploads directory (if using local file storage)
       - uploads_data:/app/uploads
+      # Shared volume for port coordination with Caddy
+      - port_data:/var/run/synapsis
     networks:
       - synapsis-network
     depends_on:
@@ -108,8 +113,11 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-entrypoint.sh:/usr/local/bin/caddy-entrypoint.sh:ro
       - caddy_data:/data
       - caddy_config:/config
+      # Shared volume for port coordination with app
+      - port_data:/var/run/synapsis
     networks:
       - synapsis-network
     depends_on:
@@ -117,6 +125,8 @@ services:
         condition: service_healthy
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+    # Use custom entrypoint to read dynamic port from app
+    entrypoint: ["/usr/local/bin/caddy-entrypoint.sh"]
 
 # ============================================
 # Persistent Volumes
@@ -129,6 +139,8 @@ volumes:
   caddy_data:
     driver: local
   caddy_config:
+    driver: local
+  port_data:
     driver: local
 
 # ============================================

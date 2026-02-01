@@ -51,6 +51,9 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# Create shared directory for port file (must be writable by nextjs)
+RUN mkdir -p /var/run/synapsis && chown nextjs:nodejs /var/run/synapsis
+
 # Set production environment
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -80,16 +83,13 @@ RUN chmod +x ./docker-entrypoint.sh
 # Switch to non-root user
 USER nextjs
 
-# Expose the application port
-EXPOSE 3000
+# Expose port range for auto-detection
+EXPOSE 3000-3020
 
 # Health check - longer start period to allow migrations to run
-# Using 127.0.0.1 instead of localhost to avoid IPv6 issues
+# Uses PORT environment variable (set by entrypoint)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD node -e "require('http').get('http://127.0.0.1:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+    CMD wget -q --spider http://127.0.0.1:${PORT:-3000}/api/health || exit 1
 
 # Set the entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]
-
-# Default command (can be overridden)
-CMD ["node", "server.js"]

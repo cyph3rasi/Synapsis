@@ -2,8 +2,8 @@
 # Automatic HTTPS via Let's Encrypt
 
 {$DOMAIN} {
-    # Reverse proxy to Synapsis app
-    reverse_proxy app:3000
+    # Reverse proxy to Synapsis app (port is set via APP_PORT env var)
+    reverse_proxy app:{$APP_PORT:3000}
     
     # Enable compression
     encode gzip

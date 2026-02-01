@@ -1,15 +1,85 @@
 #!/bin/sh
 # Synapsis Docker Entrypoint Script
-# Handles database migrations and application startup
+# Handles database migrations, port detection, and application startup
 
 set -e
 
+# ============================================
+# Port Detection Configuration
+# ============================================
+PORT_START=${PORT_START:-3000}
+PORT_END=${PORT_END:-3020}
+
+# Function to check if a port is available
+check_port_available() {
+    local port=$1
+    if ! nc -z localhost "$port" 2>/dev/null; then
+        return 0  # Port is available
+    else
+        return 1  # Port is in use
+    fi
+}
+
+# Function to find first available port in range
+find_available_port() {
+    local start=$1
+    local end=$2
+    
+    for port in $(seq "$start" "$end"); do
+        if check_port_available "$port"; then
+            echo "$port"
+            return 0
+        fi
+    done
+    
+    echo "ERROR: No available ports found in range $start-$end" >&2
+    return 1
+}
+
+# Handle PORT=auto
+if [ "${PORT}" = "auto" ]; then
+    echo "🔍 PORT=auto detected, scanning for available port in range ${PORT_START}-${PORT_END}..."
+    
+    DETECTED_PORT=$(find_available_port "$PORT_START" "$PORT_END")
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to find an available port. Exiting."
+        exit 1
+    fi
+    
+    export PORT="$DETECTED_PORT"
+    echo "✅ Using automatically detected port: $PORT"
+else
+    echo "📡 Using configured port: $PORT"
+fi
+
+# Ensure PORT is set
+if [ -z "$PORT" ]; then
+    echo "⚠️ PORT not set, defaulting to 3000"
+    export PORT=3000
+fi
+
+# Write port to shared file for Caddy to read
+SHARED_PORT_FILE="/var/run/synapsis/port"
+mkdir -p "$(dirname "$SHARED_PORT_FILE")"
+echo "$PORT" > "$SHARED_PORT_FILE"
+echo "📝 Port $PORT written to $SHARED_PORT_FILE"
+
+# Export HOSTNAME for Next.js
+export HOSTNAME="0.0.0.0"
+
+# ============================================
+# Database Migrations
+# ============================================
+
+echo ""
 echo "========================================"
 echo "  Synapsis - Starting Application"
 echo "========================================"
 echo "  Time: $(date)"
 echo "  Working Dir: $(pwd)"
 echo "  Database URL: ${DATABASE_URL%%:*}://***@***"
+echo "  Port: $PORT"
 echo "========================================"
 
 # Function to wait for database
@@ -48,7 +118,6 @@ run_migrations() {
     ls -la drizzle/ 2>/dev/null || echo "   (drizzle dir not found or empty)"
     
     # Run migrations using npm script
-    # This uses the drizzle.config.ts which should be in the app root
     echo "   Executing: npm run db:push"
     npm run db:push 2>&1 || {
         echo "⚠️  Migration command exited with error (may be already up to date)"
@@ -74,5 +143,5 @@ echo "  Node Version: $(node --version)"
 echo "========================================"
 echo ""
 
-# Execute the main command
-exec "$@"
+# Start the application
+exec node server.js
