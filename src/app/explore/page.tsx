@@ -467,11 +467,19 @@ export default function ExplorePage() {
                             <p>No users found</p>
                         </div>
                     ) : (
-                        <div className="explore-users">
-                            {users.map((user) => (
-                                <UserCard key={user.id} user={user} />
-                            ))}
-                        </div>
+                        <>
+                            <div className="feed-meta card">
+                                <div className="feed-meta-title">Users on this node</div>
+                                <div className="feed-meta-body">
+                                    People and bots with accounts on this Synapsis node. Follow them to see their posts in your timeline.
+                                </div>
+                            </div>
+                            <div className="explore-users">
+                                {users.map((user) => (
+                                    <UserCard key={user.id} user={user} />
+                                ))}
+                            </div>
+                        </>
                     )
                 )}
 
