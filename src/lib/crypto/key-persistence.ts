@@ -120,7 +120,7 @@ export async function deriveSessionKey(password: string): Promise<CryptoKey> {
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     true,  // extractable so we can store it
-    ['wrapKey', 'unwrapKey']
+    ['encrypt', 'decrypt']
   );
 }
 
@@ -131,7 +131,7 @@ async function generateSessionKey(): Promise<CryptoKey> {
   return crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
     true,
-    ['wrapKey', 'unwrapKey']
+    ['encrypt', 'decrypt']
   );
 }
 
@@ -147,7 +147,7 @@ async function importSessionKey(keyData: string): Promise<CryptoKey> {
     buffer,
     { name: 'AES-GCM', length: 256 },
     false,  // not extractable after import
-    ['wrapKey', 'unwrapKey']
+    ['encrypt', 'decrypt']
   );
 }
 

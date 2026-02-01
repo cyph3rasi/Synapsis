@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { signedAPI } from '@/lib/api/signed-fetch';
-import { ArrowLeft, Send, Lock, Shield, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
 import { formatFullHandle } from '@/lib/utils/handle';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -35,7 +35,7 @@ interface Message {
 }
 
 export default function ChatPage() {
-    const { user, isIdentityUnlocked, setShowUnlockPrompt } = useAuth();
+    const { user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const composeHandle = searchParams.get('compose');
@@ -347,29 +347,6 @@ export default function ChatPage() {
     );
 
     if (user === null) return null;
-
-    // Identity Locked State
-    if (!isIdentityUnlocked) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '24px' }}>
-                <Lock size={48} style={{ color: 'var(--accent)' }} />
-                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Identity Required</h2>
-                <p style={{ color: 'var(--foreground-secondary)', maxWidth: '400px', textAlign: 'center' }}>
-                    Chat requires your identity to be unlocked. Your private keys are used to sign messages to prove they came from you.
-                </p>
-                <button
-                    onClick={() => setShowUnlockPrompt(true)}
-                    className="btn btn-primary"
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                    <Shield size={16} />
-                    Unlock Identity
-                </button>
-            </div>
-        );
-    }
-
-
 
     // Prevent flash of list view while processing compose intent
     if (composeHandle && !selectedConversation) {

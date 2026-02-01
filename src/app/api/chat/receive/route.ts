@@ -1,26 +1,93 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { chatConversations, chatMessages, users, handleRegistry } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { verifyActionSignature, type SignedAction } from '@/lib/auth/verify-signature';
+import { verifySwarmRequest } from '@/lib/swarm/signature';
+import { fetchAndCacheRemoteKey, logKeyChange } from '@/lib/swarm/identity-cache';
+import { z } from 'zod';
+
+// Schema for direct signed action (legacy)
+const chatReceiveSchema = z.object({
+    did: z.string().regex(/^did:/, 'Must be a valid DID'),
+    handle: z.string().min(3).max(30),
+    data: z.object({
+        recipientDid: z.string().regex(/^did:/, 'Must be a valid DID'),
+        content: z.string().min(1).max(5000),
+    }),
+    signature: z.string(),
+    timestamp: z.number().optional(),
+});
+
+// Schema for federated envelope
+const federatedEnvelopeSchema = z.object({
+    userAction: chatReceiveSchema,
+    fullSenderHandle: z.string().min(3).max(60),
+    sourceDomain: z.string().min(1),
+    ts: z.number(),
+});
 
 /**
  * POST /api/chat/receive
  * Endpoint for receiving federated chat messages from other nodes.
- * Expects a SignedAction payload from the sender.
+ * Expects either:
+ * 1. A SignedAction payload from the sender (legacy, for backward compatibility)
+ * 2. A federated envelope with node's signature and user's signed action
  */
 export async function POST(request: NextRequest) {
     try {
-        const signedAction: SignedAction = await request.json();
+        const body = await request.json();
+
+        // Check if this is a federated envelope (node-signed)
+        const swarmSignature = request.headers.get('X-Swarm-Signature');
+        const sourceDomain = request.headers.get('X-Swarm-Source-Domain');
+
+        let signedAction: SignedAction;
+        let fullSenderHandle: string | null = null;
+
+        if (swarmSignature && sourceDomain && body.userAction) {
+            // Federated envelope format - validate and verify node signature
+            const envelopeValidation = federatedEnvelopeSchema.safeParse(body);
+            if (!envelopeValidation.success) {
+                return NextResponse.json(
+                    { error: 'Invalid envelope payload', details: envelopeValidation.error.issues },
+                    { status: 400 }
+                );
+            }
+
+            const isValidNodeSig = await verifySwarmRequest(
+                { userAction: body.userAction, fullSenderHandle: body.fullSenderHandle, sourceDomain: body.sourceDomain, ts: body.ts },
+                swarmSignature,
+                sourceDomain
+            );
+
+            if (!isValidNodeSig) {
+                console.error('[Chat Receive] Invalid node signature from:', sourceDomain);
+                return NextResponse.json({ error: 'Invalid node signature' }, { status: 403 });
+            }
+
+            // Extract user's signed action and full handle from envelope
+            signedAction = body.userAction;
+            fullSenderHandle = body.fullSenderHandle;
+            console.log(`[Chat Receive] Federated envelope from node: ${sourceDomain}, full handle: ${fullSenderHandle}`);
+        } else {
+            // Legacy format - direct user signed action
+            const actionValidation = chatReceiveSchema.safeParse(body);
+            if (!actionValidation.success) {
+                return NextResponse.json(
+                    { error: 'Invalid action payload', details: actionValidation.error.issues },
+                    { status: 400 }
+                );
+            }
+            signedAction = body;
+        }
+
         const { did, handle, data } = signedAction;
         const { recipientDid, content } = data || {};
 
-        if (!did || !handle || !recipientDid || !content) {
-            return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-        }
-
-        console.log(`[Chat Receive] From: ${handle} (DID: ${did}), To: ${recipientDid}`);
+        // Use full handle if provided in envelope, otherwise fall back to signed handle
+        const senderHandle = fullSenderHandle || handle;
+        console.log(`[Chat Receive] From: ${senderHandle} (DID: ${did}), To: ${recipientDid}`);
 
         // 1. Resolve Sender Public Key
         let senderUser = await db.query.users.findFirst({
@@ -28,15 +95,15 @@ export async function POST(request: NextRequest) {
         });
 
         let publicKey = senderUser?.publicKey;
-        let senderDisplayName = senderUser?.displayName || handle;
+        let senderDisplayName = senderUser?.displayName || senderHandle;
         let senderAvatarUrl = senderUser?.avatarUrl;
         let senderNodeDomain: string | null = null;
 
         if (!senderUser) {
             // Unknown user - likely remote. We need to fetch their profile to get the public key.
-            // Derive domain from handle if possible
-            if (handle.includes('@')) {
-                const parts = handle.split('@');
+            // Derive domain from full sender handle if possible
+            if (senderHandle.includes('@')) {
+                const parts = senderHandle.split('@');
                 senderNodeDomain = parts[parts.length - 1];
             } else {
                 // Try to get from header first
@@ -55,26 +122,44 @@ export async function POST(request: NextRequest) {
             if (senderNodeDomain) {
                 try {
                     const protocol = senderNodeDomain.includes('localhost') ? 'http' : 'https';
-                    // Fetch profile from remote node
-                    // Assuming /api/users/:handle convention
-                    const remoteHandle = handle.includes('@') ? handle.split('@')[0] : handle;
-                    const res = await fetch(`${protocol}://${senderNodeDomain}/api/users/${remoteHandle}`);
+                    const remoteHandle = senderHandle.includes('@') ? senderHandle.split('@')[0] : senderHandle;
 
-                    if (res.ok) {
-                        const profileData = await res.json();
-                        const remoteProfile = profileData.user;
-                        if (remoteProfile && remoteProfile.publicKey) {
-                            if (remoteProfile.did !== did) {
-                                console.error('DID mismatch for remote user');
-                            } else {
-                                publicKey = remoteProfile.publicKey;
-                                senderDisplayName = remoteProfile.displayName || handle;
-                                senderAvatarUrl = remoteProfile.avatarUrl;
+                    // Fetch public key with TOFU validation
+                    const { publicKey: cachedOrFreshKey, fromCache, keyChanged } = await fetchAndCacheRemoteKey(
+                        did,
+                        senderHandle,
+                        senderNodeDomain,
+                        async () => {
+                            // Fetch profile from remote node
+                            const res = await fetch(`${protocol}://${senderNodeDomain}/api/users/${remoteHandle}`);
+                            if (!res.ok) return null;
+                            const profileData = await res.json();
+                            const remoteProfile = profileData.user;
+                            if (remoteProfile?.did !== did) {
+                                console.error('[Chat Receive] DID mismatch for remote user');
+                                return null;
+                            }
+                            return remoteProfile?.publicKey || null;
+                        }
+                    );
+
+                    if (cachedOrFreshKey) {
+                        publicKey = cachedOrFreshKey;
+                        console.log(`[Chat Receive] Using ${fromCache ? 'cached' : 'fetched'} public key for ${senderHandle}${keyChanged ? ' (KEY CHANGED!)' : ''}`);
+
+                        // Also fetch display name/avatar if not from cache (or if we need fresh data)
+                        if (!fromCache || keyChanged) {
+                            const res = await fetch(`${protocol}://${senderNodeDomain}/api/users/${remoteHandle}`);
+                            if (res.ok) {
+                                const profileData = await res.json();
+                                const remoteProfile = profileData.user;
+                                senderDisplayName = remoteProfile?.displayName || senderHandle;
+                                senderAvatarUrl = remoteProfile?.avatarUrl;
 
                                 // CACHE: Upsert the remote user into our local database
                                 const { upsertRemoteUser } = await import('@/lib/swarm/user-cache');
                                 await upsertRemoteUser({
-                                    handle: handle, // already full handle if remote
+                                    handle: senderHandle, // use full handle (user@domain)
                                     displayName: senderDisplayName,
                                     avatarUrl: senderAvatarUrl || null,
                                     did: did || '',
@@ -83,7 +168,7 @@ export async function POST(request: NextRequest) {
                             }
                         }
                     } else {
-                        console.error('Failed to fetch remote profile:', res.status);
+                        console.error('Failed to fetch remote profile: no key returned');
                     }
                 } catch (e) {
                     console.error('Remote profile fetch failed:', e);
@@ -112,20 +197,20 @@ export async function POST(request: NextRequest) {
 
         // 4. Find or Create Conversation
         // For the RECIPIENT, the conversation is with the SENDER
-        // Use full handle
-        const fullSenderHandle = handle.includes('@') ? handle : (senderNodeDomain ? `${handle}@${senderNodeDomain}` : handle);
+        // Use full handle from envelope if available, otherwise construct from handle + domain
+        const computedFullSenderHandle = senderHandle.includes('@') ? senderHandle : (senderNodeDomain ? `${senderHandle}@${senderNodeDomain}` : senderHandle);
 
         let conversation = await db.query.chatConversations.findFirst({
             where: and(
                 eq(chatConversations.participant1Id, recipientUser.id),
-                eq(chatConversations.participant2Handle, fullSenderHandle)
+                eq(chatConversations.participant2Handle, computedFullSenderHandle)
             )
         });
 
         if (!conversation) {
             const [newConv] = await db.insert(chatConversations).values({
                 participant1Id: recipientUser.id,
-                participant2Handle: fullSenderHandle,
+                participant2Handle: computedFullSenderHandle,
                 lastMessageAt: new Date(),
                 lastMessagePreview: content.slice(0, 50)
             }).returning();
@@ -144,7 +229,7 @@ export async function POST(request: NextRequest) {
         // 5. Store Message
         await db.insert(chatMessages).values({
             conversationId: conversation.id,
-            senderHandle: fullSenderHandle,
+            senderHandle: computedFullSenderHandle,
             senderDisplayName: senderDisplayName,
             senderAvatarUrl: senderAvatarUrl,
             senderNodeDomain: senderNodeDomain,
@@ -156,7 +241,7 @@ export async function POST(request: NextRequest) {
         // 6. Update Registry (to ensure we can reply efficiently)
         if (senderNodeDomain) {
             await db.insert(handleRegistry).values({
-                handle: fullSenderHandle, // user@domain
+                handle: computedFullSenderHandle, // user@domain
                 did: did,
                 nodeDomain: senderNodeDomain
             }).onConflictDoUpdate({
@@ -172,6 +257,14 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('Federated Receive Failed:', error);
+        
+        if (error instanceof z.ZodError) {
+            return NextResponse.json(
+                { error: 'Invalid input', details: error.issues },
+                { status: 400 }
+            );
+        }
+        
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

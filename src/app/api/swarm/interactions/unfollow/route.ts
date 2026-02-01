@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, remoteFollowers } from '@/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { verifyUserInteraction } from '@/lib/swarm/signature';
 
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Update follower count
     await db.update(users)
-      .set({ followersCount: Math.max(0, targetUser.followersCount - 1) })
+      .set({ followersCount: sql`GREATEST(0, ${users.followersCount} - 1)` })
       .where(eq(users.id, targetUser.id));
 
     console.log(`[Swarm] Received unfollow from ${data.unfollow.followerHandle}@${data.unfollow.followerNodeDomain} for @${data.targetHandle}`);

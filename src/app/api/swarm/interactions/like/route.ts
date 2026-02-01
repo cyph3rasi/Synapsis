@@ -15,14 +15,14 @@ import { verifyUserInteraction } from '@/lib/swarm/signature';
 const swarmLikeSchema = z.object({
   postId: z.string().uuid(),
   like: z.object({
-    actorHandle: z.string(),
-    actorDisplayName: z.string(),
-    actorAvatarUrl: z.string().optional(),
-    actorNodeDomain: z.string(),
-    interactionId: z.string(),
-    timestamp: z.string(),
+    actorHandle: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Handle must be alphanumeric with underscores'),
+    actorDisplayName: z.string().min(1).max(50),
+    actorAvatarUrl: z.string().url().optional(),
+    actorNodeDomain: z.string().min(1).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/, 'Invalid domain format'),
+    interactionId: z.string().uuid(),
+    timestamp: z.string().datetime(),
   }),
-  signature: z.string(),
+  signature: z.string().min(1),
 });
 
 /**
@@ -106,7 +106,9 @@ export async function POST(request: NextRequest) {
       });
       console.log(`[Swarm] Created like notification for post ${data.postId} from ${data.like.actorHandle}@${data.like.actorNodeDomain}`);
     } catch (notifError) {
-      console.error(`[Swarm] Failed to create like notification:`, notifError);
+      // Log error with context but don't fail the request - notification creation is best-effort
+      console.error('[Swarm Like] Failed to create notification:', notifError);
+      console.error('[Swarm Like] Context:', { postId: data.postId, userId: post.userId, actor: data.like.actorHandle });
     }
 
     // Also notify bot owner if this is a bot's post
@@ -124,7 +126,9 @@ export async function POST(request: NextRequest) {
           type: 'like',
         });
       } catch (err) {
-        console.error('[Swarm] Failed to notify bot owner:', err);
+        // Log error with context but don't fail the request - bot owner notification is best-effort
+        console.error('[Swarm Like] Failed to notify bot owner:', err);
+        console.error('[Swarm Like] Context:', { postId: data.postId, botOwnerId: author.botOwnerId, actor: data.like.actorHandle });
       }
     }
 

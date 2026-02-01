@@ -11,22 +11,22 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, users, notifications, remoteFollowers } from '@/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmFollowSchema = z.object({
-  targetHandle: z.string(),
+  targetHandle: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Handle must be alphanumeric with underscores'),
   follow: z.object({
-    followerHandle: z.string(),
-    followerDisplayName: z.string(),
-    followerAvatarUrl: z.string().optional(),
-    followerBio: z.string().optional(),
-    followerNodeDomain: z.string(),
-    interactionId: z.string(),
-    timestamp: z.string(),
+    followerHandle: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Handle must be alphanumeric with underscores'),
+    followerDisplayName: z.string().min(1).max(50),
+    followerAvatarUrl: z.string().url().optional(),
+    followerBio: z.string().max(500).optional(),
+    followerNodeDomain: z.string().min(1).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/, 'Invalid domain format'),
+    interactionId: z.string().uuid(),
+    timestamp: z.string().datetime(),
   }),
-  signature: z.string(),
+  signature: z.string().min(1),
 });
 
 /**
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Update follower count
     await db.update(users)
-      .set({ followersCount: targetUser.followersCount + 1 })
+      .set({ followersCount: sql`${users.followersCount} + 1` })
       .where(eq(users.id, targetUser.id));
 
     // Create notification with actor info stored directly
@@ -115,7 +115,9 @@ export async function POST(request: NextRequest) {
       });
       console.log(`[Swarm] Created follow notification for @${data.targetHandle} from ${data.follow.followerHandle}@${data.follow.followerNodeDomain}`);
     } catch (notifError) {
-      console.error(`[Swarm] Failed to create notification:`, notifError);
+      // Log error with context but don't fail the request - notification creation is best-effort
+      console.error('[Swarm Follow] Failed to create notification:', notifError);
+      console.error('[Swarm Follow] Context:', { targetHandle: data.targetHandle, userId: targetUser.id, actor: data.follow.followerHandle });
     }
 
     // Also notify bot owner if this is a bot being followed
@@ -130,7 +132,9 @@ export async function POST(request: NextRequest) {
           type: 'follow',
         });
       } catch (err) {
-        console.error('[Swarm] Failed to notify bot owner:', err);
+        // Log error with context but don't fail the request - bot owner notification is best-effort
+        console.error('[Swarm Follow] Failed to notify bot owner:', err);
+        console.error('[Swarm Follow] Context:', { targetHandle: data.targetHandle, botOwnerId: targetUser.botOwnerId, actor: data.follow.followerHandle });
       }
     }
 

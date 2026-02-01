@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts } from '@/db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { verifyUserInteraction } from '@/lib/swarm/signature';
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     // Decrement repost count
     await db.update(posts)
-      .set({ repostsCount: Math.max(0, post.repostsCount - 1) })
+      .set({ repostsCount: sql`GREATEST(0, ${posts.repostsCount} - 1)` })
       .where(eq(posts.id, data.postId));
 
     console.log(`[Swarm] Received unrepost from ${data.unrepost.actorHandle}@${data.unrepost.actorNodeDomain} on post ${data.postId}`);

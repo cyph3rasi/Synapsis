@@ -8,6 +8,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
+import { z } from 'zod';
+
+// Schema for conversation ID parameter
+const conversationIdSchema = z.string().uuid('Invalid conversation ID format');
+
+// Schema for delete query parameter
+const deleteQuerySchema = z.object({
+  deleteFor: z.enum(['self', 'both']).optional(),
+});
 
 export async function DELETE(
   request: NextRequest,
@@ -24,8 +33,23 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    
+    // Validate conversation ID
+    const idResult = conversationIdSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid conversation ID', details: idResult.error.issues }, { status: 400 });
+    }
+    
     const { searchParams } = new URL(request.url);
-    const deleteFor = searchParams.get('deleteFor'); // 'self' or 'both'
+    const deleteForRaw = searchParams.get('deleteFor'); // 'self' or 'both'
+    
+    // Validate deleteFor parameter
+    const deleteForResult = deleteQuerySchema.safeParse({ deleteFor: deleteForRaw || undefined });
+    if (!deleteForResult.success) {
+      return NextResponse.json({ error: 'Invalid deleteFor parameter', details: deleteForResult.error.issues }, { status: 400 });
+    }
+    
+    const { deleteFor } = deleteForResult.data;
 
     // Verify the conversation belongs to this user
     const conversation = await db.query.chatConversations.findFirst({
@@ -118,6 +142,9 @@ export async function DELETE(
       });
     }
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid input', details: error.issues }, { status: 400 });
+    }
     console.error('Delete conversation error:', error);
     return NextResponse.json({ error: 'Failed to delete conversation' }, { status: 500 });
   }

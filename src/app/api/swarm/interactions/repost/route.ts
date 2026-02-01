@@ -8,22 +8,22 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts, users, notifications } from '@/db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { verifyUserInteraction } from '@/lib/swarm/signature';
 
 const swarmRepostSchema = z.object({
   postId: z.string().uuid(),
   repost: z.object({
-    actorHandle: z.string(),
-    actorDisplayName: z.string(),
-    actorAvatarUrl: z.string().optional(),
-    actorNodeDomain: z.string(),
-    repostId: z.string(),
-    interactionId: z.string(),
-    timestamp: z.string(),
+    actorHandle: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Handle must be alphanumeric with underscores'),
+    actorDisplayName: z.string().min(1).max(50),
+    actorAvatarUrl: z.string().url().optional(),
+    actorNodeDomain: z.string().min(1).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/, 'Invalid domain format'),
+    repostId: z.string().uuid(),
+    interactionId: z.string().uuid(),
+    timestamp: z.string().datetime(),
   }),
-  signature: z.string(),
+  signature: z.string().min(1),
 });
 
 /**
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     // Increment repost count
     await db.update(posts)
-      .set({ repostsCount: post.repostsCount + 1 })
+      .set({ repostsCount: sql`${posts.repostsCount} + 1` })
       .where(eq(posts.id, data.postId));
 
     // Create notification with actor info stored directly

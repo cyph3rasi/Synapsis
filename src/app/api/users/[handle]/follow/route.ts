@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db, follows, users, notifications, remoteFollows } from '@/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
 import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { isSwarmNode, deliverSwarmFollow, deliverSwarmUnfollow, cacheSwarmUserPosts } from '@/lib/swarm/interactions';
@@ -152,9 +152,9 @@ export async function POST(request: Request, context: RouteContext) {
                 avatarUrl: null,
             });
 
-            // Update the user's following count
+            // Update the user's following count (atomic increment)
             await db.update(users)
-                .set({ followingCount: currentUser.followingCount + 1 })
+                .set({ followingCount: sql`${users.followingCount} + 1` })
                 .where(eq(users.id, currentUser.id));
 
             // Cache the remote user's recent posts in the background
@@ -231,13 +231,13 @@ export async function POST(request: Request, context: RouteContext) {
             }
         }
 
-        // Update counts
+        // Update counts (atomic increments)
         await db.update(users)
-            .set({ followingCount: currentUser.followingCount + 1 })
+            .set({ followingCount: sql`${users.followingCount} + 1` })
             .where(eq(users.id, currentUser.id));
 
         await db.update(users)
-            .set({ followersCount: targetUser.followersCount + 1 })
+            .set({ followersCount: sql`${users.followersCount} + 1` })
             .where(eq(users.id, targetUser.id));
 
         return NextResponse.json({ success: true, following: true });
@@ -295,9 +295,9 @@ export async function DELETE(request: Request, context: RouteContext) {
             // Remove the follow record
             await db.delete(remoteFollows).where(eq(remoteFollows.id, existingRemoteFollow.id));
 
-            // Update the user's following count
+            // Update the user's following count (atomic decrement, clamped to 0)
             await db.update(users)
-                .set({ followingCount: Math.max(0, currentUser.followingCount - 1) })
+                .set({ followingCount: sql`GREATEST(0, ${users.followingCount} - 1)` })
                 .where(eq(users.id, currentUser.id));
 
             console.log(`[Swarm] Unfollow delivered to ${remote.domain}`);
@@ -335,13 +335,13 @@ export async function DELETE(request: Request, context: RouteContext) {
         // Remove follow
         await db.delete(follows).where(eq(follows.id, existingFollow.id));
 
-        // Update counts
+        // Update counts (atomic decrements, clamped to 0)
         await db.update(users)
-            .set({ followingCount: Math.max(0, currentUser.followingCount - 1) })
+            .set({ followingCount: sql`GREATEST(0, ${users.followingCount} - 1)` })
             .where(eq(users.id, currentUser.id));
 
         await db.update(users)
-            .set({ followersCount: Math.max(0, targetUser.followersCount - 1) })
+            .set({ followersCount: sql`GREATEST(0, ${users.followersCount} - 1)` })
             .where(eq(users.id, targetUser.id));
 
         return NextResponse.json({ success: true, following: false });

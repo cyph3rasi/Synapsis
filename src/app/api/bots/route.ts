@@ -17,6 +17,7 @@ import {
   BotHandleTakenError,
   BotValidationError,
 } from '@/lib/bots/botManager';
+import { generateAndUploadAvatarToUserStorage } from '@/lib/storage/s3';
 
 // Schema for creating a bot
 const createBotSchema = z.object({
@@ -42,6 +43,8 @@ const createBotSchema = z.object({
     timezone: z.string().optional(),
   }).optional(),
   autonomousMode: z.boolean().optional(),
+  // Optional: password to generate avatar using owner's S3 storage
+  ownerPassword: z.string().optional(),
 });
 
 /**
@@ -58,11 +61,33 @@ export async function POST(request: Request) {
     const body = await request.json();
     const data = createBotSchema.parse(body);
 
+    // Generate bot avatar using owner's S3 storage if password provided and no avatar URL
+    let botAvatarUrl = data.avatarUrl;
+    if (!botAvatarUrl && data.ownerPassword && user.storageAccessKeyEncrypted && user.storageSecretKeyEncrypted && user.storageBucket) {
+      try {
+        const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
+        const botHandle = `${data.handle.toLowerCase()}@${nodeDomain}`;
+        
+        botAvatarUrl = await generateAndUploadAvatarToUserStorage(
+          botHandle,
+          user.storageEndpoint,
+          user.storageRegion || 'auto',
+          user.storageBucket,
+          user.storageAccessKeyEncrypted,
+          user.storageSecretKeyEncrypted,
+          data.ownerPassword
+        );
+      } catch (err) {
+        console.error('[Bot API] Failed to generate bot avatar:', err);
+        // Continue without avatar - user can set it later
+      }
+    }
+
     const bot = await createBot(user.id, {
       name: data.name,
       handle: data.handle,
       bio: data.bio,
-      avatarUrl: data.avatarUrl,
+      avatarUrl: botAvatarUrl,
       headerUrl: data.headerUrl,
       personality: data.personality,
       llmProvider: data.llmProvider,

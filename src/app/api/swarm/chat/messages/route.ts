@@ -9,6 +9,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, chatConversations, chatMessages, users } from '@/db';
 import { eq, desc, and, lt, isNull, sql, inArray } from 'drizzle-orm';
 import { getSession } from '@/lib/auth';
+import { z } from 'zod';
+
+// Schema for query parameters
+const messagesQuerySchema = z.object({
+    conversationId: z.string().uuid(),
+    cursor: z.string().datetime().optional(),
+    limit: z.number().min(1).max(100).default(50),
+});
+
+// Schema for PATCH request body
+const markReadSchema = z.object({
+    conversationId: z.string().uuid(),
+});
 
 
 export async function GET(request: NextRequest) {
@@ -23,13 +36,19 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const conversationId = searchParams.get('conversationId');
-    const cursor = searchParams.get('cursor'); // For pagination
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
+    
+    // Validate query parameters
+    const queryResult = messagesQuerySchema.safeParse({
+      conversationId: searchParams.get('conversationId'),
+      cursor: searchParams.get('cursor') || undefined,
+      limit: parseInt(searchParams.get('limit') || '50'),
+    });
 
-    if (!conversationId) {
-      return NextResponse.json({ error: 'conversationId required' }, { status: 400 });
+    if (!queryResult.success) {
+      return NextResponse.json({ error: 'Invalid query parameters', details: queryResult.error.issues }, { status: 400 });
     }
+
+    const { conversationId, cursor, limit } = queryResult.data;
 
     // Verify user has access to this conversation
     const conversation = await db.query.chatConversations.findFirst({
@@ -114,6 +133,9 @@ export async function GET(request: NextRequest) {
       nextCursor: messages.length === limit ? messages[messages.length - 1].createdAt.toISOString() : null,
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid input', details: error.issues }, { status: 400 });
+    }
     console.error('Get messages error:', error);
     return NextResponse.json({ error: 'Failed to get messages' }, { status: 500 });
   }
@@ -130,11 +152,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { conversationId } = await request.json();
-
-    if (!conversationId) {
-      return NextResponse.json({ error: 'conversationId required' }, { status: 400 });
+    const body = await request.json();
+    
+    // Validate request body
+    const bodyResult = markReadSchema.safeParse(body);
+    if (!bodyResult.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: bodyResult.error.issues }, { status: 400 });
     }
+    
+    const { conversationId } = bodyResult.data;
 
     // Verify user has access to this conversation
     const conversation = await db.query.chatConversations.findFirst({
@@ -160,6 +186,9 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Invalid input', details: error.issues }, { status: 400 });
+    }
     console.error('Mark as read error:', error);
     return NextResponse.json({ error: 'Failed to mark as read' }, { status: 500 });
   }

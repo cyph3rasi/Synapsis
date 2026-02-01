@@ -7,8 +7,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, posts } from '@/db';
 import { eq, desc, and } from 'drizzle-orm';
+import { z } from 'zod';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const uuidSchema = z.string().uuid();
 
 /**
  * GET /api/swarm/posts/[id]
@@ -21,7 +24,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Database not available' }, { status: 503 });
     }
 
-    const { id: postId } = await context.params;
+    const { id: postIdRaw } = await context.params;
+    
+    // Validate postId is a valid UUID
+    const postIdValidation = uuidSchema.safeParse(postIdRaw);
+    if (!postIdValidation.success) {
+      return NextResponse.json({ error: 'Invalid post ID format' }, { status: 400 });
+    }
+    const postId = postIdValidation.data;
 
     // Find the post
     const post = await db.query.posts.findFirst({
@@ -97,6 +107,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
       }),
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid input', details: error.issues },
+        { status: 400 }
+      );
+    }
     console.error('[Swarm] Post detail error:', error);
     return NextResponse.json({ error: 'Failed to get post' }, { status: 500 });
   }

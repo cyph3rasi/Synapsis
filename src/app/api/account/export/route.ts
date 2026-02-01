@@ -21,6 +21,7 @@ interface ExportManifest {
     handle: string;
     sourceNode: string;
     exportedAt: string;
+    expiresAt: string; // Export expiration timestamp
     publicKey: string;
     privateKeyEncrypted: string; // Encrypted with user's password
     salt: string; // For key derivation
@@ -40,7 +41,7 @@ interface ExportPost {
     content: string;
     createdAt: string;
     replyToApId: string | null;
-    media: { filename: string; url: string; altText: string | null }[];
+    media: { filename: string; url: string; altText: string | null; isIPFS?: boolean }[];
 }
 
 interface ExportFollowing {
@@ -209,6 +210,7 @@ export async function POST(req: NextRequest) {
                 filename: `${post.id}_${idx}${getExtension(m.url)}`,
                 url: m.url,
                 altText: m.altText,
+                isIPFS: m.url?.startsWith('ipfs://') || false,
             })),
         }));
 
@@ -314,12 +316,15 @@ export async function POST(req: NextRequest) {
         const { encrypted, salt, iv } = encryptPrivateKey(privateKey, password);
 
         // Build manifest (without signature first)
+        const exportedAt = new Date();
+        const expiresAt = new Date(exportedAt.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
         const manifestData: Omit<ExportManifest, 'signature'> = {
             version: '1.0',
             did: user.did,
             handle: user.handle,
             sourceNode: nodeDomain,
-            exportedAt: new Date().toISOString(),
+            exportedAt: exportedAt.toISOString(),
+            expiresAt: expiresAt.toISOString(),
             publicKey: user.publicKey,
             privateKeyEncrypted: encrypted,
             salt,

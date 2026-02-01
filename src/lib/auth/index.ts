@@ -8,9 +8,10 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { generateKeyPair } from '@/lib/crypto/keys';
 import { encryptPrivateKey, serializeEncryptedKey } from '@/lib/crypto/private-key';
+import { base58btc } from 'multiformats/bases/base58';
 import { cookies } from 'next/headers';
 import { upsertHandleEntries } from '@/lib/federation/handles';
-import { generateAndUploadAvatar } from '@/lib/auth/avatar';
+import { generateAndUploadAvatarToUserStorage } from '@/lib/storage/s3';
 
 const SESSION_COOKIE_NAME = 'synapsis_session';
 const SESSION_EXPIRY_DAYS = 30;
@@ -31,10 +32,22 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 /**
  * Generate a DID for a new user
+ * Uses did:key format (W3C standard) - the DID contains the public key itself
  */
-export function generateDID(): string {
-    // Using a simple did:key-like format for now
-    // In production, this would be more sophisticated
+export function generateDID(publicKey: string): string {
+    // Encode the SPKI public key in base58btc (multibase)
+    const publicKeyBytes = Buffer.from(publicKey, 'base64');
+    const encoded = base58btc.encode(new Uint8Array(publicKeyBytes));
+    
+    // Create did:key - the 'z' prefix indicates base58btc encoding
+    return `did:key:${encoded}`;
+}
+
+/**
+ * Generate legacy DID format (for backward compatibility)
+ * @deprecated Use generateDID() instead
+ */
+export function generateLegacyDID(): string {
     return `did:synapsis:${uuid().replace(/-/g, '')}`;
 }
 
@@ -123,7 +136,13 @@ export async function registerUser(
     handle: string,
     email: string,
     password: string,
-    displayName?: string
+    displayName?: string,
+    storageProvider?: string,
+    storageEndpoint?: string | null,
+    storageRegion?: string,
+    storageBucket?: string,
+    storageAccessKey?: string,
+    storageSecretKey?: string
 ): Promise<typeof users.$inferSelect> {
     // Validate handle format
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(handle)) {
@@ -148,21 +167,49 @@ export async function registerUser(
         throw new Error('Email is already registered');
     }
 
+    // Validate S3 storage credentials (required for new users)
+    if (!storageProvider) {
+        throw new Error('Storage provider is required.');
+    }
+    if (!storageRegion || storageRegion.length < 2) {
+        throw new Error('Storage region is required (e.g., us-east-1, auto).');
+    }
+    if (!storageBucket || storageBucket.length < 3) {
+        throw new Error('Storage bucket name is required.');
+    }
+    if (!storageAccessKey || storageAccessKey.length < 10) {
+        throw new Error('Storage access key is required.');
+    }
+    if (!storageSecretKey || storageSecretKey.length < 10) {
+        throw new Error('Storage secret key is required.');
+    }
+
     // Generate cryptographic keys
     const { publicKey, privateKey } = await generateKeyPair();
 
     // Encrypt the private key with user's password before storing
     const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
 
-    // Create the user
-    const did = generateDID();
+    // Create the user with did:key format (public key encoded in DID)
+    const did = generateDID(publicKey);
     const passwordHash = await hashPassword(password);
 
     const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
-    // Generate avatar using full handle (@user@domain) for global uniqueness
+    // Generate avatar and upload to user's S3 storage
     const fullHandle = `${handle.toLowerCase()}@${nodeDomain}`;
-    const avatarUrl = await generateAndUploadAvatar(fullHandle);
+    const avatarUrl = await generateAndUploadAvatarToUserStorage(
+        fullHandle,
+        storageEndpoint || null,
+        storageRegion,
+        storageBucket,
+        storageAccessKey,
+        storageSecretKey
+    );
+
+    // Encrypt the storage credentials with user's password
+    const encryptedAccessKey = encryptPrivateKey(storageAccessKey, password);
+    const encryptedSecretKey = encryptPrivateKey(storageSecretKey, password);
 
     const [user] = await db.insert(users).values({
         did,
@@ -173,6 +220,12 @@ export async function registerUser(
         avatarUrl,
         publicKey,
         privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey),
+        storageProvider,
+        storageEndpoint: storageEndpoint || null,
+        storageRegion,
+        storageBucket,
+        storageAccessKeyEncrypted: serializeEncryptedKey(encryptedAccessKey),
+        storageSecretKeyEncrypted: serializeEncryptedKey(encryptedSecretKey),
     }).returning();
 
     await upsertHandleEntries([{

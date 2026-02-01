@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { db, handleRegistry } from '@/db';
 import { eq } from 'drizzle-orm';
 import { normalizeHandle, upsertHandleEntries } from '@/lib/federation/handles';
+import { z } from 'zod';
+
+const handleParamSchema = z.string().min(3).max(40).regex(/^[a-zA-Z0-9_]+(@[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,})?$/, 'Invalid handle format');
 
 const parseHandleWithDomain = (handle: string) => {
     const clean = normalizeHandle(handle);
@@ -19,11 +22,21 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url);
-        const handleParam = searchParams.get('handle');
+        const handleParamRaw = searchParams.get('handle');
 
-        if (!handleParam) {
+        if (!handleParamRaw) {
             return NextResponse.json({ error: 'Handle is required' }, { status: 400 });
         }
+
+        // Validate handle format
+        const handleValidation = handleParamSchema.safeParse(handleParamRaw);
+        if (!handleValidation.success) {
+            return NextResponse.json(
+                { error: 'Invalid handle format', details: handleValidation.error.issues },
+                { status: 400 }
+            );
+        }
+        const handleParam = handleValidation.data;
 
         const parsed = parseHandleWithDomain(handleParam);
         const lookupHandle = parsed ? parsed.handle : normalizeHandle(handleParam);
@@ -63,6 +76,12 @@ export async function GET(request: Request) {
 
         return NextResponse.json(entry);
     } catch (error) {
+        if (error instanceof z.ZodError) {
+            return NextResponse.json(
+                { error: 'Invalid input', details: error.issues },
+                { status: 400 }
+            );
+        }
         console.error('Handle resolve error:', error);
         return NextResponse.json({ error: 'Failed to resolve handle' }, { status: 500 });
     }

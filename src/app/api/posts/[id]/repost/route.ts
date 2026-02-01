@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, notifications } from '@/db';
 import { requireAuth } from '@/lib/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import crypto from 'crypto';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+// UUID or swarm post ID format (swarm:domain:uuid)
+const postIdSchema = z.union([
+    z.string().uuid(),
+    z.string().regex(/^swarm:[^:]+:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, 'Invalid swarm post ID format'),
+]);
 
 /**
  * Extract domain from a swarm post ID (swarm:domain:postId)
@@ -38,7 +45,8 @@ export async function POST(request: Request, context: RouteContext) {
     try {
         const user = await requireAuth();
         const { id: rawId } = await context.params;
-        const postId = decodeURIComponent(rawId);
+        const decodedId = decodeURIComponent(rawId);
+        const postId = postIdSchema.parse(decodedId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (user.isSuspended || user.isSilenced) {
@@ -116,12 +124,12 @@ export async function POST(request: Request, context: RouteContext) {
 
         // Update original post's repost count
         await db.update(posts)
-            .set({ repostsCount: originalPost.repostsCount + 1 })
+            .set({ repostsCount: sql`${posts.repostsCount} + 1` })
             .where(eq(posts.id, postId));
 
         // Update user's post count
         await db.update(users)
-            .set({ postsCount: user.postsCount + 1 })
+            .set({ postsCount: sql`${users.postsCount} + 1` })
             .where(eq(users.id, user.id));
 
         if (originalPost.userId !== user.id) {
@@ -196,6 +204,9 @@ export async function POST(request: Request, context: RouteContext) {
 
         return NextResponse.json({ success: true, repost, reposted: true });
     } catch (error) {
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: 'Invalid post ID', details: error.issues }, { status: 400 });
+        }
         if (error instanceof Error && error.message === 'Authentication required') {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
         }
@@ -208,7 +219,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     try {
         const user = await requireAuth();
         const { id: rawId } = await context.params;
-        const postId = decodeURIComponent(rawId);
+        const decodedId = decodeURIComponent(rawId);
+        const postId = postIdSchema.parse(decodedId);
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
 
         if (user.isSuspended || user.isSilenced) {
@@ -272,17 +284,20 @@ export async function DELETE(request: Request, context: RouteContext) {
         // Update original post's repost count
         if (originalPost) {
             await db.update(posts)
-                .set({ repostsCount: Math.max(0, originalPost.repostsCount - 1) })
+                .set({ repostsCount: sql`GREATEST(0, ${posts.repostsCount} - 1)` })
                 .where(eq(posts.id, postId));
         }
 
         // Update user's post count
         await db.update(users)
-            .set({ postsCount: Math.max(0, user.postsCount - 1) })
+            .set({ postsCount: sql`GREATEST(0, ${users.postsCount} - 1)` })
             .where(eq(users.id, user.id));
 
         return NextResponse.json({ success: true, reposted: false });
     } catch (error) {
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: 'Invalid post ID', details: error.issues }, { status: 400 });
+        }
         if (error instanceof Error && error.message === 'Authentication required') {
             return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
         }

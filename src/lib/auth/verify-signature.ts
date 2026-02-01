@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { canonicalize, importPublicKey, base64UrlToBase64 } from '@/lib/crypto/user-signing';
 // Note: user-signing helpers are isomorphic (work in Node via webcrypto polyfill/availability)
 import crypto from 'crypto';
+import { isRateLimited } from '@/lib/rate-limit';
 
 // Use Node's webcrypto for server-side if not global
 const cryptoSubtle = globalThis.crypto?.subtle || require('crypto').webcrypto.subtle;
@@ -77,7 +78,13 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
 
   const { sig, ...payload } = signedAction;
 
-  // 1. FRESHNESS CHECK (Fail fast before DB/Crypto)
+  // 1. RATE LIMIT CHECK (Fail fast before heavy operations)
+  // 5 requests per minute per DID
+  if (isRateLimited(payload.did, 5, 60 * 1000)) {
+    return { valid: false, error: 'RATE_LIMITED' };
+  }
+
+  // 2. FRESHNESS CHECK (Fail fast before DB/Crypto)
   const now = Date.now();
   const diff = Math.abs(now - payload.ts);
   // Allow 5 minutes clock skew
@@ -87,7 +94,7 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
     return { valid: false, error: 'INVALID_TIMESTAMP: Request too old or in future' };
   }
 
-  // 2. FETCH USER & KEY
+  // 3. FETCH USER & KEY
   const user = await db.query.users.findFirst({
     where: eq(users.did, payload.did),
   });
@@ -100,18 +107,18 @@ export async function verifyUserAction(signedAction: SignedAction): Promise<{
     return { valid: false, error: 'Handle mismatch' };
   }
 
-  // 3. CRYPTOGRAPHIC VERIFICATION
+  // 4. CRYPTOGRAPHIC VERIFICATION
   const isValid = await verifyActionSignature(signedAction, user.publicKey);
 
   if (!isValid) {
     return { valid: false, error: 'INVALID_SIGNATURE' };
   }
 
-  // 4. ACTION ID HASH COMPUTATION
+  // 5. ACTION ID HASH COMPUTATION
   const canonicalString = canonicalize(payload);
   const actionIdHash = crypto.createHash('sha256').update(canonicalString).digest('hex');
 
-  // 5. REPLAY PROTECTION (DB)
+  // 6. REPLAY PROTECTION (DB)
   try {
     await db.insert(signedActionDedupe).values({
       actionId: actionIdHash,

@@ -3,6 +3,7 @@ import { registerUser, createSession } from '@/lib/auth';
 import { db, nodes, users } from '@/db';
 import { eq } from 'drizzle-orm';
 import { verifyTurnstileToken } from '@/lib/turnstile';
+import { testS3Credentials } from '@/lib/storage/s3';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -11,6 +12,13 @@ const registerSchema = z.object({
     password: z.string().min(8),
     displayName: z.string().optional(),
     turnstileToken: z.string().nullable().optional(),
+    // S3-compatible storage credentials
+    storageProvider: z.string().min(1),
+    storageEndpoint: z.string().nullable().optional(),
+    storageRegion: z.string().min(1),
+    storageBucket: z.string().min(1),
+    storageAccessKey: z.string().min(10),
+    storageSecretKey: z.string().min(10),
 });
 
 export async function POST(request: Request) {
@@ -36,11 +44,37 @@ export async function POST(request: Request) {
             }
         }
 
+        // Test S3 credentials before creating account
+        console.log('[Register] Testing S3 credentials...');
+        const s3Test = await testS3Credentials(
+            data.storageEndpoint || null,
+            data.storageRegion,
+            data.storageBucket,
+            data.storageAccessKey,
+            data.storageSecretKey
+        );
+
+        if (!s3Test.success) {
+            console.error('[Register] S3 credential test failed:', s3Test.error);
+            return NextResponse.json(
+                { error: `Storage connection failed: ${s3Test.error}` },
+                { status: 400 }
+            );
+        }
+
+        console.log('[Register] S3 credentials verified successfully');
+
         const user = await registerUser(
             data.handle,
             data.email,
             data.password,
-            data.displayName
+            data.displayName,
+            data.storageProvider,
+            data.storageEndpoint || null,
+            data.storageRegion,
+            data.storageBucket,
+            data.storageAccessKey,
+            data.storageSecretKey
         );
 
         // Check if this is an NSFW node and auto-enable NSFW settings

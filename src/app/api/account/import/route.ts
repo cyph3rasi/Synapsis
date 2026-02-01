@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db, users, posts, media, follows, nodes, chatConversations, chatMessages, bots, botContentSources, botActivityLogs } from '@/db';
-import { eq } from 'drizzle-orm';
+import { db, users, posts, media, follows, remoteFollows, nodes, chatConversations, chatMessages, bots, botContentSources, botActivityLogs } from '@/db';
+import { eq, sql } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { encryptApiKey, serializeEncryptedData } from '@/lib/bots/encryption';
 import { v4 as uuid } from 'uuid';
@@ -19,6 +19,7 @@ interface ImportManifest {
     handle: string;
     sourceNode: string;
     exportedAt: string;
+    expiresAt?: string; // Optional for backward compatibility
     publicKey: string;
     privateKeyEncrypted: string;
     salt: string;
@@ -38,12 +39,15 @@ interface ImportPost {
     content: string;
     createdAt: string;
     replyToApId: string | null;
-    media: { filename: string; url: string; altText: string | null }[];
+    media: { filename: string; url: string; altText: string | null; isIPFS?: boolean }[];
 }
 
 interface ImportFollowing {
     actorUrl: string;
     handle: string;
+    isRemote?: boolean;
+    inboxUrl?: string;
+    activityId?: string;
 }
 
 interface ImportDMConversation {
@@ -167,6 +171,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Unsupported export version' }, { status: 400 });
         }
 
+        // Check if export has expired
+        if (manifest.expiresAt) {
+            const expiresAt = new Date(manifest.expiresAt);
+            if (expiresAt < new Date()) {
+                return NextResponse.json({ 
+                    error: 'Export has expired. Please create a new export from your old node.' 
+                }, { status: 400 });
+            }
+        }
+
         const { dms: importDMs = [], bots: importBots = [] } = exportData;
 
         // Verify signature
@@ -263,12 +277,14 @@ export async function POST(req: NextRequest) {
                     apUrl: `https://${nodeDomain}/posts/${uuid()}`,
                 }).returning();
 
-                // Import media references (URLs point to old location for now)
+                // Import media references
+                // For IPFS media (ipfs://hash), the URL works on any node
+                // For legacy S3 media, URL points to old node (may break if old node goes down)
                 for (const mediaItem of post.media) {
                     await db.insert(media).values({
                         userId: newUser.id,
                         postId: newPost.id,
-                        url: mediaItem.url, // Original URL - might need re-uploading
+                        url: mediaItem.url, // IPFS URLs are portable, S3 URLs are not
                         altText: mediaItem.altText,
                     });
                 }
@@ -286,6 +302,49 @@ export async function POST(req: NextRequest) {
             nodeDomain,
             updatedAt: new Date().toISOString(),
         }]);
+
+        // Import following list
+        let importedFollowing = 0;
+        for (const follow of following) {
+            try {
+                if (follow.isRemote) {
+                    // Remote follow - add to remoteFollows table
+                    await db.insert(remoteFollows).values({
+                        followerId: newUser.id,
+                        targetHandle: follow.handle,
+                        targetActorUrl: follow.actorUrl || `https://${follow.handle.split('@')[1]}/users/${follow.handle.split('@')[0]}`,
+                        inboxUrl: follow.inboxUrl || `https://${follow.handle.split('@')[1]}/inbox`,
+                        activityId: follow.activityId || `migrate-${uuid()}`,
+                    });
+                } else {
+                    // Local follow - look up user and add to follows table
+                    const targetUser = await db.query.users.findFirst({
+                        where: eq(users.handle, follow.handle.toLowerCase()),
+                    });
+                    if (targetUser) {
+                        await db.insert(follows).values({
+                            followerId: newUser.id,
+                            followingId: targetUser.id,
+                        });
+                        // Increment following count on target user
+                        await db.update(users)
+                            .set({ followersCount: sql`${users.followersCount} + 1` })
+                            .where(eq(users.id, targetUser.id));
+                    } else {
+                        // Local user not found, convert to remote follow
+                        console.log(`[Import] Local user @${follow.handle} not found, skipping follow`);
+                    }
+                }
+                importedFollowing++;
+            } catch (error) {
+                console.error(`[Import] Failed to restore follow for @${follow.handle}:`, error);
+            }
+        }
+
+        // Update user's following count
+        await db.update(users)
+            .set({ followingCount: importedFollowing })
+            .where(eq(users.id, newUser.id));
 
         // Import DMs
         for (const conv of importDMs) {
@@ -404,7 +463,7 @@ export async function POST(req: NextRequest) {
             },
             stats: {
                 postsImported: importedPosts,
-                followingToRestore: following.length,
+                followingImported: importedFollowing,
                 dmsImported: importDMs.length,
                 botsImported: importBots.length,
             },

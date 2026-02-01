@@ -11,6 +11,8 @@
  */
 
 import { db, bots, users, botContentSources, botContentItems, botMentions, botActivityLogs, botRateLimits, follows } from '@/db';
+import { generateAndUploadAvatarToUserStorage } from '@/lib/storage/s3';
+import { decryptPrivateKey, deserializeEncryptedKey } from '@/lib/crypto/private-key';
 import { eq, and, count } from 'drizzle-orm';
 import { generateKeyPair } from '@/lib/crypto/keys';
 import { 
@@ -333,6 +335,15 @@ export async function createBot(ownerId: string, config: BotCreateInput): Promis
     throw new BotHandleTakenError(config.handle);
   }
   
+  // Get owner to access their S3 storage for bot avatar
+  const owner = await db.query.users.findFirst({
+    where: eq(users.id, ownerId),
+  });
+  
+  if (!owner) {
+    throw new BotValidationError('Owner user not found');
+  }
+  
   // Generate cryptographic keys for the bot's user account
   const { publicKey, privateKey } = await generateKeyPair();
   
@@ -344,13 +355,27 @@ export async function createBot(ownerId: string, config: BotCreateInput): Promis
   const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
   const botDid = `did:web:${nodeDomain}:users:${config.handle.toLowerCase()}`;
   
+  // Generate bot avatar using owner's S3 storage if no avatar provided
+  let botAvatarUrl = config.avatarUrl || null;
+  if (!botAvatarUrl && owner.storageAccessKeyEncrypted && owner.storageSecretKeyEncrypted && owner.storageBucket) {
+    try {
+      // We need the owner's password to decrypt S3 credentials
+      // Since we don't have the password here, we'll leave avatar null
+      // The frontend should handle avatar generation with the user's password
+      // Or we can generate a default avatar URL pattern
+      console.log('[BotManager] Bot avatar will need to be set via API with user password');
+    } catch (err) {
+      console.error('[BotManager] Failed to generate bot avatar:', err);
+    }
+  }
+  
   // Create the bot's user account first
   const [botUser] = await db.insert(users).values({
     did: botDid,
     handle: config.handle.toLowerCase(),
     displayName: config.name,
     bio: config.bio || null,
-    avatarUrl: config.avatarUrl || null,
+    avatarUrl: botAvatarUrl,
     headerUrl: config.headerUrl || null,
     publicKey,
     privateKeyEncrypted: serializeEncryptedData(encryptedPrivateKey),

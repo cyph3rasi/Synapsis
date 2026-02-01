@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, posts, users, media, follows, mutes, blocks, likes, remoteFollows, remotePosts } from '@/db';
 import { requireAuth } from '@/lib/auth';
 import { requireSignedAction, type SignedAction } from '@/lib/auth/verify-signature';
-import { eq, desc, and, inArray, isNull, isNotNull, or, lt } from 'drizzle-orm';
+import { eq, desc, and, inArray, isNull, isNotNull, or, lt, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -19,7 +19,7 @@ const buildWhere = (...conditions: Array<SQL | undefined>) => {
 
 const createPostSchema = z.object({
     content: z.string().min(1).max(POST_MAX_LENGTH),
-    replyToId: z.string().optional(), // Can be UUID or swarm:domain:uuid
+    replyToId: z.string().uuid().optional(), // Must be UUID (swarm replies use separate field)
     swarmReplyTo: z.object({
         postId: z.string(),
         nodeDomain: z.string(),
@@ -105,21 +105,16 @@ export async function POST(request: Request) {
             });
         }
 
-        // Update user's post count
+        // Update user's post count (atomic increment to prevent race conditions)
         await db.update(users)
-            .set({ postsCount: user.postsCount + 1 })
+            .set({ postsCount: sql`${users.postsCount} + 1` })
             .where(eq(users.id, user.id));
 
-        // If this is a reply, update the parent's reply count
+        // If this is a reply, update the parent's reply count (atomic increment)
         if (data.replyToId) {
-            const parentPost = await db.query.posts.findFirst({
-                where: eq(posts.id, data.replyToId),
-            });
-            if (parentPost) {
-                await db.update(posts)
-                    .set({ repliesCount: parentPost.repliesCount + 1 })
-                    .where(eq(posts.id, data.replyToId));
-            }
+            await db.update(posts)
+                .set({ repliesCount: sql`${posts.repliesCount} + 1` })
+                .where(eq(posts.id, data.replyToId));
         }
 
         // DEPRECATED: Push-based federation disabled
@@ -213,7 +208,9 @@ export async function POST(request: Request) {
                     }
                 }
             } catch (err) {
-                console.error('[Local] Error creating mention notifications:', err);
+                // Log error with context but don't fail the request - mention notifications are best-effort
+                console.error('[Posts] Error creating mention notifications:', err);
+                console.error('[Posts] Context:', { postId: post.id, userId: user.id, content: data.content?.slice(0, 100) });
             }
         })();
 
@@ -237,7 +234,9 @@ export async function POST(request: Request) {
                     console.log(`[Swarm] Delivered ${result.delivered} mentions (${result.failed} failed)`);
                 }
             } catch (err) {
-                console.error('[Swarm] Error delivering mentions:', err);
+                // Log error with context but don't fail the request - swarm delivery is best-effort
+                console.error('[Posts] Error delivering swarm mentions:', err);
+                console.error('[Posts] Context:', { postId: post.id, userId: user.id, nodeDomain });
             }
         })();
 
@@ -264,7 +263,9 @@ export async function POST(request: Request) {
                     console.log(`[Swarm] Post ${post.id} delivered to ${swarmResult.delivered} swarm nodes (${swarmResult.failed} failed)`);
                 }
             } catch (err) {
-                console.error('[Swarm] Error delivering post:', err);
+                // Log error with context but don't fail the request - swarm delivery is best-effort
+                console.error('[Posts] Error delivering post to swarm followers:', err);
+                console.error('[Posts] Context:', { postId: post.id, userId: user.id, nodeDomain });
             }
         })();
 

@@ -4,10 +4,13 @@ import { chatConversations, chatMessages, users, handleRegistry, follows } from 
 import { requireSignedAction } from '@/lib/auth/verify-signature';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { createSignedPayload } from '@/lib/swarm/signature';
+
+const handleRegex = /^[a-zA-Z0-9_]{3,20}$/;
 
 const chatSendSchema = z.object({
-    recipientDid: z.string(),
-    recipientHandle: z.string(),
+    recipientDid: z.string().min(1).regex(/^did:/, 'Must be a valid DID (did:key:... or did:synapsis:...)'),
+    recipientHandle: z.string().min(3).max(30).regex(handleRegex, 'Handle must be 3-20 characters, alphanumeric and underscores only'),
     content: z.string().min(1).max(5000),
 });
 
@@ -33,7 +36,14 @@ export async function POST(request: NextRequest) {
             where: eq(users.did, recipientDid)
         });
 
-        if (recipientUser) {
+        // Check if recipient is a local user (not remote/swarm cached)
+        // Remote users have handles with @domain or IDs starting with "swarm:"
+        const isRemoteUser = recipientUser && (
+            recipientUser.handle.includes('@') || 
+            recipientUser.id.startsWith('swarm:')
+        );
+
+        if (recipientUser && !isRemoteUser) {
             // Reject if recipient is a bot
             if (recipientUser.isBot) {
                 return NextResponse.json({ error: 'Cannot DM a bot account' }, { status: 400 });
@@ -165,19 +175,35 @@ export async function POST(request: NextRequest) {
                 const protocol = targetDomain.includes('localhost') ? 'http' : 'https';
                 const sourceDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || '';
 
+                // Construct full sender handle for federation
+                const fullSenderHandle = `${user.handle}@${sourceDomain}`;
+
                 console.log(`[Remote Send] Debug:`, {
                     targetDomain,
                     targetUrl: `${protocol}://${targetDomain}/api/chat/receive`,
                     sourceDomainEnv: sourceDomain,
+                    fullSenderHandle,
                 });
+
+                // Create a federated envelope with node's signature
+                // This wraps the user's signed action with the full handle
+                const federatedPayload = {
+                    userAction: signedAction,
+                    fullSenderHandle,
+                    sourceDomain,
+                    ts: Date.now(),
+                };
+
+                const { payload, signature } = await createSignedPayload(federatedPayload);
 
                 const res = await fetch(`${protocol}://${targetDomain}/api/chat/receive`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Swarm-Source-Domain': sourceDomain
+                        'X-Swarm-Source-Domain': sourceDomain,
+                        'X-Swarm-Signature': signature,
                     },
-                    body: JSON.stringify(signedAction) // Forward the user's signed intent
+                    body: JSON.stringify(payload)
                 });
 
                 if (!res.ok) {

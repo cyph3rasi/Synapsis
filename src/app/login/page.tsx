@@ -32,6 +32,12 @@ export default function LoginPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [handle, setHandle] = useState('');
     const [displayName, setDisplayName] = useState('');
+    const [storageProvider, setStorageProvider] = useState('r2');
+    const [storageEndpoint, setStorageEndpoint] = useState('');
+    const [storageRegion, setStorageRegion] = useState('auto');
+    const [storageBucket, setStorageBucket] = useState('');
+    const [storageAccessKey, setStorageAccessKey] = useState('');
+    const [storageSecretKey, setStorageSecretKey] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [nodeInfoLoaded, setNodeInfoLoaded] = useState(false);
@@ -244,6 +250,12 @@ export default function LoginPage() {
                     password,
                     handle,
                     displayName,
+                    storageProvider,
+                    storageEndpoint: storageEndpoint || null,
+                    storageRegion,
+                    storageBucket,
+                    storageAccessKey,
+                    storageSecretKey,
                     ...(nodeInfo.turnstileSiteKey ? { turnstileToken } : {})
                 };
 
@@ -326,7 +338,7 @@ export default function LoginPage() {
             justifyContent: 'center',
             padding: '24px',
         }}>
-            <div style={{ width: '100%', maxWidth: '400px' }}>
+            <div style={{ width: '100%', maxWidth: mode === 'register' ? '680px' : '400px' }}>
                 {/* Logo */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px', minHeight: '120px' }}>
                     {nodeInfoLoaded && (
@@ -440,111 +452,248 @@ export default function LoginPage() {
 
                         {mode === 'register' && (
                             <>
-                                <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                        Handle
-                                    </label>
-                                    <div style={{ position: 'relative' }}>
-                                        <span style={{
-                                            position: 'absolute',
-                                            left: '12px',
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            color: 'var(--foreground-tertiary)',
-                                        }}>@</span>
-                                        <input
-                                            type="text"
-                                            className="input"
-                                            value={handle}
-                                            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                            style={{ paddingLeft: '28px' }}
-                                            placeholder="yourhandle"
-                                            required
-                                            minLength={3}
-                                            maxLength={20}
-                                        />
+                                {/* Row 1: Handle | Password */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Handle
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{
+                                                position: 'absolute',
+                                                left: '12px',
+                                                top: '50%',
+                                                transform: 'translateY(-50%)',
+                                                color: 'var(--foreground-tertiary)',
+                                            }}>@</span>
+                                            <input
+                                                type="text"
+                                                className="input"
+                                                value={handle}
+                                                onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                                style={{ paddingLeft: '28px' }}
+                                                placeholder="yourhandle"
+                                                required
+                                                minLength={3}
+                                                maxLength={20}
+                                            />
+                                        </div>
+                                        <div style={{
+                                            fontSize: '12px',
+                                            marginTop: '4px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <span style={{ color: 'var(--foreground-tertiary)' }}>
+                                                3-20 chars, a-z 0-9 _
+                                            </span>
+                                            {handleStatus === 'checking' && (
+                                                <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
+                                            )}
+                                            {handleStatus === 'available' && (
+                                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓</span>
+                                            )}
+                                            {handleStatus === 'taken' && (
+                                                <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div style={{
-                                        fontSize: '12px',
-                                        marginTop: '4px',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                    }}>
-                                        <span style={{ color: 'var(--foreground-tertiary)' }}>
-                                            3-20 characters, alphanumeric and underscores
-                                        </span>
-                                        {handleStatus === 'checking' && (
-                                            <span style={{ color: 'var(--foreground-tertiary)' }}>Checking...</span>
-                                        )}
-                                        {handleStatus === 'available' && (
-                                            <span style={{ color: 'var(--success)', fontWeight: 600 }}>Available</span>
-                                        )}
-                                        {handleStatus === 'taken' && (
-                                            <span style={{ color: 'var(--error)', fontWeight: 600 }}>Taken</span>
-                                        )}
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="input"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            required
+                                            minLength={8}
+                                        />
                                     </div>
                                 </div>
 
+                                {/* Row 2: Display Name | Confirm Password */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Display Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={displayName}
+                                            onChange={(e) => setDisplayName(e.target.value)}
+                                            placeholder="Your Name"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Confirm Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="input"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            required
+                                            minLength={8}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Row 3: Email | Storage Provider */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            className="input"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="you@example.com"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Storage Provider
+                                        </label>
+                                        <select
+                                            className="input"
+                                            value={storageProvider}
+                                            onChange={(e) => setStorageProvider(e.target.value)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <option value="r2">Cloudflare R2 (10GB free)</option>
+                                            <option value="b2">Backblaze B2 (10GB free)</option>
+                                            <option value="wasabi">Wasabi</option>
+                                            <option value="s3">AWS S3</option>
+                                            <option value="minio">MinIO / Self-hosted</option>
+                                            <option value="other">Other S3-compatible</option>
+                                        </select>
+                                        <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                            You own your storage. We just connect to it.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* S3 Credentials - Full Width */}
                                 <div style={{ marginBottom: '16px' }}>
                                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                        Display Name
+                                        Endpoint URL (optional for AWS)
                                     </label>
                                     <input
                                         type="text"
                                         className="input"
-                                        value={displayName}
-                                        onChange={(e) => setDisplayName(e.target.value)}
-                                        placeholder="Your Name"
+                                        value={storageEndpoint}
+                                        onChange={(e) => setStorageEndpoint(e.target.value)}
+                                        placeholder="https://<account>.r2.cloudflarestorage.com"
                                     />
+                                    <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                        Leave empty for AWS S3. Required for R2, B2, MinIO.
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Region
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={storageRegion}
+                                            onChange={(e) => setStorageRegion(e.target.value)}
+                                            placeholder="auto"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Bucket Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={storageBucket}
+                                            onChange={(e) => setStorageBucket(e.target.value)}
+                                            placeholder="my-synapsis-bucket"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Access Key ID
+                                    </label>
+                                    <input
+                                        type="password"
+                                        className="input"
+                                        value={storageAccessKey}
+                                        onChange={(e) => setStorageAccessKey(e.target.value)}
+                                        placeholder="AKIA..."
+                                        required
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Secret Access Key
+                                    </label>
+                                    <input
+                                        type="password"
+                                        className="input"
+                                        value={storageSecretKey}
+                                        onChange={(e) => setStorageSecretKey(e.target.value)}
+                                        placeholder="••••••••"
+                                        required
+                                    />
+                                    <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                        Get free S3 storage at <a href="https://dash.cloudflare.com/sign-up/r2" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Cloudflare R2</a> (10GB free) or <a href="https://www.backblaze.com/b2/sign-up.html" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Backblaze B2</a>
+                                    </div>
                                 </div>
                             </>
                         )}
 
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                Email
-                            </label>
-                            <input
-                                type="email"
-                                className="input"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                required
-                            />
-                        </div>
+                        {/* Login Mode - Show email/password only */}
+                        {mode === 'login' && (
+                            <>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        className="input"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="you@example.com"
+                                        required
+                                    />
+                                </div>
 
-                        <div style={{ marginBottom: '24px' }}>
-                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                Password
-                            </label>
-                            <input
-                                type="password"
-                                className="input"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                required
-                                minLength={8}
-                            />
-                        </div>
-
-                        {mode === 'register' && (
-                            <div style={{ marginBottom: '24px' }}>
-                                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                    Confirm Password
-                                </label>
-                                <input
-                                    type="password"
-                                    className="input"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    required
-                                    minLength={8}
-                                />
-                            </div>
+                                <div style={{ marginBottom: '24px' }}>
+                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                        Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        className="input"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        required
+                                        minLength={8}
+                                    />
+                                </div>
+                            </>
                         )}
 
                         {mode === 'register' && nodeInfo.isNsfw && (
@@ -581,7 +730,21 @@ export default function LoginPage() {
                             type="submit"
                             className="btn btn-primary btn-lg"
                             style={{ width: '100%' }}
-                            disabled={loading || (!!nodeInfo.turnstileSiteKey && !turnstileToken)}
+                            disabled={loading || 
+                                (!!nodeInfo.turnstileSiteKey && !turnstileToken) ||
+                                (mode === 'register' && (
+                                    !handle || handle.length < 3 ||
+                                    !email ||
+                                    !password || password.length < 8 ||
+                                    !confirmPassword ||
+                                    password !== confirmPassword ||
+                                    !storageProvider ||
+                                    !storageRegion ||
+                                    !storageBucket ||
+                                    !storageAccessKey ||
+                                    !storageSecretKey ||
+                                    (nodeInfo.isNsfw && !ageVerified)
+                                ))}
                         >
                             {loading ? 'Please wait...' : (mode === 'login' ? 'Login' : 'Create Account')}
                         </button>

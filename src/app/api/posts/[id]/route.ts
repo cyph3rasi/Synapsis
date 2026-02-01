@@ -1,6 +1,19 @@
 import { NextResponse } from 'next/server';
 import { db, posts, users, media, remotePosts } from '@/db';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
+// Schema for local post ID (UUID)
+const localPostIdSchema = z.string().uuid('Invalid post ID format');
+
+// Schema for swarm post ID (swarm:domain:uuid)
+const swarmPostIdSchema = z.string().regex(
+  /^swarm:[^:]+:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  'Invalid swarm post ID format'
+);
+
+// Combined schema that accepts either format
+const postIdSchema = z.union([localPostIdSchema, swarmPostIdSchema]);
 
 export async function GET(
     request: Request,
@@ -424,15 +437,10 @@ export async function DELETE(
         // 3. Delete the post (cascades to media, likes, notifications)
         await db.delete(posts).where(eq(posts.id, id));
 
-        // 4. Decrement the post author's postsCount
-        const postAuthor = await db.query.users.findFirst({
-            where: eq(users.id, post.userId),
-        });
-        if (postAuthor && postAuthor.postsCount > 0) {
-            await db.update(users)
-                .set({ postsCount: postAuthor.postsCount - 1 })
-                .where(eq(users.id, post.userId));
-        }
+        // 4. Decrement the post author's postsCount (atomic decrement, clamped to 0)
+        await db.update(users)
+            .set({ postsCount: sql`GREATEST(0, ${users.postsCount} - 1)` })
+            .where(eq(users.id, post.userId));
 
         return NextResponse.json({ success: true });
     } catch (error) {
