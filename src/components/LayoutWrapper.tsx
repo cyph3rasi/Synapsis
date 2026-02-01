@@ -12,8 +12,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     // Paths that should NOT have the app layout
     const isStandalone =
         pathname === '/login' ||
-        pathname === '/register' ||
-        pathname?.startsWith('/install');
+        pathname === '/register';
 
     // Hide right sidebar on chat page for more space
     const hideRightSidebar = false;
