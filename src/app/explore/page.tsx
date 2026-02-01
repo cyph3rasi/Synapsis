@@ -361,10 +361,18 @@ export default function ExplorePage() {
                     ) : loading ? (
                         <div className="explore-loading">Loading posts...</div>
                     ) : nodePosts.length === 0 ? (
-                        <div className="explore-empty">
-                            <Server size={24} />
-                            <p>No posts on this node yet</p>
-                        </div>
+                        <>
+                            <div className="feed-meta card">
+                                <div className="feed-meta-title">Node feed</div>
+                                <div className="feed-meta-body">
+                                    A chronological feed of all posts from users on this node. See what the local community is sharing.
+                                </div>
+                            </div>
+                            <div className="explore-empty">
+                                <Server size={24} />
+                                <p>No posts on this node yet</p>
+                            </div>
+                        </>
                     ) : (
                         <>
                             <div className="feed-meta card">
