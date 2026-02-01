@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         
         botAvatarUrl = await generateAndUploadAvatarToUserStorage(
           botHandle,
-          user.storageEndpoint,
+          user.storageEndpoint ?? undefined,
           user.storageRegion || 'auto',
           user.storageBucket,
           accessKeyId,
