@@ -33,29 +33,41 @@ export async function PATCH(req: NextRequest) {
                 bannerUrl: data.bannerUrl,
                 logoUrl: data.logoUrl,
                 faviconUrl: data.faviconUrl,
+                logoData: data.logoData,
+                faviconData: data.faviconData,
                 accentColor: data.accentColor,
                 isNsfw: data.isNsfw ?? false,
                 turnstileSiteKey: data.turnstileSiteKey,
                 turnstileSecretKey: data.turnstileSecretKey,
             }).returning();
         } else {
+            const updateData: Record<string, unknown> = {
+                name: data.name,
+                description: data.description,
+                longDescription: data.longDescription,
+                rules: data.rules,
+                bannerUrl: data.bannerUrl,
+                logoUrl: data.logoUrl,
+                faviconUrl: data.faviconUrl,
+                accentColor: data.accentColor,
+                isNsfw: data.isNsfw ?? node.isNsfw,
+                turnstileSiteKey: data.turnstileSiteKey !== undefined ? data.turnstileSiteKey : node.turnstileSiteKey,
+                turnstileSecretKey: data.turnstileSecretKey !== undefined ? data.turnstileSecretKey : node.turnstileSecretKey,
+                // Fix domain drift: ensure the DB matches the current environment
+                domain: domain,
+                updatedAt: new Date(),
+            };
+
+            // Only update logoData/faviconData if explicitly provided
+            if (data.logoData !== undefined) {
+                updateData.logoData = data.logoData;
+            }
+            if (data.faviconData !== undefined) {
+                updateData.faviconData = data.faviconData;
+            }
+
             [node] = await db.update(nodes)
-                .set({
-                    name: data.name,
-                    description: data.description,
-                    longDescription: data.longDescription,
-                    rules: data.rules,
-                    bannerUrl: data.bannerUrl,
-                    logoUrl: data.logoUrl,
-                    faviconUrl: data.faviconUrl,
-                    accentColor: data.accentColor,
-                    isNsfw: data.isNsfw ?? node.isNsfw,
-                    turnstileSiteKey: data.turnstileSiteKey !== undefined ? data.turnstileSiteKey : node.turnstileSiteKey,
-                    turnstileSecretKey: data.turnstileSecretKey !== undefined ? data.turnstileSecretKey : node.turnstileSecretKey,
-                    // Fix domain drift: ensure the DB matches the current environment
-                    domain: domain,
-                    updatedAt: new Date(),
-                })
+                .set(updateData)
                 .where(eq(nodes.id, node.id))
                 .returning();
         }

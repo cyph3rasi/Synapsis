@@ -200,7 +200,7 @@ export async function registerUser(
     const fullHandle = `${handle.toLowerCase()}@${nodeDomain}`;
     const avatarUrl = await generateAndUploadAvatarToUserStorage(
         fullHandle,
-        storageEndpoint || null,
+        storageEndpoint || undefined,
         storageRegion,
         storageBucket,
         storageAccessKey,

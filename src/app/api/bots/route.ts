@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     const data = createBotSchema.parse(body);
 
     // Generate bot avatar using owner's S3 storage if password provided and no avatar URL
-    let botAvatarUrl = data.avatarUrl;
+    let botAvatarUrl: string | null | undefined = data.avatarUrl;
     if (!botAvatarUrl && data.ownerPassword && user.storageAccessKeyEncrypted && user.storageSecretKeyEncrypted && user.storageBucket) {
       try {
         const nodeDomain = process.env.NEXT_PUBLIC_NODE_DOMAIN || 'localhost:3000';
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         
         botAvatarUrl = await generateAndUploadAvatarToUserStorage(
           botHandle,
-          (user.storageEndpoint ?? undefined) as string | null | undefined,
+          user.storageEndpoint || undefined,
           user.storageRegion || 'auto',
           user.storageBucket,
           accessKeyId,
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       name: data.name,
       handle: data.handle,
       bio: data.bio,
-      avatarUrl: botAvatarUrl,
+      avatarUrl: botAvatarUrl ?? undefined,
       headerUrl: data.headerUrl,
       personality: data.personality,
       llmProvider: data.llmProvider,

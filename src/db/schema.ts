@@ -15,6 +15,8 @@ export const nodes = pgTable('nodes', {
   bannerUrl: text('banner_url'),
   logoUrl: text('logo_url'),
   faviconUrl: text('favicon_url'),
+  logoData: text('logo_data'), // Base64 encoded logo image
+  faviconData: text('favicon_data'), // Base64 encoded favicon image
   accentColor: text('accent_color').default('#FFFFFF'),
   publicKey: text('public_key'),
   privateKeyEncrypted: text('private_key_encrypted'), // Encrypted with AUTH_SECRET

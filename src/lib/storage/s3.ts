@@ -164,15 +164,15 @@ export async function testS3Credentials(
  */
 export async function generateAndUploadAvatarToUserStorage(
   handle: string,
-  endpoint: string | null | undefined,
+  endpoint: string | undefined,
   region: string,
   bucket: string,
   accessKey: string,
   secretKey: string
 ): Promise<string | null> {
   try {
-    // 1. Fetch the avatar from DiceBear
-    const dicebearUrl = `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${handle}`;
+    // 1. Fetch the avatar from DiceBear (PNG format for better compatibility)
+    const dicebearUrl = `https://api.dicebear.com/9.x/bottts-neutral/png?seed=${handle}`;
     const response = await fetch(dicebearUrl);
 
     if (!response.ok) {
@@ -192,13 +192,13 @@ export async function generateAndUploadAvatarToUserStorage(
       bucket,
     });
 
-    const key = `synapsis/avatars/${handle.replace(/[^a-zA-Z0-9]/g, '')}-avatar.svg`;
+    const key = `synapsis/avatars/${handle.replace(/[^a-zA-Z0-9]/g, '')}-avatar.png`;
     
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       Body: buffer,
-      ContentType: 'image/svg+xml',
+      ContentType: 'image/png',
     }));
 
     // 3. Return URL

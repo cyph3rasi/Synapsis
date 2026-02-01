@@ -3,8 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 export async function generateAndUploadAvatar(handle: string): Promise<string | null> {
     try {
-        // 1. Fetch the avatar from DiceBear
-        const dicebearUrl = `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${handle}`;
+        // 1. Fetch the avatar from DiceBear (PNG format for better compatibility)
+        const dicebearUrl = `https://api.dicebear.com/9.x/bottts-neutral/png?seed=${handle}`;
         const response = await fetch(dicebearUrl);
 
         if (!response.ok) {
@@ -29,13 +29,13 @@ export async function generateAndUploadAvatar(handle: string): Promise<string | 
         const bucket = process.env.STORAGE_BUCKET || 'synapsis';
         // Sanitize handle for filename just in case
         const safeHandle = handle.replace(/[^a-zA-Z0-9]/g, '');
-        const filename = `${uuidv4()}-${safeHandle}-avatar.svg`;
+        const filename = `${uuidv4()}-${safeHandle}-avatar.png`;
 
         await s3.send(new PutObjectCommand({
             Bucket: bucket,
             Key: filename,
             Body: buffer,
-            ContentType: 'image/svg+xml',
+            ContentType: 'image/png',
             ACL: 'public-read',
         }));
 

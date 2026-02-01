@@ -577,8 +577,36 @@ export default function LoginPage() {
                                             <option value="minio">MinIO / Self-hosted</option>
                                             <option value="other">Other S3-compatible</option>
                                         </select>
-                                        <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                                            You own your storage. We just connect to it.
+                                    </div>
+                                </div>
+
+                                {/* Storage Explainer Section */}
+                                <div style={{
+                                    marginBottom: '20px',
+                                    padding: '16px',
+                                    background: 'var(--background-secondary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 'var(--radius-md)',
+                                }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--foreground)' }}>
+                                        🗄️ Why do I need to provide storage?
+                                    </div>
+                                    <div style={{ fontSize: '13px', color: 'var(--foreground-secondary)', lineHeight: 1.5, marginBottom: '12px' }}>
+                                        Synapsis is <strong>decentralized</strong> — unlike other platforms, we don't store your photos, videos, or files on our servers. 
+                                        Instead, you connect your own S3-compatible storage bucket (like Cloudflare R2 or Backblaze B2) where your media lives.
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                                        <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>
+                                            <strong style={{ color: 'var(--success)' }}>✓ You own your data</strong><br/>
+                                            Your files stay in your bucket, not ours
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>
+                                            <strong style={{ color: 'var(--success)' }}>✓ Portable</strong><br/>
+                                            Take your media with you if you leave
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)' }}>
+                                            <strong style={{ color: 'var(--success)' }}>✓ Free options</strong><br/>
+                                            R2 and B2 offer 10GB free
                                         </div>
                                     </div>
                                 </div>

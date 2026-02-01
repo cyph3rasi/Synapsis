@@ -138,7 +138,8 @@ export default function AdminPage() {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const res = await fetch('/api/media/upload', {
+            formData.append('type', 'logo');
+            const res = await fetch('/api/admin/node/upload', {
                 method: 'POST',
                 body: formData,
             });
@@ -150,13 +151,13 @@ export default function AdminPage() {
 
             const nextSettings = {
                 ...nodeSettings,
-                logoUrl: data.media?.url || data.url,
+                logoUrl: data.url,
             };
             setNodeSettings(nextSettings);
             await handleSaveSettings(nextSettings);
         } catch (error) {
             console.error('Logo upload failed', error);
-            setLogoUploadError('Upload failed. Please try again.');
+            setLogoUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
         } finally {
             setIsUploadingLogo(false);
         }
@@ -173,7 +174,8 @@ export default function AdminPage() {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const res = await fetch('/api/media/upload', {
+            formData.append('type', 'favicon');
+            const res = await fetch('/api/admin/node/upload', {
                 method: 'POST',
                 body: formData,
             });
@@ -185,13 +187,13 @@ export default function AdminPage() {
 
             const nextSettings = {
                 ...nodeSettings,
-                faviconUrl: data.media?.url || data.url,
+                faviconUrl: data.url,
             };
             setNodeSettings(nextSettings);
             await handleSaveSettings(nextSettings);
         } catch (error) {
             console.error('Favicon upload failed', error);
-            setFaviconUploadError('Upload failed. Please try again.');
+            setFaviconUploadError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
         } finally {
             setIsUploadingFavicon(false);
         }
