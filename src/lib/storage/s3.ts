@@ -164,7 +164,7 @@ export async function testS3Credentials(
  */
 export async function generateAndUploadAvatarToUserStorage(
   handle: string,
-  endpoint: string | null,
+  endpoint: string | null | undefined,
   region: string,
   bucket: string,
   accessKey: string,
