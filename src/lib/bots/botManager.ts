@@ -409,9 +409,6 @@ export async function createBot(ownerId: string, config: BotCreateInput): Promis
     .set({ followersCount: 1 })
     .where(eq(users.id, botUser.id));
   
-  const owner = await db.query.users.findFirst({
-    where: eq(users.id, ownerId),
-  });
   if (owner) {
     await db.update(users)
       .set({ followingCount: owner.followingCount + 1 })
