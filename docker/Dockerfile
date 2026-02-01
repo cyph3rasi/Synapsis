@@ -93,3 +93,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 
 # Set the entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]
+
