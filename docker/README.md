@@ -131,23 +131,6 @@ docker pull ghcr.io/cyph3rasi/synapsis:latest
 
 ---
 
-## 🖼️ Enabling Image Uploads
-
-To enable image uploads, configure S3-compatible storage in your `.env`:
-
-```env
-STORAGE_ENDPOINT=https://s3.your-provider.com
-STORAGE_REGION=us-east-1
-STORAGE_BUCKET=your-bucket
-STORAGE_ACCESS_KEY=your-access-key
-STORAGE_SECRET_KEY=your-secret-key
-STORAGE_PUBLIC_BASE_URL=https://cdn.your-domain.com
-```
-
-Then restart: `docker compose down && docker compose up -d`
-
----
-
 ## 💾 Backup Strategy
 
 Create `/opt/synapsis/backup.sh`:
