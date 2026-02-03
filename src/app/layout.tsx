@@ -57,6 +57,7 @@ export const dynamic = 'force-dynamic';
 import { AuthProvider } from '@/lib/contexts/AuthContext';
 import { ToastProvider } from '@/lib/contexts/ToastContext';
 import { AccentColorProvider } from '@/lib/contexts/AccentColorContext';
+import { ConfigProvider } from '@/lib/contexts/ConfigContext';
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 
 export default function RootLayout({
@@ -67,15 +68,17 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${sairaCondensed.variable}`}>
       <body>
-        <AuthProvider>
-          <AccentColorProvider>
-            <ToastProvider>
-              <LayoutWrapper>
-                {children}
-              </LayoutWrapper>
-            </ToastProvider>
-          </AccentColorProvider>
-        </AuthProvider>
+        <ConfigProvider>
+          <AuthProvider>
+            <AccentColorProvider>
+              <ToastProvider>
+                <LayoutWrapper>
+                  {children}
+                </LayoutWrapper>
+              </ToastProvider>
+            </AccentColorProvider>
+          </AuthProvider>
+        </ConfigProvider>
       </body>
     </html>
   );

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
             file.type,
             user.storageProvider as any,
             user.storageEndpoint,
+            user.storagePublicBaseUrl,
             user.storageRegion || 'us-east-1',
             user.storageBucket || '',
             user.storageAccessKeyEncrypted,

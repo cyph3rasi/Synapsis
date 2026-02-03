@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
 import { Bot } from 'lucide-react';
@@ -65,6 +65,7 @@ const FlagIcon = () => (
 );
 
 function UserCard({ user }: { user: User }) {
+    const fullHandle = useFormattedHandle(user.handle);
     return (
         <Link
             href={`/@${user.handle}`}
@@ -107,7 +108,7 @@ function UserCard({ user }: { user: User }) {
                         </span>
                     )}
                 </div>
-                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '14px' }}>{formatFullHandle(user.handle)}</div>
+                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '14px' }}>{fullHandle}</div>
                 {user.bio && (
                     <div style={{
                         color: 'var(--foreground-secondary)',

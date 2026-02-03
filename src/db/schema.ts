@@ -65,8 +65,9 @@ export const users = pgTable('users', {
   movedFrom: text('moved_from'), // Old actor URL if this account migrated here
   migratedAt: timestamp('migrated_at'), // When the migration occurred
   // User-owned S3-compatible storage - required for new users
-  storageProvider: text('storage_provider'), // 's3', 'r2', 'b2', 'wasabi', etc
+  storageProvider: text('storage_provider'), // 's3', 'r2', 'b2', 'wasabi', 'contabo', etc
   storageEndpoint: text('storage_endpoint'), // S3 endpoint URL (optional for AWS)
+  storagePublicBaseUrl: text('storage_public_base_url'), // Public URL for viewing files (required for R2, B2, Contabo)
   storageRegion: text('storage_region'), // Region (e.g., 'us-east-1')
   storageBucket: text('storage_bucket'), // Bucket name
   storageAccessKeyEncrypted: text('storage_access_key_encrypted'), // Encrypted access key

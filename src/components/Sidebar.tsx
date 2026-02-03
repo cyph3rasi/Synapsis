@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { HomeIcon, SearchIcon, BellIcon, UserIcon, ShieldIcon, SettingsIcon, BotIcon } from './Icons';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { LogOut, Settings2 } from 'lucide-react';
 // import { IdentityUnlockPrompt } from './IdentityUnlockPrompt'; // Moved to LayoutWrapper
 
@@ -18,6 +18,7 @@ export function Sidebar() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
     const [loggingOut, setLoggingOut] = useState(false);
+    const formattedHandle = user ? useFormattedHandle(user.handle) : '';
 
     useEffect(() => {
         fetch('/api/node')
@@ -188,7 +189,7 @@ export function Sidebar() {
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.displayName}</div>
-                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatFullHandle(user.handle)}</div>
+                            <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formattedHandle}</div>
                         </div>
                     </div>
 

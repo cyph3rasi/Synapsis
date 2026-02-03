@@ -8,7 +8,7 @@ import { PostCard } from '@/components/PostCard';
 import { User, Post } from '@/lib/types';
 import AutoTextarea from '@/components/AutoTextarea';
 import { Rocket, MoreHorizontal, Mail, Camera } from 'lucide-react';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { Bot } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -35,6 +35,7 @@ const stripHtml = (html: string | null | undefined): string | null => {
 };
 
 function UserRow({ user }: { user: UserSummary }) {
+    const fullHandle = useFormattedHandle(user.handle);
     return (
         <Link href={`/u/${user.handle}`} className="user-row">
             <div className="avatar">
@@ -66,7 +67,7 @@ function UserRow({ user }: { user: UserSummary }) {
                         </span>
                     )}
                 </div>
-                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{formatFullHandle(user.handle)}</div>
+                <div style={{ color: 'var(--foreground-tertiary)', fontSize: '13px' }}>{fullHandle}</div>
                 {user.bio && stripHtml(user.bio) && (
                     <div className="user-row-bio">{stripHtml(user.bio)}</div>
                 )}
@@ -82,6 +83,7 @@ export default function ProfilePage() {
     const { isIdentityUnlocked, signUserAction } = useAuth();
 
     const [user, setUser] = useState<User | null>(null);
+    const userFullHandle = user ? useFormattedHandle(user.handle) : '';
     const [posts, setPosts] = useState<Post[]>([]);
     const [likedPosts, setLikedPosts] = useState<Post[]>([]);
     const [currentUser, setCurrentUser] = useState<{ id: string; handle: string } | null>(null);
@@ -719,7 +721,7 @@ export default function ProfilePage() {
                     {/* User Info */}
                     <div style={{ padding: '12px 0' }}>
                         <h2 style={{ fontSize: '20px', fontWeight: 700 }}>{user.displayName || user.handle}</h2>
-                        <p style={{ color: 'var(--foreground-tertiary)' }}>{formatFullHandle(user.handle)}</p>
+                        <p style={{ color: 'var(--foreground-tertiary)' }}>{userFullHandle}</p>
 
                         {user.bio && (
                             <p style={{ marginTop: '12px', lineHeight: 1.5 }}>{user.bio}</p>

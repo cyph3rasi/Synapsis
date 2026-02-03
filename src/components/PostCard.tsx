@@ -10,7 +10,8 @@ import { useAuth } from '@/lib/contexts/AuthContext';
 import { useToast } from '@/lib/contexts/ToastContext';
 import { VideoEmbed } from '@/components/VideoEmbed';
 import BlurredVideo from '@/components/BlurredVideo';
-import { formatFullHandle, NODE_DOMAIN } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
+import { useDomain } from '@/lib/contexts/ConfigContext';
 import { signedAPI } from '@/lib/api/signed-fetch';
 
 // Component for link preview image that hides on error
@@ -52,6 +53,9 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
     const [reporting, setReporting] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+    const domain = useDomain();
+    const authorHandle = useFormattedHandle(post.author.handle, post.nodeDomain);
+    const replyToHandle = post.replyTo?.author?.handle ? useFormattedHandle(post.replyTo.author.handle) : '';
 
     // Sync state if post changes (e.g. after a re-render from parent)
     useEffect(() => {
@@ -263,7 +267,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
             return post.author.handle;
         }
         // If this is a swarm post from a DIFFERENT node, append the node domain
-        if (post.nodeDomain && post.nodeDomain !== NODE_DOMAIN) {
+        if (post.nodeDomain && post.nodeDomain !== domain) {
             return `${post.author.handle}@${post.nodeDomain}`;
         }
         // Local user
@@ -403,7 +407,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                         <Link href={`/u/${profileHandle}`} className="post-handle" onClick={(e) => e.stopPropagation()}>
                             {post.author.displayName || post.author.handle}
                         </Link>
-                        <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)}</span>
+                        <span className="post-time">{authorHandle}</span>
                     </div>
                 </div>
                 <div className="post-content">{renderContent(post.content, post.linkPreviewUrl ?? undefined)}</div>
@@ -467,7 +471,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                                 </span>
                             )}
                         </div>
-                        <span className="post-time">{formatFullHandle(post.author.handle, post.nodeDomain)} · {formatTime(post.createdAt)}</span>
+                        <span className="post-time">{authorHandle} · {formatTime(post.createdAt)}</span>
                     </div>
                     {currentUser && currentUser.id !== post.author.id && (
                         <div style={{ position: 'relative', marginLeft: 'auto' }}>
@@ -591,7 +595,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
 
                 {effectiveReplyTo && !showThread && (
                     <div className="post-reply-to">
-                        Replying to <Link href={`/u/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{formatFullHandle(effectiveReplyTo.author.handle)}</Link>
+                        Replying to <Link href={`/u/${effectiveReplyTo.author.handle}`} onClick={(e) => e.stopPropagation()}>{replyToHandle}</Link>
                     </div>
                 )}
 
@@ -672,7 +676,7 @@ export function PostCard({ post, onLike, onRepost, onComment, onDelete, onHide, 
                         // Allow deleting own remote posts where handle might be username@node_domain
                         (post.author.id.startsWith('swarm:') && (
                             post.author.handle === currentUser.handle ||
-                            post.author.handle === `${currentUser.handle}@${NODE_DOMAIN}`
+                            post.author.handle === `${currentUser.handle}@${domain}`
                         ))
                     )) && (
                             <button className="post-action delete-action" onClick={handleDelete} disabled={deleting} title="Delete post">

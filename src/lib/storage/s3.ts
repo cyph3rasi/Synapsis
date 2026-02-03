@@ -65,6 +65,7 @@ export async function uploadToUserStorage(
   mimeType: string,
   provider: StorageProvider,
   endpoint: string | null,
+  publicBaseUrl: string | null,
   region: string,
   bucket: string,
   encryptedAccessKey: string,
@@ -89,7 +90,7 @@ export async function uploadToUserStorage(
 
   // Upload file
   const key = `synapsis/${filename}`;
-  
+
   await s3.send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
@@ -99,8 +100,12 @@ export async function uploadToUserStorage(
 
   // Construct URL based on provider
   let url: string;
-  if (endpoint) {
-    // Custom endpoint (R2, MinIO, etc)
+
+  // Priority: user's publicBaseUrl > construct from endpoint > AWS format
+  if (publicBaseUrl) {
+    url = `${publicBaseUrl.replace(/\/$/, '')}/${key}`;
+  } else if (endpoint) {
+    // Custom endpoint (MinIO, etc)
     url = `${endpoint}/${bucket}/${key}`;
   } else {
     // AWS S3 standard URL
@@ -165,6 +170,7 @@ export async function testS3Credentials(
 export async function generateAndUploadAvatarToUserStorage(
   handle: string,
   endpoint: string | undefined,
+  publicBaseUrl: string | undefined,
   region: string,
   bucket: string,
   accessKey: string,
@@ -193,7 +199,7 @@ export async function generateAndUploadAvatarToUserStorage(
     });
 
     const key = `synapsis/avatars/${handle.replace(/[^a-zA-Z0-9]/g, '')}-avatar.png`;
-    
+
     await s3.send(new PutObjectCommand({
       Bucket: bucket,
       Key: key,
@@ -202,6 +208,10 @@ export async function generateAndUploadAvatarToUserStorage(
     }));
 
     // 3. Return URL
+    // Priority: user's publicBaseUrl > construct from endpoint > AWS format
+    if (publicBaseUrl) {
+      return `${publicBaseUrl.replace(/\/$/, '')}/${key}`;
+    }
     if (endpoint) {
       return `${endpoint}/${bucket}/${key}`;
     }

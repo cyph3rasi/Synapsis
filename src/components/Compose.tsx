@@ -5,7 +5,7 @@ import AutoTextarea from '@/components/AutoTextarea';
 import { Post, Attachment } from '@/lib/types';
 import { ImageIcon, AlertTriangle, Film } from 'lucide-react';
 import { VideoEmbed } from '@/components/VideoEmbed';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface MediaAttachment extends Attachment {
@@ -22,6 +22,7 @@ interface ComposeProps {
 
 export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What's happening?", isReply }: ComposeProps) {
     const { isIdentityUnlocked } = useAuth();
+    const replyToHandle = replyingTo ? useFormattedHandle(replyingTo.author.handle) : '';
     const [content, setContent] = useState('');
     const [isPosting, setIsPosting] = useState(false);
     const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
@@ -161,7 +162,7 @@ export function Compose({ onPost, replyingTo, onCancelReply, placeholder = "What
             {replyingTo && !isReply && (
                 <div className="compose-reply-target">
                     <div className="compose-reply-info">
-                        Replying to <span className="compose-reply-handle">{formatFullHandle(replyingTo.author.handle)}</span>
+                        Replying to <span className="compose-reply-handle">{replyToHandle}</span>
                     </div>
                     <button type="button" className="compose-reply-cancel" onClick={onCancelReply}>
                         Cancel

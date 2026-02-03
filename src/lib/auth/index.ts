@@ -139,6 +139,7 @@ export async function registerUser(
     displayName?: string,
     storageProvider?: string,
     storageEndpoint?: string | null,
+    storagePublicBaseUrl?: string | null,
     storageRegion?: string,
     storageBucket?: string,
     storageAccessKey?: string,
@@ -201,6 +202,7 @@ export async function registerUser(
     const avatarUrl = await generateAndUploadAvatarToUserStorage(
         fullHandle,
         storageEndpoint || undefined,
+        storagePublicBaseUrl || undefined,
         storageRegion,
         storageBucket,
         storageAccessKey,
@@ -222,6 +224,7 @@ export async function registerUser(
         privateKeyEncrypted: serializeEncryptedKey(encryptedPrivateKey),
         storageProvider,
         storageEndpoint: storageEndpoint || null,
+        storagePublicBaseUrl: storagePublicBaseUrl || null,
         storageRegion,
         storageBucket,
         storageAccessKeyEncrypted: serializeEncryptedKey(encryptedAccessKey),

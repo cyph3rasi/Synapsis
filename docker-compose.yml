@@ -72,6 +72,9 @@ services:
       # Port configuration (auto or specific port)
       PORT: ${PORT:-3000}
 
+      # S3 Storage public URL (for custom S3 providers like R2, B2, Contabo)
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-}
+
       # Node environment
       NODE_ENV: production
     volumes:

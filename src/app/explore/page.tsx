@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { SearchIcon, TrendingIcon, UsersIcon } from '@/components/Icons';
 import { PostCard } from '@/components/PostCard';
 import { Post } from '@/lib/types';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { Bot, Network, Server, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -21,6 +21,7 @@ interface User {
 }
 
 function UserCard({ user }: { user: User }) {
+    const fullHandle = useFormattedHandle(user.handle);
     return (
         <Link href={`/u/${user.handle}`} className="user-card">
             <div className="avatar">
@@ -52,7 +53,7 @@ function UserCard({ user }: { user: User }) {
                         </span>
                     )}
                 </div>
-                <div className="user-card-handle">{formatFullHandle(user.handle)}</div>
+                <div className="user-card-handle">{fullHandle}</div>
                 {user.bio && <div className="user-card-bio">{user.bio}</div>}
             </div>
         </Link>

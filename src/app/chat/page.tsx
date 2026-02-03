@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { signedAPI } from '@/lib/api/signed-fetch';
 import { ArrowLeft, Send, Loader2, MessageCircle, Search, Plus, Trash2, MoreVertical } from 'lucide-react';
-import { formatFullHandle } from '@/lib/utils/handle';
+import { useFormattedHandle } from '@/lib/utils/handle';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface Conversation {
@@ -43,6 +43,7 @@ export default function ChatPage() {
     // Chat Data State
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+    const selectedHandle = selectedConversation ? useFormattedHandle(selectedConversation.participant2.handle) : '';
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -389,7 +390,7 @@ export default function ChatPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: '15px' }}>{selectedConversation.participant2.displayName}</div>
                             <div style={{ fontSize: '12px', color: 'var(--foreground-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {formatFullHandle(selectedConversation.participant2.handle)}
+                                {selectedHandle}
                             </div>
                         </div>
                         <button

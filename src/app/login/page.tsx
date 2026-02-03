@@ -34,6 +34,7 @@ export default function LoginPage() {
     const [displayName, setDisplayName] = useState('');
     const [storageProvider, setStorageProvider] = useState('r2');
     const [storageEndpoint, setStorageEndpoint] = useState('');
+    const [storagePublicBaseUrl, setStoragePublicBaseUrl] = useState('');
     const [storageRegion, setStorageRegion] = useState('auto');
     const [storageBucket, setStorageBucket] = useState('');
     const [storageAccessKey, setStorageAccessKey] = useState('');
@@ -252,6 +253,7 @@ export default function LoginPage() {
                     displayName,
                     storageProvider,
                     storageEndpoint: storageEndpoint || null,
+                    storagePublicBaseUrl: storagePublicBaseUrl || null,
                     storageRegion,
                     storageBucket,
                     storageAccessKey,
@@ -573,6 +575,7 @@ export default function LoginPage() {
                                             <option value="r2">Cloudflare R2 (10GB free)</option>
                                             <option value="b2">Backblaze B2 (10GB free)</option>
                                             <option value="wasabi">Wasabi</option>
+                                            <option value="contabo">Contabo S3</option>
                                             <option value="s3">AWS S3</option>
                                             <option value="minio">MinIO / Self-hosted</option>
                                             <option value="other">Other S3-compatible</option>
@@ -611,22 +614,49 @@ export default function LoginPage() {
                                     </div>
                                 </div>
 
-                                {/* S3 Credentials - Full Width */}
-                                <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
-                                        Endpoint URL (optional for AWS)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        value={storageEndpoint}
-                                        onChange={(e) => setStorageEndpoint(e.target.value)}
-                                        placeholder="https://<account>.r2.cloudflarestorage.com"
-                                    />
-                                    <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
-                                        Leave empty for AWS S3. Required for R2, B2, MinIO.
+                                {/* Endpoint URL - only show for providers that need it (R2, B2, Contabo, MinIO, Other) */}
+                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo' || storageProvider === 'minio' || storageProvider === 'other') && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Endpoint URL
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={storageEndpoint}
+                                            onChange={(e) => setStorageEndpoint(e.target.value)}
+                                            placeholder={storageProvider === 'contabo' ? 'https://s3.eu2.contabo.com' : 'https://<account>.r2.cloudflarestorage.com'}
+                                            required
+                                        />
+                                        <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                            {storageProvider === 'contabo' ? 'S3 API endpoint from Contabo dashboard (e.g., https://s3.eu2.contabo.com)' :
+                                             'S3-compatible endpoint URL for uploads.'}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* Public Base URL - only show for providers that need it (R2, B2, Contabo, Other) */}
+                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo' || storageProvider === 'other') && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
+                                            Public Base URL
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={storagePublicBaseUrl}
+                                            onChange={(e) => setStoragePublicBaseUrl(e.target.value)}
+                                            placeholder={storageProvider === 'contabo' ? 'https://usc1.contabostorage.com/d5bec82ae49b444d8314dcb13654dd1d:your-bucket' : 'https://pub-xxx.r2.dev'}
+                                            required
+                                        />
+                                        <div style={{ fontSize: '11px', color: 'var(--foreground-tertiary)', marginTop: '4px' }}>
+                                            {storageProvider === 'contabo' ? 'Public URL from Contabo (format: https://region.contabostorage.com/account-id:bucket)' :
+                                             storageProvider === 'r2' ? 'Public bucket URL from R2 dashboard (e.g., https://pub-xxx.r2.dev)' :
+                                             storageProvider === 'b2' ? 'Public bucket URL from B2 dashboard (e.g., https://f000.backblazeb2.com/file/bucket)' :
+                                             'Public URL where files are accessible (without trailing slash)'}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                                     <div>
