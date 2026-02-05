@@ -7,6 +7,24 @@ set -e
 SHARED_PORT_FILE="/var/run/synapsis/port"
 DEFAULT_PORT=3000
 
+# Normalize DOMAIN (strip scheme/path) to avoid invalid Caddyfile hostnames
+sanitize_domain() {
+    echo "$1" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##'
+}
+
+if [ -n "$DOMAIN" ]; then
+    CLEAN_DOMAIN=$(sanitize_domain "$DOMAIN")
+    if [ "$CLEAN_DOMAIN" != "$DOMAIN" ]; then
+        export DOMAIN="$CLEAN_DOMAIN"
+        echo "🌐 DOMAIN normalized to $DOMAIN"
+    fi
+fi
+
+if [ -z "$DOMAIN" ]; then
+    echo "❌ DOMAIN is not set. Exiting."
+    exit 1
+fi
+
 # Wait for the port file to exist (with timeout)
 echo "⏳ Waiting for Synapsis app to announce its port..."
 TIMEOUT=60

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
                 accessKeyId: process.env.STORAGE_ACCESS_KEY || '',
                 secretAccessKey: process.env.STORAGE_SECRET_KEY || '',
             },
-            forcePathStyle: true, // Needed for many S3-compatible providers (MinIO, etc.)
+            forcePathStyle: true, // Needed for many S3-compatible providers
         });
 
         const bucket = process.env.STORAGE_BUCKET || 'synapsis';

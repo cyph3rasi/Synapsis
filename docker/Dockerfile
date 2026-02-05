@@ -43,7 +43,7 @@ RUN npm run build
 # Stage 3: Production Runner
 # ============================================
 FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl netcat-openbsd
+RUN apk add --no-cache libc6-compat openssl netcat-openbsd wget
 
 WORKDIR /app
 
@@ -87,10 +87,9 @@ USER nextjs
 EXPOSE 3000-3020
 
 # Health check - longer start period to allow migrations to run
-# Uses PORT environment variable (set by entrypoint)
+# Reads dynamic port file when PORT=auto
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD wget -q --spider http://127.0.0.1:${PORT:-3000}/api/health || exit 1
+    CMD sh -c 'PORT_FILE=/var/run/synapsis/port; PORT=3000; if [ -f "$PORT_FILE" ]; then PORT=$(cat "$PORT_FILE"); fi; case "$PORT" in ""|*[!0-9]*) PORT=3000;; esac; wget -q --spider "http://127.0.0.1:${PORT}/api/health" || exit 1'
 
 # Set the entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]
-

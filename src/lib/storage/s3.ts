@@ -1,13 +1,13 @@
 /**
  * User-Owned S3-Compatible Storage Utilities
  * 
- * Supports AWS S3, Cloudflare R2, Backblaze B2, Wasabi, MinIO, etc.
+ * Supports AWS S3, Cloudflare R2, Backblaze B2, Wasabi, and Contabo.
  */
 
 import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { decryptPrivateKey, deserializeEncryptedKey } from '@/lib/crypto/private-key';
 
-export type StorageProvider = 's3' | 'r2' | 'b2' | 'wasabi' | 'minio' | 'other';
+export type StorageProvider = 's3' | 'r2' | 'b2' | 'wasabi' | 'contabo';
 
 interface S3Credentials {
   endpoint?: string;
@@ -105,7 +105,7 @@ export async function uploadToUserStorage(
   if (publicBaseUrl) {
     url = `${publicBaseUrl.replace(/\/$/, '')}/${key}`;
   } else if (endpoint) {
-    // Custom endpoint (MinIO, etc)
+    // Custom endpoint (R2, B2, Contabo)
     url = `${endpoint}/${bucket}/${key}`;
   } else {
     // AWS S3 standard URL

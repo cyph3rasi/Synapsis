@@ -82,14 +82,79 @@ echo "  Database URL: ${DATABASE_URL%%:*}://***@***"
 echo "  Port: $PORT"
 echo "========================================"
 
+# Ensure DATABASE_URL is set
+if [ -z "$DATABASE_URL" ]; then
+    echo "❌ DATABASE_URL is not set. Exiting."
+    exit 1
+fi
+
+# Normalize domain inputs (strip scheme/path) to avoid localhost/protocol issues
+sanitize_domain() {
+    echo "$1" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##'
+}
+
+# Normalize DOMAIN if provided
+if [ -n "$DOMAIN" ]; then
+    CLEAN_DOMAIN=$(sanitize_domain "$DOMAIN")
+    if [ "$CLEAN_DOMAIN" != "$DOMAIN" ]; then
+        export DOMAIN="$CLEAN_DOMAIN"
+        echo "🌐 DOMAIN normalized to $DOMAIN"
+    fi
+fi
+
+# Normalize NEXT_PUBLIC_NODE_DOMAIN if provided
+if [ -n "$NEXT_PUBLIC_NODE_DOMAIN" ]; then
+    CLEAN_NODE_DOMAIN=$(sanitize_domain "$NEXT_PUBLIC_NODE_DOMAIN")
+    if [ "$CLEAN_NODE_DOMAIN" != "$NEXT_PUBLIC_NODE_DOMAIN" ]; then
+        export NEXT_PUBLIC_NODE_DOMAIN="$CLEAN_NODE_DOMAIN"
+        echo "🌐 NEXT_PUBLIC_NODE_DOMAIN normalized to $NEXT_PUBLIC_NODE_DOMAIN"
+    fi
+fi
+
+# Ensure NEXT_PUBLIC_NODE_DOMAIN is set (fallback to DOMAIN)
+if [ -z "$NEXT_PUBLIC_NODE_DOMAIN" ] && [ -n "$DOMAIN" ]; then
+    export NEXT_PUBLIC_NODE_DOMAIN="$DOMAIN"
+    echo "🌐 NEXT_PUBLIC_NODE_DOMAIN set to $NEXT_PUBLIC_NODE_DOMAIN"
+fi
+
+# Fail fast if running in production with localhost domain
+if [ "$NODE_ENV" = "production" ]; then
+    case "$NEXT_PUBLIC_NODE_DOMAIN" in
+        ""|localhost|localhost:*|127.0.0.1|127.0.0.1:*)
+            if [ -z "$ALLOW_LOCALHOST" ]; then
+                echo "❌ NEXT_PUBLIC_NODE_DOMAIN is set to localhost in production."
+                echo "   Set DOMAIN to your public domain in .env, or set ALLOW_LOCALHOST=1 to bypass."
+                exit 1
+            fi
+            ;;
+    esac
+fi
+
+# Ensure NEXT_PUBLIC_APP_URL is set for background jobs
+if [ -z "$NEXT_PUBLIC_APP_URL" ] && [ -n "$NEXT_PUBLIC_NODE_DOMAIN" ]; then
+    case "$NEXT_PUBLIC_NODE_DOMAIN" in
+        http://*|https://*)
+            NEXT_PUBLIC_APP_URL="$NEXT_PUBLIC_NODE_DOMAIN"
+            ;;
+        localhost*|127.0.0.1*)
+            NEXT_PUBLIC_APP_URL="http://$NEXT_PUBLIC_NODE_DOMAIN"
+            ;;
+        *)
+            NEXT_PUBLIC_APP_URL="https://$NEXT_PUBLIC_NODE_DOMAIN"
+            ;;
+    esac
+    export NEXT_PUBLIC_APP_URL
+    echo "🌐 NEXT_PUBLIC_APP_URL set to $NEXT_PUBLIC_APP_URL"
+fi
+
 # Function to wait for database
 wait_for_db() {
     echo ""
     echo "⏳ Waiting for PostgreSQL..."
     
     # Extract host and port from DATABASE_URL
-    DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-    DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    DB_HOST=$(echo "$DATABASE_URL" | sed -n 's#.*@\([^/:]*\).*#\1#p')
+    DB_PORT=$(echo "$DATABASE_URL" | sed -n 's#.*:\([0-9][0-9]*\)/.*#\1#p')
     DB_HOST=${DB_HOST:-postgres}
     DB_PORT=${DB_PORT:-5432}
     
@@ -119,11 +184,12 @@ run_migrations() {
     
     # Run migrations using npm script
     echo "   Executing: npm run db:push"
-    npm run db:push 2>&1 || {
-        echo "⚠️  Migration command exited with error (may be already up to date)"
-    }
-    
-    echo "✅ Migration step complete"
+    if npm run db:push 2>&1; then
+        echo "✅ Migration step complete"
+    else
+        echo "❌ Migration failed"
+        exit 1
+    fi
 }
 
 # Wait for database

@@ -577,8 +577,6 @@ export default function LoginPage() {
                                             <option value="wasabi">Wasabi</option>
                                             <option value="contabo">Contabo S3</option>
                                             <option value="s3">AWS S3</option>
-                                            <option value="minio">MinIO / Self-hosted</option>
-                                            <option value="other">Other S3-compatible</option>
                                         </select>
                                     </div>
                                 </div>
@@ -614,8 +612,8 @@ export default function LoginPage() {
                                     </div>
                                 </div>
 
-                                {/* Endpoint URL - only show for providers that need it (R2, B2, Contabo, MinIO, Other) */}
-                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo' || storageProvider === 'minio' || storageProvider === 'other') && (
+                                {/* Endpoint URL - only show for providers that need it (R2, B2, Contabo) */}
+                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo') && (
                                     <div style={{ marginBottom: '16px' }}>
                                         <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
                                             Endpoint URL
@@ -635,8 +633,8 @@ export default function LoginPage() {
                                     </div>
                                 )}
 
-                                {/* Public Base URL - only show for providers that need it (R2, B2, Contabo, Other) */}
-                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo' || storageProvider === 'other') && (
+                                {/* Public Base URL - only show for providers that need it (R2, B2, Contabo) */}
+                                {(storageProvider === 'r2' || storageProvider === 'b2' || storageProvider === 'contabo') && (
                                     <div style={{ marginBottom: '16px' }}>
                                         <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500 }}>
                                             Public Base URL

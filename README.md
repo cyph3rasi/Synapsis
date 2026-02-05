@@ -2,7 +2,7 @@
 
 **Your node. Your network. Your identity.**
 
-Synapsis is an open-source, federated social network built for the decentralized web. Run your own node, own your identity with DIDs, and communicate across the Swarm network with end-to-end encryption. No corporations. No lock-in. Just you and the network.
+Synapsis is an open-source, federated social network built for the decentralized web. Run your own node, own your identity with DIDs, and communicate across the Swarm network with plain text server-stored messaging. No corporations. No lock-in. Just you and the network.
 
 ---
 
@@ -15,19 +15,22 @@ Run your personal Synapsis node with a single command:
 mkdir -p /opt/synapsis && cd /opt/synapsis
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker-compose.yml
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/Caddyfile
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/caddy-entrypoint.sh
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/.env.example
 cp .env.example .env
 
 # 2. Edit .env with your domain and secrets (takes 2 minutes)
 nano .env
+# Use a host-only domain (no scheme), e.g. synapsis.example.com
 
 # 3. Start your node
 docker compose up -d
 ```
 
 Done! Your node is live at `https://your-domain.com` with automatic SSL. No build step. No dependencies. No fuss.
+Database migrations run automatically on startup and during updates.
 
-**Updating:**
+**Updating (migrations run automatically):**
 ```bash
 docker compose pull && docker compose up -d
 ```
@@ -39,7 +42,7 @@ For detailed Docker setup, see [docker/README.md](docker/README.md).
 ## ✨ Features
 
 - **🌐 Swarm Network** — Native peer-to-peer network with automatic node discovery and gossip protocol
-- **💬 Swarm Chat** — End-to-end encrypted messaging across the entire network
+- **💬 Swarm Chat** — Direct messaging across the entire network
 - **🔐 Decentralized Identity (DIDs)** — Cryptographic identity you truly own, portable between nodes
 - **🤖 AI Bots** — Create AI-powered bot accounts with custom personalities
 - **🎨 Modern UI** — Clean, responsive interface inspired by Vercel's design system
@@ -83,7 +86,7 @@ Synapsis operates on the **Swarm** — a native peer-to-peer network designed sp
 
 - **Gossip Protocol** — Nodes discover each other automatically and exchange information
 - **Swarm Timeline** — Aggregated feed of posts from across all Synapsis nodes
-- **Swarm Chat** — End-to-end encrypted direct messaging between users on any Synapsis node
+- **Swarm Chat** — Direct messaging between users on any Synapsis node
 - **Handle Registry** — Distributed directory of user handles across the swarm
 - **Instant Interactions** — Likes, reposts, follows, and mentions delivered in real-time
 
@@ -94,7 +97,7 @@ Synapsis operates on the **Swarm** — a native peer-to-peer network designed sp
 | **Identity** | Server-bound (`@user@server`) | DID-based (cryptographic, portable) |
 | **Account Migration** | Limited (followers don't auto-migrate) | **Full** — DID-based migration with auto-follow |
 | **Cryptographic Signing** | HTTP Signatures only | Full post signing with user keys |
-| **Direct Messages** | Posts with limited visibility | True E2E encrypted chat |
+| **Direct Messages** | Posts with limited visibility | Direct messaging between users |
 | **Network Discovery** | Manual server discovery | Automatic gossip protocol |
 | **AI Bots** | Not supported | Native bot framework with LLM integration |
 | **Interactions** | Queue-based, delayed | Instant delivery via Swarm |
@@ -108,7 +111,7 @@ Want to hack on Synapsis? Here's how to run it locally:
 ### Prerequisites
 - Node.js 20+
 - PostgreSQL 15+
-- S3-compatible storage (or MinIO for local dev)
+- S3-compatible storage (AWS S3, Cloudflare R2, Backblaze B2, Wasabi, or Contabo)
 
 ### Local Setup
 

@@ -10,6 +10,7 @@ Production Docker deployment using pre-built images from GitHub Container Regist
 mkdir -p /opt/synapsis && cd /opt/synapsis
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker-compose.yml
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/Caddyfile
+curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/caddy-entrypoint.sh
 curl -O https://raw.githubusercontent.com/cyph3rasi/synapsis/main/docker/.env.example
 cp .env.example .env
 nano .env  # Add your domain and secrets
@@ -39,7 +40,7 @@ newgrp docker
 
 ## ⚙️ Configuration
 
-Edit `.env` and set these required values:
+Edit `.env` and set these required values (domain should be host only, no scheme or path):
 
 | Variable | What to put |
 |----------|-------------|
@@ -48,13 +49,18 @@ Edit `.env` and set these required values:
 | `AUTH_SECRET` | Run: `openssl rand -hex 32` |
 | `ADMIN_EMAILS` | Your email address |
 
+Optional (advanced):
+- `NEXT_PUBLIC_NODE_DOMAIN` to override the node domain (defaults to `DOMAIN`)
+- `NEXT_PUBLIC_APP_URL` to override the public app URL used by background jobs (auto-derived from the node domain)
+- `ALLOW_LOCALHOST=1` to allow `localhost` in production containers for local testing
+
 **Port Configuration:**
 - `PORT=auto` (default) — Automatically finds an available port between 3000-3020
 - `PORT=3000` — Use a specific port instead
 
 ---
 
-## 🔄 Updates
+## 🔄 Updates (migrations run automatically)
 
 ```bash
 cd /opt/synapsis
